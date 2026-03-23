@@ -1,28 +1,65 @@
 
 
-## Plano: Conectar ao Supabase Externo
+## Plano: Corrigir consultas e garantir funcionamento de Configuracoes e Lancamentos
 
-### O que será feito
-Criar um cliente Supabase dedicado apontando para o banco externo do usuário e redirecionar todos os hooks de dados para usá-lo.
+### 1. Corrigir `useDashboardData.ts`
 
-### Implementação
+Ajustar os nomes das colunas da view `vw_monthly_cashflow_consolidated` para os nomes reais:
+- `total_income` → `income_paid`
+- `total_expense` → `expense_paid`
+- `net_balance` → `projected_balance`
 
-**1. Criar `src/lib/supabaseClient.ts`**
-- Cliente Supabase com URL `https://tabjmrdsadodghvqoqcp.supabase.co` e chave pública fornecida
+Corrigir o filtro de mes:
+- De: `.eq("reference_month", "2026-03")`
+- Para: `.gte("reference_month", "2026-03-01").lt("reference_month", "2026-04-01")`
 
-**2. Atualizar import em 10 hooks**
-Trocar `import { supabase } from "@/integrations/supabase/client"` por `import { supabase } from "@/lib/supabaseClient"` em:
-- `useFinancialEntities.ts`
-- `useAccounts.ts`
-- `useCards.ts`
-- `useCategories.ts`
-- `useSystemParameters.ts`
-- `useTransactions.ts`
-- `useCardPurchases.ts`
-- `useCardInstallments.ts`
-- `useMonthlyCashflow.ts`
-- `useDashboardData.ts`
+Usar `addMonths` do date-fns para calcular o proximo mes no filtro.
 
-### Resultado
-Todas as telas passarão a ler dados reais do banco externo. Nenhuma tabela será criada ou alterada.
+No cashflowChart query, corrigir os nomes das colunas no select e no tipo de retorno.
+
+No fallback de transactions, manter a logica atual (nao depende da view).
+
+### 2. Corrigir `useMonthlyCashflow.ts`
+
+Atualizar a interface `MonthlyCashflow` para refletir os campos reais:
+- `income_planned`, `income_paid`, `expense_planned`, `expense_paid`
+- `projected_card_amount`, `potential_containment`
+- `total_portfolio_value`, `investment_estimated_return`
+- `projected_balance`, `minimum_reserve`, `traffic_light`
+
+Remover `total_income`, `total_expense`, `net_balance`, `accumulated_balance`.
+
+### 3. Corrigir `Dashboard.tsx`
+
+Atualizar as referencias:
+- `flow?.total_income` → `flow?.income_paid`
+- `flow?.total_expense` → `flow?.expense_paid`
+- `flow?.net_balance` → `flow?.projected_balance`
+
+No chartData, mapear:
+- `Receitas: d.income_paid`
+- `Despesas: d.expense_paid`
+
+### 4. Corrigir `FluxoMensal.tsx`
+
+Atualizar as referencias de colunas na tabela e nos totais para usar os nomes reais (`income_paid`, `expense_paid`, `projected_balance`, `traffic_light`).
+
+Exibir `traffic_light` como Badge colorido quando disponivel.
+
+Adicionar colunas extras relevantes: `income_planned`, `expense_planned`, `projected_card_amount`.
+
+### 5. Configuracoes e Lancamentos
+
+Esses modulos ja estao implementados e funcionais — hooks CRUD, tabs, formularios e filtros ja existem. Precisam apenas da conexao ao Supabase externo (ja feita no passo anterior). Nenhuma alteracao necessaria nesses arquivos.
+
+### Arquivos alterados
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/hooks/useDashboardData.ts` | Nomes de colunas da view, filtro de mes por intervalo de data |
+| `src/hooks/useMonthlyCashflow.ts` | Interface com campos reais da view |
+| `src/pages/Dashboard.tsx` | Referencias aos novos nomes de campo |
+| `src/pages/FluxoMensal.tsx` | Colunas da tabela e totais com nomes reais |
+
+### Nenhuma tabela criada ou alterada
 
