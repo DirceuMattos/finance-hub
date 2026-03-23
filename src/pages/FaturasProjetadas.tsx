@@ -84,7 +84,7 @@ export default function FaturasProjetadas() {
         </div>
       )}
 
-      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma fatura projetada encontrada." />
+      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma fatura projetada disponível. As faturas são geradas automaticamente a partir de compras parceladas registradas em Compras no Cartão." />
     </AppLayout>
   );
 }

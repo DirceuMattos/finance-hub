@@ -123,7 +123,7 @@ export default function ComprasCartao() {
         </Select>
       </FilterBar>
 
-      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma compra encontrada." />
+      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma compra parcelada registrada. Utilize o botão 'Nova' para cadastrar compras no cartão. As parcelas serão geradas automaticamente." />
 
       <CardPurchaseForm
         open={formOpen}
