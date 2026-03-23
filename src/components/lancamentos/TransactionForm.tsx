@@ -110,7 +110,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   const personalEntities = entities.filter(e => e.is_active && e.entity_type === "personal");
   const businessEntities = entities.filter(e => e.is_active && e.entity_type === "business");
 
-  const DateField = ({ name, label }: { name: "competence_date" | "due_date" | "payment_date"; label: string }) => (
+  const DateField = ({ name, label }: { name: "due_date" | "payment_date"; label: string }) => (
     <FormField control={form.control} name={name} render={({ field }) => (
       <FormItem className="flex flex-col">
         <FormLabel>{label}</FormLabel>
