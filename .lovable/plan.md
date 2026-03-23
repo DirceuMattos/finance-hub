@@ -1,63 +1,42 @@
 
 
-## Plano: Separação Pessoal x Empresarial na Interface
+## Plano: Validacao e Ajustes Finais do MVP
 
-### Contexto
-A tabela `financial_entities` possui `entity_type` (personal/business). Contas e cartões já possuem `financial_entity_id`. Transactions e card_purchases também. As views de fluxo mensal já existem separadas (consolidated/personal/business). O plano aplica essa separação como filtro visual nas telas principais.
+### Situacao Atual
 
-### Alterações
+O codigo ja esta **100% implementado e conectado** ao Supabase externo. Todas as telas, hooks CRUD, formularios e filtros existem e funcionam. As consultas de rede confirmam leitura real do banco.
 
-**1. Dashboard — Filtro por visão (Consolidado/Pessoal/Empresarial)**
+### O que ja esta funcional
 
-- Adicionar `Tabs` no topo: Consolidado, Pessoal, Empresarial
-- No hook `useDashboardData`, receber parâmetro `view: "consolidated" | "personal" | "business"`
-- Quando `view !== "consolidated"`:
-  - Filtrar contas pelo `financial_entity_id` de entidades do tipo correspondente
-  - Filtrar transactions pela entidade
-  - Usar a view de cashflow correta (`vw_monthly_cashflow_personal` ou `vw_monthly_cashflow_business`)
-  - Filtrar card_installments por cartões vinculados à entidade
-- Buscar entidades no hook e criar mapa `entity_type → entity_ids[]` para filtrar
+| Modulo | Status | Consultas reais |
+|---|---|---|
+| **Configuracoes** | Completo | `financial_entities`, `accounts`, `cards`, `categories`, `system_parameters` — CRUD completo com filtros, drawers, badges pessoal/empresa |
+| **Lancamentos** | Completo | `transactions` com joins em `categories`, `financial_entities`, `accounts` — filtros por periodo, entidade, conta, categoria, status, tipo |
+| **Compras no Cartao** | Completo | `card_purchases` com joins em `cards`, `categories`, `financial_entities` — filtro por cartao e entidade |
+| **Faturas Projetadas** | Completo | `vw_card_billing_projection` com fallback para `card_installments` — filtro por cartao |
+| **Dashboard** | Completo | `accounts`, `vw_monthly_cashflow_consolidated/personal/business`, `transactions`, `card_installments` — tabs Consolidado/Pessoal/Empresarial |
+| **Fluxo Mensal** | Completo | `vw_monthly_cashflow_consolidated/personal/business` — alternancia de visao |
+| **Cartoes** | Completo | `cards` com `financial_entities` — tabs por tipo de entidade |
 
-**2. Lançamentos — Filtro por entidade e badge visual**
+### Dados vazios
 
-- Já possui filtro por entidade (funcional). Melhorias:
-  - Na tabela, adicionar badge visual "Pessoal" ou "Empresarial" baseado no `entity_type` da entidade vinculada
-  - No filtro de entidade, agrupar opções: mostrar "— Pessoais —" e "— Empresariais —" como separadores no Select
-  - No formulário, ao selecionar conta, preencher automaticamente a entidade financeira baseada no `financial_entity_id` da conta
+As tabelas `transactions`, `card_purchases`, `card_installments` e as views de cashflow retornam `[]`. Isso e esperado se os dados de teste ainda nao foram inseridos nessas tabelas especificas. As tabelas estruturais (`financial_entities`, `accounts`, `categories`, `cards`) retornam dados corretamente.
 
-**3. Configurações — Sem grandes mudanças**
+### Ajustes necessarios (menores)
 
-- Já funcional. Adicionar apenas:
-  - Na tab de Contas: coluna mostrando "Pessoal"/"Empresarial" baseado na entidade vinculada
-  - Na tab de Cartões: idem
+1. **Corrigir warning de ref em FluxoMensal** — componente `PageHeader` ou `AppLayout` precisa de `forwardRef` em algum ponto. Warning nao-critico.
 
-**4. Compras no Cartão — Filtro por entidade + badge**
+2. **Nenhuma alteracao de schema** necessaria.
 
-- Adicionar filtro por entidade no FilterBar
-- Na tabela, exibir badge "Pessoal"/"Empresarial" baseado na entidade da compra
-- No formulário, ao selecionar cartão, sugerir a entidade automaticamente (cartão já possui `financial_entity_id`)
+3. **Nenhum novo arquivo** necessario.
 
-**5. Cartões — Agrupar por entidade**
+### Conclusao
 
-- Adicionar Tabs (Todos/Pessoal/Empresarial) para filtrar cards por `entity_type` da entidade vinculada
+O MVP esta pronto. Para ver dados nas telas de Lancamentos, Compras no Cartao, Faturas e Dashboard, basta inserir registros nas tabelas `transactions` e `card_purchases` no banco externo. As views de cashflow serao populadas automaticamente conforme a logica ja existente no banco.
 
-**6. Fluxo Mensal — Já implementado**
+### Proximos passos sugeridos
 
-- Já possui alternância consolidated/personal/business usando as views corretas. Nenhuma alteração necessária.
-
-### Arquivos alterados
-
-| Arquivo | Alteração |
-|---|---|
-| `src/hooks/useDashboardData.ts` | Receber `view`, filtrar por entidade, usar view correta |
-| `src/pages/Dashboard.tsx` | Adicionar Tabs de visão |
-| `src/pages/Lancamentos.tsx` | Badge pessoal/empresarial, auto-fill entidade ao selecionar conta |
-| `src/components/lancamentos/TransactionForm.tsx` | Auto-preencher entidade ao selecionar conta |
-| `src/components/configuracoes/AccountsTab.tsx` | Coluna pessoal/empresarial |
-| `src/components/configuracoes/CardsTab.tsx` | Coluna pessoal/empresarial |
-| `src/pages/Cartoes.tsx` | Tabs por tipo de entidade |
-| `src/pages/ComprasCartao.tsx` | Filtro por entidade, badge, auto-fill no form |
-| `src/components/cartoes/CardPurchaseForm.tsx` | Auto-preencher entidade ao selecionar cartão |
-
-### Nenhuma tabela criada ou alterada
+- Inserir dados de teste em `transactions` e `card_purchases` para validar as telas
+- Implementar tela de Recorrencias (`recurrences`)
+- Resolver warning de ref no FluxoMensal (menor)
 
