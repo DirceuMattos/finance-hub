@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, subMonths, addMonths, startOfMonth } from "date-fns";
+import { format, subMonths, addMonths, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
