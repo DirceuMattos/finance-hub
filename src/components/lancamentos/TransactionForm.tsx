@@ -21,8 +21,8 @@ const schema = z.object({
   category_id: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   account_id: z.string().optional().nullable(),
-  amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero"),
-  competence_date: z.date({ required_error: "Data de competência é obrigatória" }),
+  amount: z.string().min(1, "Valor é obrigatório"),
+  competence_date: z.string().min(1, "Competência é obrigatória"),
   due_date: z.date().optional().nullable(),
   payment_date: z.date().optional().nullable(),
   status: z.string().min(1, "Status é obrigatório"),
@@ -47,7 +47,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     resolver: zodResolver(schema),
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
-      account_id: "", amount: 0, competence_date: new Date(), due_date: null, payment_date: null,
+      account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
       status: "planned", notes: "",
     },
   });
@@ -72,8 +72,8 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         category_id: transaction.category_id || "",
         financial_entity_id: transaction.financial_entity_id,
         account_id: transaction.account_id || "",
-        amount: transaction.amount,
-        competence_date: new Date(transaction.competence_date),
+        amount: String(transaction.amount),
+        competence_date: transaction.competence_date.substring(0, 7),
         due_date: transaction.due_date ? new Date(transaction.due_date) : null,
         payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
         status: transaction.status,
@@ -82,19 +82,25 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     } else {
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
-        account_id: "", amount: 0, competence_date: new Date(), due_date: null, payment_date: null,
+        account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
         status: "planned", notes: "",
       });
     }
   }, [transaction, open]);
 
   const handleSubmit = (data: FormData) => {
+    const parsedAmount = parseFloat(String(data.amount).replace(/\./g, "").replace(",", "."));
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      form.setError("amount", { message: "Valor inválido" });
+      return;
+    }
     const payload: any = {
       ...data,
       category_id: data.category_id || null,
       account_id: data.account_id || null,
       notes: data.notes || null,
-      competence_date: format(data.competence_date, "yyyy-MM-dd"),
+      amount: parsedAmount,
+      competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
       payment_date: data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
     };
@@ -104,7 +110,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   const personalEntities = entities.filter(e => e.is_active && e.entity_type === "personal");
   const businessEntities = entities.filter(e => e.is_active && e.entity_type === "business");
 
-  const DateField = ({ name, label }: { name: "competence_date" | "due_date" | "payment_date"; label: string }) => (
+  const DateField = ({ name, label }: { name: "due_date" | "payment_date"; label: string }) => (
     <FormField control={form.control} name={name} render={({ field }) => (
       <FormItem className="flex flex-col">
         <FormLabel>{label}</FormLabel>
@@ -208,11 +214,19 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
           )} />
 
           <FormField control={form.control} name="amount" render={({ field }) => (
-            <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="text" inputMode="decimal" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <DateField name="competence_date" label="Competência *" />
+            <FormField control={form.control} name="competence_date" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Competência (mês/ano) *</FormLabel>
+                <FormControl>
+                  <Input type="month" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
             <DateField name="due_date" label="Vencimento" />
             <DateField name="payment_date" label="Pagamento" />
           </div>
