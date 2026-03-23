@@ -5,6 +5,7 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
+import { useCardInvoicesByCard } from "@/hooks/useCardInvoiceTransactions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -15,6 +16,7 @@ type FilterView = "all" | "personal" | "business";
 export default function Cartoes() {
   const { data: cards = [], isLoading } = useCards();
   const { data: entities = [] } = useFinancialEntities();
+  const { byCard } = useCardInvoicesByCard();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<FilterView>("all");
 
@@ -62,6 +64,9 @@ export default function Cartoes() {
           {filtered.map((card) => {
             const managerialLimit = card.managerial_limit || card.credit_limit;
             const entityType = entityMap.get(card.financial_entity_id);
+            const usedAmount = byCard.get(card.name) || 0;
+            const usagePct = card.credit_limit > 0 ? Math.min((usedAmount / card.credit_limit) * 100, 100) : 0;
+            const managerialUsagePct = managerialLimit > 0 ? Math.min((usedAmount / managerialLimit) * 100, 100) : 0;
 
             return (
               <Card key={card.id} className="relative overflow-hidden">
@@ -104,20 +109,20 @@ export default function Cartoes() {
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
                       <span className="text-muted-foreground">Uso do Limite</span>
-                      <span className="font-medium">{fmt(0)} / {fmt(card.credit_limit)}</span>
+                      <span className="font-medium">{fmt(usedAmount)} / {fmt(card.credit_limit)}</span>
                     </div>
-                    <Progress value={0} className="h-2" />
+                    <Progress value={usagePct} className="h-2" />
                     <p className="text-[11px] text-muted-foreground mt-1.5 italic">
-                      Dados de uso baseados em pagamentos de fatura registrados. Para detalhamento por compra, utilize Compras no Cartão.
+                      Baseado em faturas previstas (status planned) registradas em Lançamentos.
                     </p>
                   </div>
                   {card.managerial_limit && card.managerial_limit < card.credit_limit && (
                     <div>
                       <div className="flex items-center justify-between text-xs mb-1">
                         <span className="text-muted-foreground">Uso do Teto Gerencial</span>
-                        <span className="font-medium">{fmt(0)} / {fmt(card.managerial_limit)}</span>
+                        <span className="font-medium">{fmt(usedAmount)} / {fmt(card.managerial_limit)}</span>
                       </div>
-                      <Progress value={0} className="h-2" />
+                      <Progress value={managerialUsagePct} className="h-2" />
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
