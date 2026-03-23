@@ -6,6 +6,8 @@ import {
   ShoppingCart,
   FileText,
   CalendarRange,
+  Landmark,
+  PieChart,
   Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -43,6 +45,13 @@ const navGroups = [
       { title: "Cartões", url: "/cartoes", icon: CreditCard },
       { title: "Compras no Cartão", url: "/compras-cartao", icon: ShoppingCart },
       { title: "Faturas Projetadas", url: "/faturas-projetadas", icon: FileText },
+    ],
+  },
+  {
+    label: "Patrimônio",
+    items: [
+      { title: "Patrimônio", url: "/patrimonio", icon: Landmark },
+      { title: "Investimentos", url: "/investimentos", icon: PieChart },
     ],
   },
   {

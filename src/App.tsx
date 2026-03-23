@@ -11,6 +11,8 @@ import ComprasCartao from "./pages/ComprasCartao";
 import FaturasProjetadas from "./pages/FaturasProjetadas";
 import FluxoMensal from "./pages/FluxoMensal";
 import Configuracoes from "./pages/Configuracoes";
+import Patrimonio from "./pages/Patrimonio";
+import Investimentos from "./pages/Investimentos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +31,8 @@ const App = () => (
           <Route path="/compras-cartao" element={<ComprasCartao />} />
           <Route path="/faturas-projetadas" element={<FaturasProjetadas />} />
           <Route path="/fluxo-mensal" element={<FluxoMensal />} />
+          <Route path="/patrimonio" element={<Patrimonio />} />
+          <Route path="/investimentos" element={<Investimentos />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
