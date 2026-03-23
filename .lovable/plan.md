@@ -1,22 +1,42 @@
 
 
-## Plano: Estado vazio elegante no módulo de Cartões
+## Plano: Corrigir status dos lançamentos futuros
 
-### Alterações
+### Diagnóstico
 
-**1. Compras no Cartão (`src/pages/ComprasCartao.tsx`)**
-- Alterar `emptyMessage` do DataTable para texto informativo: "Nenhuma compra parcelada registrada. Utilize o botão 'Nova' para cadastrar compras no cartão. As parcelas serão geradas automaticamente."
+O código do frontend **já está correto** — `resolveStatus = (r) => r.status` usa exclusivamente o campo do banco. O problema está nos **dados importados**: todos os registros foram carregados com `status = 'paid'`, inclusive lançamentos de dezembro 2026.
 
-**2. Faturas Projetadas (`src/pages/FaturasProjetadas.tsx`)**
-- Alterar `emptyMessage` do DataTable para: "Nenhuma fatura projetada disponível. As faturas são geradas automaticamente a partir de compras parceladas registradas em Compras no Cartão."
+Evidência do response da API:
+```text
+competence_date: "2026-12-01"
+due_date: "2026-12-25"
+status: "paid"          ← dado real do banco, incorreto para lançamento futuro
+```
 
-**3. Cartões (`src/pages/Cartoes.tsx`)**
-- A nota informativa sobre dados de uso já existe (linha 110-112). Manter como está — já cumpre o requisito.
+### Solução
 
-Nenhuma nova tabela. Nenhuma alteração no banco. Apenas textos de estado vazio mais informativos.
+Executar uma **correção pontual de dados** via migration (UPDATE, não altera schema):
 
-| Arquivo | Alteração |
+```sql
+UPDATE transactions
+SET status = 'planned', updated_at = now()
+WHERE due_date > CURRENT_DATE
+  AND status = 'paid';
+```
+
+Isso corrige todos os lançamentos com vencimento futuro para `planned` (Previsto), mantendo os passados como `paid` (Realizado).
+
+Nenhuma alteração no frontend — o código já está preparado para exibir:
+- `paid` → Realizado (verde)
+- `planned` → Previsto (amarelo)
+- `cancelled` → Cancelado (vermelho)
+
+### Resumo
+
+| Item | Detalhe |
 |---|---|
-| `src/pages/ComprasCartao.tsx` | Mensagem vazia informativa |
-| `src/pages/FaturasProjetadas.tsx` | Mensagem vazia informativa |
+| Causa raiz | Dados importados com `status = 'paid'` para todos os registros |
+| Correção | UPDATE em `transactions` onde `due_date > CURRENT_DATE` |
+| Frontend | Sem alteração — já usa `r.status` corretamente |
+| Schema | Sem alteração |
 
