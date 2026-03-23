@@ -146,9 +146,12 @@ export default function Lancamentos() {
     },
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
-      render: (r) => (
-        <EntityTypeBadge entityType={entityMap.get(r.financial_entity_id)} />
-      ),
+      render: (r) => {
+        const entityType = entityMap.get(r.financial_entity_id);
+        const name = r.financial_entities?.name || "—";
+        if (name === "—") return "—";
+        return <EntityTypeBadge entityType={entityType} />;
+      },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
