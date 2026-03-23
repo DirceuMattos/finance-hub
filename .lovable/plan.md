@@ -1,39 +1,34 @@
 
 
-## Plano: Ação "Registrar Baixa" em Lançamentos
+## Plano: Corrigir constraint de status nos Lançamentos
 
-### Alterações
+### Causa raiz
 
-**1. Novo componente: `src/components/lancamentos/PaymentDialog.tsx`**
+O banco aceita apenas `planned`, `paid`, `cancelled` no campo `status` (check constraint `transactions_status_check`). O frontend usa `pending` em vários locais, causando o erro ao salvar.
 
-Modal simples com:
-- Campo "Data efetiva" (DatePicker)
-- Campo "Valor realizado" (Input numérico, pré-preenchido com `amount` atual)
-- Botões Cancelar / Confirmar
+Evidência no network log:
+```
+status: "pending" → erro 400: violates check constraint "transactions_status_check"
+```
 
-Ao confirmar, chama `update.mutate({ id, status: "paid", payment_date, amount })`.
+### Correções
 
-**2. Arquivo: `src/pages/Lancamentos.tsx`**
+**1. `src/components/lancamentos/TransactionForm.tsx`**
+- Linha 51: default `status: "pending"` → `"planned"`
+- Linha 86: reset default `status: "pending"` → `"planned"`
+- Linha 155: `<SelectItem value="pending">` → `value="planned"`
 
-- Importar `PaymentDialog` e ícone `CheckCircle`
-- Adicionar estado `settling: Transaction | null`
-- Na coluna "Ações", adicionar botão "Registrar baixa" (ícone CheckCircle verde) **apenas** quando `r.status === "planned" || r.status === "pending"`
-- Ao clicar, abre o `PaymentDialog` com os dados do lançamento
-- Ao confirmar, executa `update.mutate` e fecha o modal
-- A listagem se atualiza automaticamente via `invalidateQueries`
+**2. `src/pages/Lancamentos.tsx`**
+- Linha 162/165: condição `r.status === "pending"` → remover (manter só `"planned"`)
+- Linha 219: filtro `<SelectItem value="pending">` → `value="planned"`
+- Linha 27 no StatusBadge: comentário sobre "pending" pode ficar como fallback mas não será usado
 
-### Lógica de visibilidade
+### Arquivos alterados
 
-| Status | Editar | Cancelar | Baixa | Excluir |
-|---|---|---|---|---|
-| planned/pending | ✓ | ✓ | ✓ | ✓ |
-| paid | ✓ | — | — | ✓ |
-| cancelled | ✓ | — | — | ✓ |
-
-| Arquivo | Alteração |
+| Arquivo | O que muda |
 |---|---|
-| `src/components/lancamentos/PaymentDialog.tsx` | Novo — modal de baixa |
-| `src/pages/Lancamentos.tsx` | Botão condicional + estado para abrir modal |
+| `src/components/lancamentos/TransactionForm.tsx` | Trocar `pending` por `planned` no default, reset e select |
+| `src/pages/Lancamentos.tsx` | Trocar `pending` por `planned` no filtro e nas condições de ação |
 
 Sem alteração no banco.
 
