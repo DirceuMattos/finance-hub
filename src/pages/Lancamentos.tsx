@@ -146,7 +146,7 @@ export default function Lancamentos() {
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
       render: (r) => {
-        const entityType = r.financial_entities?.entity_type;
+        const entityType = (r.financial_entities as any)?.entity_type;
         if (!entityType) return "—";
         return <EntityTypeBadge entityType={entityType} />;
       },
