@@ -106,11 +106,7 @@ export default function Lancamentos() {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
 
-  const resolveStatus = (r: Transaction) => {
-    const catName = r.categories?.name;
-    if (isCardInvoice(catName)) return getCardInvoiceStatus(catName!, r.competence_date);
-    return r.status;
-  };
+  const resolveStatus = (r: Transaction) => r.status;
 
   const columns: Column<Transaction>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },

@@ -34,7 +34,20 @@ export function SystemParametersTab() {
   const filtered = data.filter((p) => p.parameter_key.toLowerCase().includes(search.toLowerCase()));
 
   const columns: Column<SystemParameter>[] = [
-    { key: "parameter_key", header: "Chave" },
+    {
+      key: "parameter_key", header: "Parâmetro",
+      render: (r) => {
+        const label = PARAMETER_LABELS[r.parameter_key];
+        return <span className="font-medium">{label?.name || r.parameter_key}</span>;
+      },
+    },
+    {
+      key: "description", header: "Descrição",
+      render: (r) => {
+        const label = PARAMETER_LABELS[r.parameter_key];
+        return <span className="text-muted-foreground text-xs">{label?.description || "—"}</span>;
+      },
+    },
     { key: "parameter_value", header: "Valor", render: (r) => <span className="font-mono text-xs">{r.parameter_value}</span> },
     { key: "value_type", header: "Tipo", render: (r) => <Badge variant="secondary">{typeLabels[r.value_type] || r.value_type}</Badge> },
     {
