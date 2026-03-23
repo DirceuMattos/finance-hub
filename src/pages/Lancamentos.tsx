@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Ban, CreditCard } from "lucide-react";
-import { isCardInvoice, getCardInvoiceStatus, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
+import { isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -23,6 +23,7 @@ import type { Transaction } from "@/types/database";
 function StatusBadge({ status }: { status: string }) {
   if (status === "paid") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Realizado</Badge>;
   if (status === "cancelled") return <Badge variant="destructive">Cancelado</Badge>;
+  // Both "pending" and "planned" = Previsto
   return <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Previsto</Badge>;
 }
 
@@ -105,11 +106,7 @@ export default function Lancamentos() {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
 
-  const resolveStatus = (r: Transaction) => {
-    const catName = r.categories?.name;
-    if (isCardInvoice(catName)) return getCardInvoiceStatus(catName!, r.competence_date);
-    return r.status;
-  };
+  const resolveStatus = (r: Transaction) => r.status;
 
   const columns: Column<Transaction>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
