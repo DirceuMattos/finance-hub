@@ -1,26 +1,12 @@
 
 
-## Plano: Corrigir exibição de datas e reduzir fonte da tabela
+## Plano: Ocultar coluna Competência em Lançamentos
 
-### Problema 1 — Datas exibidas com mês errado
+A coluna "Competência" exibe apenas o primeiro dia do mês (pois `competence_date` é armazenado como `YYYY-MM-01`), tornando-a redundante quando "Vencimento" já mostra a data real. O filtro de mês continuará funcionando internamente via `competence_date`, sem necessidade de exibi-lo na tabela.
 
-`new Date("2026-03-01")` cria data em UTC meia-noite. No fuso do Brasil (UTC-3), isso vira 28/02 às 21h. O `format(new Date(d), "dd/MM/yyyy")` usa fuso local e mostra o dia anterior.
+### Alteração
 
-**Correção em `src/pages/Lancamentos.tsx`:**
-- Trocar `format(new Date(d), "dd/MM/yyyy")` por `format(parseISO(d), "dd/MM/yyyy")` (importar `parseISO` de date-fns)
-- `parseISO` cria a data no fuso local sem conversão UTC, resolvendo o problema
-
-### Problema 2 — Fonte menor na tabela (estilo planilha)
-
-**Correção em `src/components/shared/DataTable.tsx`:**
-- Adicionar `text-xs` nas `TableCell` e reduzir padding com `py-1.5 px-2`
-- Manter `TableHead` como está (já usa `text-xs`)
-- Reduzir altura das linhas para visual mais compacto
-
-### Arquivos alterados
-
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/Lancamentos.tsx` | Usar `parseISO` em vez de `new Date()` para formatar datas |
-| `src/components/shared/DataTable.tsx` | `text-xs` e padding reduzido nas células |
+**Arquivo: `src/pages/Lancamentos.tsx`**
+- Remover a coluna `competence_date` do array `columns`
+- Manter o filtro de mês usando `competence_date` internamente (sem mudança na lógica de filtro)
 
