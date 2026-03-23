@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Ban, CreditCard } from "lucide-react";
+import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle } from "lucide-react";
 import { isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
@@ -18,6 +18,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
+import { PaymentDialog } from "@/components/lancamentos/PaymentDialog";
 import type { Transaction } from "@/types/database";
 
 function StatusBadge({ status }: { status: string }) {
@@ -72,6 +73,7 @@ export default function Lancamentos() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [settling, setSettling] = useState<Transaction | null>(null);
 
   const entityMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -157,7 +159,10 @@ export default function Lancamentos() {
       key: "actions", header: "Ações", render: (r) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => { setEditing(r); setFormOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-          {r.status !== "cancelled" && (
+          {(r.status === "planned" || r.status === "pending") && (
+            <Button variant="ghost" size="icon" onClick={() => setSettling(r)} title="Registrar baixa"><CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" /></Button>
+          )}
+          {(r.status === "planned" || r.status === "pending") && (
             <Button variant="ghost" size="icon" onClick={() => handleCancel(r.id)} title="Cancelar"><Ban className="h-4 w-4 text-[hsl(var(--warning))]" /></Button>
           )}
           <Button variant="ghost" size="icon" onClick={() => setDeleting(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
@@ -271,6 +276,16 @@ export default function Lancamentos() {
       />
 
       <DeleteDialog open={!!deleting} onOpenChange={() => setDeleting(null)} onConfirm={() => { if (deleting) remove.mutate(deleting, { onSuccess: () => setDeleting(null) }); }} loading={remove.isPending} />
+
+      <PaymentDialog
+        transaction={settling}
+        open={!!settling}
+        onOpenChange={(o) => { if (!o) setSettling(null); }}
+        onConfirm={(data) => {
+          update.mutate(data as any, { onSuccess: () => setSettling(null) });
+        }}
+        loading={update.isPending}
+      />
     </AppLayout>
   );
 }
