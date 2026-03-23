@@ -48,6 +48,13 @@ const navGroups = [
     ],
   },
   {
+    label: "Patrimônio",
+    items: [
+      { title: "Patrimônio", url: "/patrimonio", icon: Landmark },
+      { title: "Investimentos", url: "/investimentos", icon: PieChart },
+    ],
+  },
+  {
     label: "Configurações",
     items: [
       { title: "Configurações", url: "/configuracoes", icon: Settings },
