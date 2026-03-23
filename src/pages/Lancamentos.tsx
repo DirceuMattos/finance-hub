@@ -89,7 +89,7 @@ export default function Lancamentos() {
       }
       return true;
     });
-  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterType, dateFrom, dateTo]);
+  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterType, filterCardInvoice, dateFrom, dateTo]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(new Date(d), "dd/MM/yyyy") : "—";
