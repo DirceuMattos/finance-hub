@@ -1,61 +1,43 @@
 
 
-## Plano: Exibir lançamentos de fatura de cartão nos módulos de Cartões e Faturas Projetadas
+## Diagnóstico: Por que o módulo de Cartões não exibe dados
 
-### Contexto
+### Causa raiz identificada
 
-Os lançamentos de fatura de cartão existem na tabela `transactions` com categorias:
-- "Cartões de Crédito - Pessoal" → cartão "BRA Pessoal"
-- "Cartões de Crédito - Prof." → cartão "Nu Infotkt"
+O hook `useCardInvoiceTransactions` filtra transações cujas categorias sejam exatamente:
+- `"Cartões de Crédito - Pessoal"`
+- `"Cartões de Crédito - Prof."`
 
-As telas Cartões e Faturas Projetadas só leem `card_purchases`/`card_installments` (vazias). Precisam consumir também os dados de `transactions`.
+**Essas categorias não existem no banco de dados.** A lista de categorias cadastradas não contém nenhuma entrada com esses nomes. Portanto, o filtro retorna zero transações, e tanto as barras de progresso dos cartões quanto as faturas projetadas ficam vazias.
 
-### Alterações
+### O que é necessário no banco (não no frontend)
 
-**1. Novo hook: `src/hooks/useCardInvoiceTransactions.ts`**
+Para que o módulo funcione como projetado, são necessários **dois passos no banco externo**:
 
-Query em `transactions` filtrando por categorias de fatura de cartão (`CARD_INVOICE_CATEGORIES`). Retorna os lançamentos agrupados por cartão e por mês, usando o mapeamento `CARD_MAP` para associar categoria → nome do cartão.
-
-Expõe:
-- `useCardInvoicesByCard(cardName)` — total de faturas por cartão (para uso na barra de progresso)
-- `useCardInvoiceProjections()` — agrupamento mês/cartão para Faturas Projetadas
-
-**2. Tela Cartões (`src/pages/Cartoes.tsx`)**
-
-- Importar o novo hook para obter totais de fatura por cartão
-- Calcular uso do limite: somar `amount` das transações de fatura vinculadas ao cartão pelo mapeamento `CARD_MAP`
-- Atualizar as barras de progresso com valores reais em vez de zero fixo
-- Manter a nota informativa existente
-
-**3. Tela Faturas Projetadas (`src/pages/FaturasProjetadas.tsx`)**
-
-- Combinar dados de `useBillingProjection()` (card_installments) com dados de `useCardInvoiceProjections()` (transactions de fatura)
-- Exibir as faturas de cartão agrupadas por mês e cartão
-- Mostrar status (Previsto/Realizado) baseado no `status` real da transaction
-- Adicionar coluna de status na tabela
-
-**4. `src/lib/cardInvoiceRules.ts`**
-
-- Adicionar mapeamento reverso: nome do cartão → categoria (para facilitar lookups)
-
-### Lógica de agrupamento para Faturas Projetadas
-
-```text
-transactions (category = "Cartões de Crédito - Pessoal")
-  → card_name = "BRA Pessoal"
-  → billing_month = competence_date (yyyy-MM)
-  → due_date = due_date da transaction
-  → total_amount = amount
-  → status = transaction.status
+**Passo 1 — Criar as categorias faltantes:**
+```sql
+INSERT INTO categories (name, category_group, transaction_nature, is_containable, is_active)
+VALUES
+  ('Cartões de Crédito - Pessoal', 'Despesa essencial', 'expense', false, true),
+  ('Cartões de Crédito - Prof.', 'Despesa profissional', 'expense', false, true);
 ```
 
-### Arquivos
+**Passo 2 — Vincular transações existentes a essas categorias:**
 
-| Arquivo | Alteração |
+Se já existem lançamentos de fatura de cartão no banco mas com outra categoria (ou se precisam ser criados), eles devem ter `category_id` apontando para as novas categorias acima.
+
+Exemplo: se existem lançamentos de pagamento de fatura do BRA Pessoal que hoje estão na categoria "DESP. BANCÁRIAS" ou outra, seria preciso atualizar o `category_id` deles para a categoria "Cartões de Crédito - Pessoal".
+
+### Resumo
+
+| Item | Estado |
 |---|---|
-| `src/hooks/useCardInvoiceTransactions.ts` | Novo — query de transactions de fatura agrupadas |
-| `src/pages/Cartoes.tsx` | Barras de progresso com dados reais de fatura |
-| `src/pages/FaturasProjetadas.tsx` | Combinar projeções com transactions de fatura |
-| `src/lib/cardInvoiceRules.ts` | Mapeamento reverso cartão → categoria |
+| Frontend (hook, tela Cartões, Faturas) | Pronto e funcional |
+| Categorias no banco | **Faltam** — "Cartões de Crédito - Pessoal" e "Cartões de Crédito - Prof." não existem |
+| Transações vinculadas | **Nenhuma** transação usa essas categorias |
+| Ação necessária | Criar categorias no banco externo e vincular transações |
 
-Sem alteração no banco. Sem novas tabelas.
+### Alternativa
+
+Se você preferir **não criar essas categorias** e em vez disso usar um critério diferente para identificar faturas de cartão (por exemplo, pela `account_id` ou `financial_entity_id` vinculada ao cartão), posso ajustar o mapeamento no frontend. Nesse caso, preciso saber qual critério usar para identificar uma transação como "fatura de cartão".
+
