@@ -23,6 +23,7 @@ import type { Transaction } from "@/types/database";
 function StatusBadge({ status }: { status: string }) {
   if (status === "paid") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Realizado</Badge>;
   if (status === "cancelled") return <Badge variant="destructive">Cancelado</Badge>;
+  // Both "pending" and "planned" = Previsto
   return <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Previsto</Badge>;
 }
 
