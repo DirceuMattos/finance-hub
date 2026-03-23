@@ -6,6 +6,8 @@ import {
   ShoppingCart,
   FileText,
   CalendarRange,
+  Landmark,
+  PieChart,
   Settings,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
