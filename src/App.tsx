@@ -11,6 +11,8 @@ import ComprasCartao from "./pages/ComprasCartao";
 import FaturasProjetadas from "./pages/FaturasProjetadas";
 import FluxoMensal from "./pages/FluxoMensal";
 import Configuracoes from "./pages/Configuracoes";
+import Patrimonio from "./pages/Patrimonio";
+import Investimentos from "./pages/Investimentos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
