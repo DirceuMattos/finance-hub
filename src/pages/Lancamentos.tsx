@@ -52,6 +52,7 @@ export default function Lancamentos() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [filterCardInvoice, setFilterCardInvoice] = useState("all");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
 
