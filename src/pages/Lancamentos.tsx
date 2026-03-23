@@ -9,8 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Plus, Pencil, Trash2, Ban } from "lucide-react";
+import { CalendarIcon, Plus, Pencil, Trash2, Ban, CreditCard } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isCardInvoice, getCardInvoiceStatus, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -90,11 +91,43 @@ export default function Lancamentos() {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(new Date(d), "dd/MM/yyyy") : "—";
 
+  const resolveStatus = (r: Transaction) => {
+    const catName = r.categories?.name;
+    if (isCardInvoice(catName)) return getCardInvoiceStatus(catName!, r.competence_date);
+    return r.status;
+  };
+
   const columns: Column<Transaction>[] = [
     { key: "competence_date", header: "Data", render: (r) => fmtDate(r.competence_date) },
-    { key: "description", header: "Descrição" },
+    {
+      key: "description", header: "Descrição", render: (r) => {
+        const catName = r.categories?.name;
+        if (isCardInvoice(catName)) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span>{r.description}</span>
+              <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
+                <CreditCard className="h-3 w-3" />Fatura
+              </Badge>
+            </div>
+          );
+        }
+        return r.description;
+      },
+    },
     { key: "transaction_type", header: "Tipo", render: (r) => <TypeBadge type={r.transaction_type} /> },
-    { key: "category", header: "Categoria", render: (r) => r.categories?.name || "—" },
+    {
+      key: "category", header: "Categoria", render: (r) => {
+        const catName = r.categories?.name;
+        const cardLabel = catName ? getCardInvoiceLabel(catName) : "";
+        return (
+          <div className="flex items-center gap-1.5">
+            <span>{catName || "—"}</span>
+            {cardLabel && <Badge variant="secondary" className="text-xs">{cardLabel}</Badge>}
+          </div>
+        );
+      },
+    },
     {
       key: "entity", header: "Entidade", render: (r) => (
         <div className="flex items-center gap-1.5">
@@ -105,7 +138,7 @@ export default function Lancamentos() {
     },
     { key: "account", header: "Conta", render: (r) => r.accounts?.name || "—" },
     { key: "amount", header: "Valor", render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
-    { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+    { key: "status", header: "Status", render: (r) => <StatusBadge status={resolveStatus(r)} /> },
     {
       key: "actions", header: "Ações", render: (r) => (
         <div className="flex gap-1">
