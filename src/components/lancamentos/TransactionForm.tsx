@@ -218,7 +218,15 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
           )} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <DateField name="competence_date" label="Competência *" />
+            <FormField control={form.control} name="competence_date" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Competência (mês/ano) *</FormLabel>
+                <FormControl>
+                  <Input type="month" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
             <DateField name="due_date" label="Vencimento" />
             <DateField name="payment_date" label="Pagamento" />
           </div>
