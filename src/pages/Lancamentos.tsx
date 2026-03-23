@@ -146,12 +146,12 @@ export default function Lancamentos() {
     },
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
-      render: (r) => (
-        <div className="flex items-center gap-1.5">
-          <span>{r.financial_entities?.name || "—"}</span>
-          <EntityTypeBadge entityType={entityMap.get(r.financial_entity_id)} />
-        </div>
-      ),
+      render: (r) => {
+        const entityType = entityMap.get(r.financial_entity_id);
+        const name = r.financial_entities?.name || "—";
+        if (name === "—") return "—";
+        return <EntityTypeBadge entityType={entityType} />;
+      },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
@@ -258,7 +258,7 @@ export default function Lancamentos() {
         data={filtered as any}
         loading={isLoading}
         emptyMessage="Nenhum lançamento encontrado."
-        defaultSortKey="competence_date"
+        defaultSortKey="due_date"
         defaultSortDir="asc"
       />
 
