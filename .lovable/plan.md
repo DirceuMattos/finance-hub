@@ -1,32 +1,32 @@
 
 
-## Plano: Filtro dedicado para Faturas de Cartao nos Lancamentos
+## Plano: Ajuste na tela de Cartões — nota sobre dados históricos
 
-### Situacao Atual
+### Situação Atual
 
-A maioria dos requisitos **ja esta implementada**:
-- Badge "Fatura" com icone CreditCard na descricao ✓
-- Badge do cartao associado (BRA Pessoal / Nu Infotkt) na categoria ✓
-- Status temporal calculado (paid/pending baseado no cutoff 2026-02-25) ✓
-- Registros mantidos como despesas ✓
-- Badge Pessoal/Empresa na coluna de entidade ✓
-- Entidades agrupadas no filtro (Pessoais / Empresariais) ✓
+Itens 1 a 5 **já estão implementados**:
+- Badge "Fatura" + nome do cartão (BRA Pessoal / Nu Infotkt) na descrição e categoria ✓
+- Registros mantidos em `transactions` ✓
+- Badge Pessoal/Empresa na entidade ✓
+- Filtro "Faturas de Cartão" no FilterBar ✓
+- Status temporal (paid/pending baseado no cutoff 2026-02-25) ✓
+- Dashboard e Fluxo Mensal impactados normalmente via views ✓
 
-### Unico ajuste necessario
+### Único ajuste necessário
 
-Adicionar um **filtro especifico para faturas de cartao** no FilterBar. Atualmente o filtro de tipo so tem Receita/Despesa/Transferencia. Adicionar uma opcao "Fatura de Cartao" que filtra apenas lancamentos cuja categoria seja uma das `CARD_INVOICE_CATEGORIES`.
+**Item 6 — Tela de Cartões**: Adicionar uma nota informativa em cada card indicando que os dados atuais de uso representam pagamentos de fatura históricos (vindos de `transactions`), não compras itemizadas (que viriam de `card_purchases`).
 
-### Implementacao
+### Implementação
 
-**Arquivo: `src/pages/Lancamentos.tsx`**
+**Arquivo: `src/pages/Cartoes.tsx`**
 
-1. Adicionar estado `filterCardInvoice` (all / card_invoice / non_card_invoice)
-2. No `filtered` useMemo, quando `filterCardInvoice === "card_invoice"`, manter apenas registros onde `isCardInvoice(t.categories?.name)` seja true
-3. Adicionar Select no FilterBar com opcoes: "Todos", "Faturas de Cartao", "Outros lancamentos"
+- Na seção de "Uso do Limite" (atualmente fixa em 0), adicionar um texto informativo:
+  `"Dados de uso baseados em pagamentos de fatura registrados. Para detalhamento por compra, utilize Compras no Cartão."`
+- Manter o layout atual dos cards com limite, teto gerencial, entidade e badges
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| `src/pages/Lancamentos.tsx` | Novo filtro "Fatura de Cartao" no FilterBar |
+| `src/pages/Cartoes.tsx` | Nota informativa sobre origem dos dados em cada card |
 
-Sem alteracao no banco. Sem novas tabelas.
+Sem alteração no banco.
 
