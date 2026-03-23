@@ -1,65 +1,63 @@
 
 
-## Plano: Corrigir consultas e garantir funcionamento de Configuracoes e Lancamentos
+## Plano: Separação Pessoal x Empresarial na Interface
 
-### 1. Corrigir `useDashboardData.ts`
+### Contexto
+A tabela `financial_entities` possui `entity_type` (personal/business). Contas e cartões já possuem `financial_entity_id`. Transactions e card_purchases também. As views de fluxo mensal já existem separadas (consolidated/personal/business). O plano aplica essa separação como filtro visual nas telas principais.
 
-Ajustar os nomes das colunas da view `vw_monthly_cashflow_consolidated` para os nomes reais:
-- `total_income` → `income_paid`
-- `total_expense` → `expense_paid`
-- `net_balance` → `projected_balance`
+### Alterações
 
-Corrigir o filtro de mes:
-- De: `.eq("reference_month", "2026-03")`
-- Para: `.gte("reference_month", "2026-03-01").lt("reference_month", "2026-04-01")`
+**1. Dashboard — Filtro por visão (Consolidado/Pessoal/Empresarial)**
 
-Usar `addMonths` do date-fns para calcular o proximo mes no filtro.
+- Adicionar `Tabs` no topo: Consolidado, Pessoal, Empresarial
+- No hook `useDashboardData`, receber parâmetro `view: "consolidated" | "personal" | "business"`
+- Quando `view !== "consolidated"`:
+  - Filtrar contas pelo `financial_entity_id` de entidades do tipo correspondente
+  - Filtrar transactions pela entidade
+  - Usar a view de cashflow correta (`vw_monthly_cashflow_personal` ou `vw_monthly_cashflow_business`)
+  - Filtrar card_installments por cartões vinculados à entidade
+- Buscar entidades no hook e criar mapa `entity_type → entity_ids[]` para filtrar
 
-No cashflowChart query, corrigir os nomes das colunas no select e no tipo de retorno.
+**2. Lançamentos — Filtro por entidade e badge visual**
 
-No fallback de transactions, manter a logica atual (nao depende da view).
+- Já possui filtro por entidade (funcional). Melhorias:
+  - Na tabela, adicionar badge visual "Pessoal" ou "Empresarial" baseado no `entity_type` da entidade vinculada
+  - No filtro de entidade, agrupar opções: mostrar "— Pessoais —" e "— Empresariais —" como separadores no Select
+  - No formulário, ao selecionar conta, preencher automaticamente a entidade financeira baseada no `financial_entity_id` da conta
 
-### 2. Corrigir `useMonthlyCashflow.ts`
+**3. Configurações — Sem grandes mudanças**
 
-Atualizar a interface `MonthlyCashflow` para refletir os campos reais:
-- `income_planned`, `income_paid`, `expense_planned`, `expense_paid`
-- `projected_card_amount`, `potential_containment`
-- `total_portfolio_value`, `investment_estimated_return`
-- `projected_balance`, `minimum_reserve`, `traffic_light`
+- Já funcional. Adicionar apenas:
+  - Na tab de Contas: coluna mostrando "Pessoal"/"Empresarial" baseado na entidade vinculada
+  - Na tab de Cartões: idem
 
-Remover `total_income`, `total_expense`, `net_balance`, `accumulated_balance`.
+**4. Compras no Cartão — Filtro por entidade + badge**
 
-### 3. Corrigir `Dashboard.tsx`
+- Adicionar filtro por entidade no FilterBar
+- Na tabela, exibir badge "Pessoal"/"Empresarial" baseado na entidade da compra
+- No formulário, ao selecionar cartão, sugerir a entidade automaticamente (cartão já possui `financial_entity_id`)
 
-Atualizar as referencias:
-- `flow?.total_income` → `flow?.income_paid`
-- `flow?.total_expense` → `flow?.expense_paid`
-- `flow?.net_balance` → `flow?.projected_balance`
+**5. Cartões — Agrupar por entidade**
 
-No chartData, mapear:
-- `Receitas: d.income_paid`
-- `Despesas: d.expense_paid`
+- Adicionar Tabs (Todos/Pessoal/Empresarial) para filtrar cards por `entity_type` da entidade vinculada
 
-### 4. Corrigir `FluxoMensal.tsx`
+**6. Fluxo Mensal — Já implementado**
 
-Atualizar as referencias de colunas na tabela e nos totais para usar os nomes reais (`income_paid`, `expense_paid`, `projected_balance`, `traffic_light`).
-
-Exibir `traffic_light` como Badge colorido quando disponivel.
-
-Adicionar colunas extras relevantes: `income_planned`, `expense_planned`, `projected_card_amount`.
-
-### 5. Configuracoes e Lancamentos
-
-Esses modulos ja estao implementados e funcionais — hooks CRUD, tabs, formularios e filtros ja existem. Precisam apenas da conexao ao Supabase externo (ja feita no passo anterior). Nenhuma alteracao necessaria nesses arquivos.
+- Já possui alternância consolidated/personal/business usando as views corretas. Nenhuma alteração necessária.
 
 ### Arquivos alterados
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| `src/hooks/useDashboardData.ts` | Nomes de colunas da view, filtro de mes por intervalo de data |
-| `src/hooks/useMonthlyCashflow.ts` | Interface com campos reais da view |
-| `src/pages/Dashboard.tsx` | Referencias aos novos nomes de campo |
-| `src/pages/FluxoMensal.tsx` | Colunas da tabela e totais com nomes reais |
+| `src/hooks/useDashboardData.ts` | Receber `view`, filtrar por entidade, usar view correta |
+| `src/pages/Dashboard.tsx` | Adicionar Tabs de visão |
+| `src/pages/Lancamentos.tsx` | Badge pessoal/empresarial, auto-fill entidade ao selecionar conta |
+| `src/components/lancamentos/TransactionForm.tsx` | Auto-preencher entidade ao selecionar conta |
+| `src/components/configuracoes/AccountsTab.tsx` | Coluna pessoal/empresarial |
+| `src/components/configuracoes/CardsTab.tsx` | Coluna pessoal/empresarial |
+| `src/pages/Cartoes.tsx` | Tabs por tipo de entidade |
+| `src/pages/ComprasCartao.tsx` | Filtro por entidade, badge, auto-fill no form |
+| `src/components/cartoes/CardPurchaseForm.tsx` | Auto-preencher entidade ao selecionar cartão |
 
 ### Nenhuma tabela criada ou alterada
 
