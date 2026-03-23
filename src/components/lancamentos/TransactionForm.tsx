@@ -21,7 +21,7 @@ const schema = z.object({
   category_id: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   account_id: z.string().optional().nullable(),
-  amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero"),
+  amount: z.string().min(1, "Valor é obrigatório"),
   competence_date: z.string().min(1, "Competência é obrigatória"),
   due_date: z.date().optional().nullable(),
   payment_date: z.date().optional().nullable(),
