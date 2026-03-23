@@ -89,12 +89,18 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   }, [transaction, open]);
 
   const handleSubmit = (data: FormData) => {
+    const parsedAmount = parseFloat(String(data.amount).replace(/\./g, "").replace(",", "."));
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      form.setError("amount", { message: "Valor inválido" });
+      return;
+    }
     const payload: any = {
       ...data,
       category_id: data.category_id || null,
       account_id: data.account_id || null,
       notes: data.notes || null,
-      competence_date: format(data.competence_date, "yyyy-MM-dd"),
+      amount: parsedAmount,
+      competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
       payment_date: data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
     };
