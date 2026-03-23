@@ -3,11 +3,19 @@ import { supabase } from "@/lib/supabaseClient";
 
 export interface MonthlyCashflow {
   reference_month: string;
-  total_income: number;
-  total_expense: number;
-  net_balance: number;
-  accumulated_balance?: number;
-  [key: string]: any; // allow extra columns from views
+  current_balance_base: number;
+  income_planned: number;
+  income_paid: number;
+  expense_planned: number;
+  expense_paid: number;
+  projected_card_amount: number;
+  potential_containment: number;
+  total_portfolio_value: number;
+  investment_estimated_return: number;
+  projected_balance: number;
+  minimum_reserve: number;
+  traffic_light: string;
+  [key: string]: any;
 }
 
 type ViewName = "consolidated" | "personal" | "business";
