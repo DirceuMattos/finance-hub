@@ -11,7 +11,7 @@ export function useTransactions() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("transactions")
-        .select("*, categories(name), financial_entities(name), accounts(name)")
+        .select("*, categories(name), financial_entities(name, entity_type), accounts(name)")
         .order("competence_date", { ascending: false });
       if (error) throw error;
       return data as Transaction[];
