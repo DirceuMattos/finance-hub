@@ -22,7 +22,7 @@ const schema = z.object({
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   account_id: z.string().optional().nullable(),
   amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero"),
-  competence_date: z.date({ required_error: "Data de competência é obrigatória" }),
+  competence_date: z.string().min(1, "Competência é obrigatória"),
   due_date: z.date().optional().nullable(),
   payment_date: z.date().optional().nullable(),
   status: z.string().min(1, "Status é obrigatório"),
