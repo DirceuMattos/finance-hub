@@ -1,42 +1,59 @@
 
 
-## Plano: Validacao e Ajustes Finais do MVP
+## Plano: Regra Temporal para Lancamentos de Cartao de Credito
 
-### Situacao Atual
+### Contexto
 
-O codigo ja esta **100% implementado e conectado** ao Supabase externo. Todas as telas, hooks CRUD, formularios e filtros existem e funcionam. As consultas de rede confirmam leitura real do banco.
+Existem transactions no banco com categorias "Cartoes de Credito - Pessoal" e "Cartoes de Credito - Prof." que representam faturas de cartao. O usuario quer aplicar uma regra temporal no frontend:
+- `competence_date <= 2026-02-25` → tratado como realizado/historico
+- `competence_date >= 2026-02-26` → tratado como previsto/futuro
 
-### O que ja esta funcional
+E associar visualmente:
+- "Cartoes de Credito - Pessoal" → cartao "BRA Pessoal"
+- "Cartoes de Credito - Prof." → cartao "Nu Infotkt"
 
-| Modulo | Status | Consultas reais |
-|---|---|---|
-| **Configuracoes** | Completo | `financial_entities`, `accounts`, `cards`, `categories`, `system_parameters` — CRUD completo com filtros, drawers, badges pessoal/empresa |
-| **Lancamentos** | Completo | `transactions` com joins em `categories`, `financial_entities`, `accounts` — filtros por periodo, entidade, conta, categoria, status, tipo |
-| **Compras no Cartao** | Completo | `card_purchases` com joins em `cards`, `categories`, `financial_entities` — filtro por cartao e entidade |
-| **Faturas Projetadas** | Completo | `vw_card_billing_projection` com fallback para `card_installments` — filtro por cartao |
-| **Dashboard** | Completo | `accounts`, `vw_monthly_cashflow_consolidated/personal/business`, `transactions`, `card_installments` — tabs Consolidado/Pessoal/Empresarial |
-| **Fluxo Mensal** | Completo | `vw_monthly_cashflow_consolidated/personal/business` — alternancia de visao |
-| **Cartoes** | Completo | `cards` com `financial_entities` — tabs por tipo de entidade |
+### Implementacao
 
-### Dados vazios
+**1. Criar helper de identificacao de lancamento de fatura**
 
-As tabelas `transactions`, `card_purchases`, `card_installments` e as views de cashflow retornam `[]`. Isso e esperado se os dados de teste ainda nao foram inseridos nessas tabelas especificas. As tabelas estruturais (`financial_entities`, `accounts`, `categories`, `cards`) retornam dados corretamente.
+Criar constantes e funcao utilitaria em `src/lib/cardInvoiceRules.ts`:
 
-### Ajustes necessarios (menores)
+```text
+CARD_INVOICE_CATEGORIES = [
+  "Cartões de Crédito - Pessoal",
+  "Cartões de Crédito - Prof."
+]
+CUTOFF_DATE = "2026-02-25"
+CARD_MAP = {
+  "Cartões de Crédito - Pessoal": "BRA Pessoal",
+  "Cartões de Crédito - Prof.": "Nu Infotkt"
+}
 
-1. **Corrigir warning de ref em FluxoMensal** — componente `PageHeader` ou `AppLayout` precisa de `forwardRef` em algum ponto. Warning nao-critico.
+isCardInvoice(categoryName) → boolean
+getCardInvoiceStatus(categoryName, competenceDate) → "paid" | "pending"
+getCardInvoiceLabel(categoryName) → string (ex: "BRA Pessoal")
+```
 
-2. **Nenhuma alteracao de schema** necessaria.
+**2. Lancamentos (`Lancamentos.tsx`)**
 
-3. **Nenhum novo arquivo** necessario.
+- Na coluna "Descricao", se `isCardInvoice`, adicionar Badge `"Fatura"` com icone de cartao (CreditCard) ao lado
+- Na coluna "Status", se `isCardInvoice`, usar o status calculado pela regra temporal em vez do `status` do banco
+- Na coluna "Categoria", manter o nome original mas com badge indicando o cartao associado
 
-### Conclusao
+**3. Dashboard (`useDashboardData.ts`)**
 
-O MVP esta pronto. Para ver dados nas telas de Lancamentos, Compras no Cartao, Faturas e Dashboard, basta inserir registros nas tabelas `transactions` e `card_purchases` no banco externo. As views de cashflow serao populadas automaticamente conforme a logica ja existente no banco.
+- Sem alteracao na query — os valores ja vem corretos do banco. A regra temporal e apenas visual/classificatoria no frontend.
 
-### Proximos passos sugeridos
+**4. Fluxo Mensal (`FluxoMensal.tsx`)**
 
-- Inserir dados de teste em `transactions` e `card_purchases` para validar as telas
-- Implementar tela de Recorrencias (`recurrences`)
-- Resolver warning de ref no FluxoMensal (menor)
+- Sem alteracao — usa views que ja calculam os valores. A regra temporal nao altera os montantes, apenas a classificacao visual.
+
+### Arquivos
+
+| Arquivo | Alteracao |
+|---|---|
+| `src/lib/cardInvoiceRules.ts` | Novo: constantes e funcoes helper |
+| `src/pages/Lancamentos.tsx` | Badge visual "Fatura" + status temporal calculado para lancamentos de cartao |
+
+### Sem alteracao no banco
 
