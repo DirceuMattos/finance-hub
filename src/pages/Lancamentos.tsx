@@ -255,7 +255,7 @@ export default function Lancamentos() {
         data={filtered as any}
         loading={isLoading}
         emptyMessage="Nenhum lançamento encontrado."
-        defaultSortKey="competence_date"
+        defaultSortKey="due_date"
         defaultSortDir="asc"
       />
 
