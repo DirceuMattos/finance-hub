@@ -196,6 +196,14 @@ export default function Lancamentos() {
             <SelectItem value="transfer">Transferência</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filterCardInvoice} onValueChange={setFilterCardInvoice}>
+          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Fatura" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="card_invoice">Faturas de Cartão</SelectItem>
+            <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
