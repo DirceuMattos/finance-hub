@@ -146,15 +146,9 @@ export default function Lancamentos() {
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
       render: (r) => {
-        const name = r.financial_entities?.name || "—";
-        if (name === "—") return "—";
-        const entityType = entityMap.get(r.financial_entity_id);
-        return (
-          <div className="flex items-center gap-1.5">
-            <span>{name}</span>
-            <EntityTypeBadge entityType={entityType} />
-          </div>
-        );
+        const entityType = r.financial_entities?.entity_type;
+        if (!entityType) return "—";
+        return <EntityTypeBadge entityType={entityType} />;
       },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
