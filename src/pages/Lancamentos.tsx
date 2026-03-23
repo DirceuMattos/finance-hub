@@ -159,7 +159,10 @@ export default function Lancamentos() {
       key: "actions", header: "Ações", render: (r) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => { setEditing(r); setFormOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-          {r.status !== "cancelled" && (
+          {(r.status === "planned" || r.status === "pending") && (
+            <Button variant="ghost" size="icon" onClick={() => setSettling(r)} title="Registrar baixa"><CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" /></Button>
+          )}
+          {(r.status === "planned" || r.status === "pending") && (
             <Button variant="ghost" size="icon" onClick={() => handleCancel(r.id)} title="Cancelar"><Ban className="h-4 w-4 text-[hsl(var(--warning))]" /></Button>
           )}
           <Button variant="ghost" size="icon" onClick={() => setDeleting(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
