@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
@@ -23,16 +24,32 @@ const fmtMonth = (m: string) => {
   }
 };
 
-const trafficLightVariant = (light: string | undefined) => {
-  if (!light) return undefined;
+const toMonthParam = (m: string) => {
+  try {
+    return format(new Date(m), "yyyy-MM");
+  } catch {
+    return m;
+  }
+};
+
+type TrafficInfo = { label: string; className: string };
+
+const trafficLightMap = (light: string | undefined): TrafficInfo | null => {
+  if (!light) return null;
   const l = light.toLowerCase();
-  if (l === "green" || l === "verde") return "default";
-  if (l === "yellow" || l === "amarelo") return "secondary";
-  if (l === "red" || l === "vermelho") return "destructive";
-  return "outline";
+  if (l === "green" || l === "verde" || l === "saudável" || l === "saudavel")
+    return { label: "Saudável", className: "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]" };
+  if (l === "yellow" || l === "amarelo" || l === "atenção" || l === "atencao")
+    return { label: "Atenção", className: "bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground,0_0%_0%))]" };
+  if (l === "blue" || l === "azul" || l === "balanced" || l === "equilibrado")
+    return { label: "Equilibrado", className: "bg-primary text-primary-foreground" };
+  if (l === "red" || l === "vermelho" || l === "crítico" || l === "critico")
+    return { label: "Crítico", className: "bg-destructive text-destructive-foreground" };
+  return { label: light, className: "" };
 };
 
 export default function FluxoMensal() {
+  const navigate = useNavigate();
   const [view, setView] = useState<ViewName>("consolidated");
   const { data = [], isLoading } = useMonthlyCashflow(view);
 
@@ -45,7 +62,14 @@ export default function FluxoMensal() {
   const columns: Column<MonthlyCashflow>[] = [
     {
       key: "reference_month", header: "Mês",
-      render: (r) => <span className="font-medium">{fmtMonth(r.reference_month)}</span>,
+      render: (r) => (
+        <button
+          className="font-medium text-primary hover:underline cursor-pointer bg-transparent border-none p-0"
+          onClick={() => navigate(`/lancamentos?mes=${toMonthParam(r.reference_month)}`)}
+        >
+          {fmtMonth(r.reference_month)}
+        </button>
+      ),
     },
     {
       key: "income_planned", header: "Receita Prevista",
@@ -53,7 +77,7 @@ export default function FluxoMensal() {
     },
     {
       key: "income_paid", header: "Receita Realizada",
-      render: (r) => <span className="text-[hsl(var(--success,152_60%_40%))]">{fmt(r.income_paid ?? 0)}</span>,
+      render: (r) => <span className="text-[hsl(var(--success))]">{fmt(r.income_paid ?? 0)}</span>,
     },
     {
       key: "expense_planned", header: "Despesa Prevista",
@@ -82,9 +106,9 @@ export default function FluxoMensal() {
     {
       key: "traffic_light", header: "Semáforo",
       render: (r) => {
-        const variant = trafficLightVariant(r.traffic_light);
-        if (!variant) return "—";
-        return <Badge variant={variant as any}>{r.traffic_light}</Badge>;
+        const info = trafficLightMap(r.traffic_light);
+        if (!info) return "—";
+        return <Badge className={info.className}>{info.label}</Badge>;
       },
     },
   ];
