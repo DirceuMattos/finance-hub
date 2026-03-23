@@ -1,59 +1,32 @@
 
 
-## Plano: Regra Temporal para Lancamentos de Cartao de Credito
+## Plano: Filtro dedicado para Faturas de Cartao nos Lancamentos
 
-### Contexto
+### Situacao Atual
 
-Existem transactions no banco com categorias "Cartoes de Credito - Pessoal" e "Cartoes de Credito - Prof." que representam faturas de cartao. O usuario quer aplicar uma regra temporal no frontend:
-- `competence_date <= 2026-02-25` → tratado como realizado/historico
-- `competence_date >= 2026-02-26` → tratado como previsto/futuro
+A maioria dos requisitos **ja esta implementada**:
+- Badge "Fatura" com icone CreditCard na descricao ✓
+- Badge do cartao associado (BRA Pessoal / Nu Infotkt) na categoria ✓
+- Status temporal calculado (paid/pending baseado no cutoff 2026-02-25) ✓
+- Registros mantidos como despesas ✓
+- Badge Pessoal/Empresa na coluna de entidade ✓
+- Entidades agrupadas no filtro (Pessoais / Empresariais) ✓
 
-E associar visualmente:
-- "Cartoes de Credito - Pessoal" → cartao "BRA Pessoal"
-- "Cartoes de Credito - Prof." → cartao "Nu Infotkt"
+### Unico ajuste necessario
+
+Adicionar um **filtro especifico para faturas de cartao** no FilterBar. Atualmente o filtro de tipo so tem Receita/Despesa/Transferencia. Adicionar uma opcao "Fatura de Cartao" que filtra apenas lancamentos cuja categoria seja uma das `CARD_INVOICE_CATEGORIES`.
 
 ### Implementacao
 
-**1. Criar helper de identificacao de lancamento de fatura**
+**Arquivo: `src/pages/Lancamentos.tsx`**
 
-Criar constantes e funcao utilitaria em `src/lib/cardInvoiceRules.ts`:
-
-```text
-CARD_INVOICE_CATEGORIES = [
-  "Cartões de Crédito - Pessoal",
-  "Cartões de Crédito - Prof."
-]
-CUTOFF_DATE = "2026-02-25"
-CARD_MAP = {
-  "Cartões de Crédito - Pessoal": "BRA Pessoal",
-  "Cartões de Crédito - Prof.": "Nu Infotkt"
-}
-
-isCardInvoice(categoryName) → boolean
-getCardInvoiceStatus(categoryName, competenceDate) → "paid" | "pending"
-getCardInvoiceLabel(categoryName) → string (ex: "BRA Pessoal")
-```
-
-**2. Lancamentos (`Lancamentos.tsx`)**
-
-- Na coluna "Descricao", se `isCardInvoice`, adicionar Badge `"Fatura"` com icone de cartao (CreditCard) ao lado
-- Na coluna "Status", se `isCardInvoice`, usar o status calculado pela regra temporal em vez do `status` do banco
-- Na coluna "Categoria", manter o nome original mas com badge indicando o cartao associado
-
-**3. Dashboard (`useDashboardData.ts`)**
-
-- Sem alteracao na query — os valores ja vem corretos do banco. A regra temporal e apenas visual/classificatoria no frontend.
-
-**4. Fluxo Mensal (`FluxoMensal.tsx`)**
-
-- Sem alteracao — usa views que ja calculam os valores. A regra temporal nao altera os montantes, apenas a classificacao visual.
-
-### Arquivos
+1. Adicionar estado `filterCardInvoice` (all / card_invoice / non_card_invoice)
+2. No `filtered` useMemo, quando `filterCardInvoice === "card_invoice"`, manter apenas registros onde `isCardInvoice(t.categories?.name)` seja true
+3. Adicionar Select no FilterBar com opcoes: "Todos", "Faturas de Cartao", "Outros lancamentos"
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/lib/cardInvoiceRules.ts` | Novo: constantes e funcoes helper |
-| `src/pages/Lancamentos.tsx` | Badge visual "Fatura" + status temporal calculado para lancamentos de cartao |
+| `src/pages/Lancamentos.tsx` | Novo filtro "Fatura de Cartao" no FilterBar |
 
-### Sem alteracao no banco
+Sem alteracao no banco. Sem novas tabelas.
 
