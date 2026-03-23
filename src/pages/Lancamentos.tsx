@@ -52,6 +52,7 @@ export default function Lancamentos() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterType, setFilterType] = useState("all");
+  const [filterCardInvoice, setFilterCardInvoice] = useState("all");
   const [dateFrom, setDateFrom] = useState<Date | undefined>();
   const [dateTo, setDateTo] = useState<Date | undefined>();
 
@@ -76,6 +77,8 @@ export default function Lancamentos() {
       if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterType !== "all" && t.transaction_type !== filterType) return false;
+      if (filterCardInvoice === "card_invoice" && !isCardInvoice(t.categories?.name)) return false;
+      if (filterCardInvoice === "non_card_invoice" && isCardInvoice(t.categories?.name)) return false;
       if (dateFrom) {
         const cd = new Date(t.competence_date);
         if (cd < dateFrom) return false;
@@ -86,7 +89,7 @@ export default function Lancamentos() {
       }
       return true;
     });
-  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterType, dateFrom, dateTo]);
+  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterType, filterCardInvoice, dateFrom, dateTo]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(new Date(d), "dd/MM/yyyy") : "—";
@@ -191,6 +194,14 @@ export default function Lancamentos() {
             <SelectItem value="income">Receita</SelectItem>
             <SelectItem value="expense">Despesa</SelectItem>
             <SelectItem value="transfer">Transferência</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterCardInvoice} onValueChange={setFilterCardInvoice}>
+          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Fatura" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="card_invoice">Faturas de Cartão</SelectItem>
+            <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
