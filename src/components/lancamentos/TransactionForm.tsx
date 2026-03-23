@@ -152,7 +152,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                 <Select onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">Previsto</SelectItem>
+                    <SelectItem value="planned">Previsto</SelectItem>
                     <SelectItem value="paid">Realizado</SelectItem>
                     <SelectItem value="cancelled">Cancelado</SelectItem>
                   </SelectContent>

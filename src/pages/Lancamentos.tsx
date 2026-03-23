@@ -216,7 +216,7 @@ export default function Lancamentos() {
           <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="pending">Previsto</SelectItem>
+            <SelectItem value="planned">Previsto</SelectItem>
             <SelectItem value="paid">Realizado</SelectItem>
             <SelectItem value="cancelled">Cancelado</SelectItem>
           </SelectContent>
