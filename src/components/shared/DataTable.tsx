@@ -126,7 +126,7 @@ export function DataTable<T extends object>({
             sorted.map((row, idx) => (
               <TableRow key={idx}>
                 {columns.map((col) => (
-                  <TableCell key={col.key}>
+                  <TableCell key={col.key} className="text-xs py-1.5 px-2">
                     {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
                   </TableCell>
                 ))}
