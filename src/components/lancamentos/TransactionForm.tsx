@@ -48,7 +48,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: 0, competence_date: new Date(), due_date: null, payment_date: null,
-      status: "pending", notes: "",
+      status: "planned", notes: "",
     },
   });
 
@@ -83,7 +83,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: 0, competence_date: new Date(), due_date: null, payment_date: null,
-        status: "pending", notes: "",
+        status: "planned", notes: "",
       });
     }
   }, [transaction, open]);
@@ -152,7 +152,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                 <Select onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">Previsto</SelectItem>
+                    <SelectItem value="planned">Previsto</SelectItem>
                     <SelectItem value="paid">Realizado</SelectItem>
                     <SelectItem value="cancelled">Cancelado</SelectItem>
                   </SelectContent>
