@@ -214,7 +214,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
           )} />
 
           <FormField control={form.control} name="amount" render={({ field }) => (
-            <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+            <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="text" inputMode="decimal" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
