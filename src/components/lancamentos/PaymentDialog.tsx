@@ -43,7 +43,7 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, load
 
   return (
     <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Registrar Baixa</DialogTitle>
         </DialogHeader>
@@ -52,23 +52,43 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, load
             <p className="text-sm text-muted-foreground">
               {transaction.description} — {transaction.transaction_type === "income" ? "Receita" : "Despesa"}
             </p>
-            <div className="space-y-2">
-              <Label>Data efetiva do pagamento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !paymentDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {paymentDate ? format(paymentDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
+
+            {/* Datas: Prevista x Efetiva lado a lado */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Vencimento previsto</Label>
+                <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted text-sm">
+                  {transaction.due_date ? format(parseISO(transaction.due_date), "dd/MM/yyyy") : "—"}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Data efetiva</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !paymentDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {paymentDate ? format(paymentDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus className="p-3 pointer-events-auto" />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Valor realizado (R$)</Label>
-              <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+
+            {/* Valores: Previsto x Realizado lado a lado */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Valor previsto (R$)</Label>
+                <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted text-sm">
+                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(transaction.amount)}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Valor realizado (R$)</Label>
+                <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+              </div>
             </div>
           </div>
         )}
