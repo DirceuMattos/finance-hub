@@ -1,29 +1,29 @@
 import { AppLayout } from "@/components/layout/AppLayout";
-import { PageHeader } from "@/components/shared/PageHeader";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Building2, Wallet, CreditCard, Tag, Settings } from "lucide-react";
+import { FinancialEntitiesTab } from "@/components/configuracoes/FinancialEntitiesTab";
+import { AccountsTab } from "@/components/configuracoes/AccountsTab";
+import { CardsTab } from "@/components/configuracoes/CardsTab";
+import { CategoriesTab } from "@/components/configuracoes/CategoriesTab";
+import { SystemParametersTab } from "@/components/configuracoes/SystemParametersTab";
 
 export default function Configuracoes() {
   return (
     <AppLayout>
-      <PageHeader title="Configurações" description="Personalize o sistema" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Categorias</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Gerencie as categorias de receitas e despesas.
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Contas Bancárias</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            Configure suas contas bancárias e saldos iniciais.
-          </CardContent>
-        </Card>
-      </div>
+      <Tabs defaultValue="entities" className="w-full">
+        <TabsList className="mb-6">
+          <TabsTrigger value="entities" className="gap-1.5"><Building2 className="h-4 w-4" />Entidades</TabsTrigger>
+          <TabsTrigger value="accounts" className="gap-1.5"><Wallet className="h-4 w-4" />Contas</TabsTrigger>
+          <TabsTrigger value="cards" className="gap-1.5"><CreditCard className="h-4 w-4" />Cartões</TabsTrigger>
+          <TabsTrigger value="categories" className="gap-1.5"><Tag className="h-4 w-4" />Categorias</TabsTrigger>
+          <TabsTrigger value="parameters" className="gap-1.5"><Settings className="h-4 w-4" />Parâmetros</TabsTrigger>
+        </TabsList>
+        <TabsContent value="entities"><FinancialEntitiesTab /></TabsContent>
+        <TabsContent value="accounts"><AccountsTab /></TabsContent>
+        <TabsContent value="cards"><CardsTab /></TabsContent>
+        <TabsContent value="categories"><CategoriesTab /></TabsContent>
+        <TabsContent value="parameters"><SystemParametersTab /></TabsContent>
+      </Tabs>
     </AppLayout>
   );
 }
