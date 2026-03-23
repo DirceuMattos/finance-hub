@@ -107,6 +107,9 @@ export default function Cartoes() {
                       <span className="font-medium">{fmt(0)} / {fmt(card.credit_limit)}</span>
                     </div>
                     <Progress value={0} className="h-2" />
+                    <p className="text-[11px] text-muted-foreground mt-1.5 italic">
+                      Dados de uso baseados em pagamentos de fatura registrados. Para detalhamento por compra, utilize Compras no Cartão.
+                    </p>
                   </div>
                   {card.managerial_limit && card.managerial_limit < card.credit_limit && (
                     <div>
