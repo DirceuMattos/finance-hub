@@ -1,47 +1,66 @@
 
 
-## Validação do MVP — Estado Atual com Dados Reais
+## Plano: 4 Ajustes de UX — Status, Parâmetros, Logout e Tema
 
-### Telas que existem e exibem dados reais
+### 1. Lançamentos — Corrigir lógica de status
 
-| Tela | Tabelas/Views usadas | Dados reais? | Separação Pessoal/Empresa |
-|---|---|---|---|
-| **Dashboard** | `accounts`, `financial_entities`, `transactions`, `card_installments`, `vw_monthly_cashflow_consolidated/personal/business` | Sim — saldo de contas, receitas/despesas por mês, despesas por categoria | Sim — tabs Consolidado/Pessoal/Empresarial |
-| **Lançamentos** | `transactions` (join `categories`, `financial_entities`, `accounts`) | Sim — centenas de registros reais visíveis | Sim — badge Pessoal/Empresa, filtro por entidade |
-| **Fluxo Mensal** | `vw_monthly_cashflow_consolidated/personal/business` | Sim (se a view retorna dados) | Sim — tabs de visão |
-| **Configurações** | `financial_entities`, `accounts`, `cards`, `categories`, `system_parameters` | Sim — dados reais de entidades, contas, cartões, categorias | Sim — badge nas tabs de Contas e Cartões |
+**Arquivo:** `src/pages/Lancamentos.tsx`
 
-### Telas que existem mas podem estar vazias
+O problema está na função `resolveStatus` que sobrescreve o status do banco para lançamentos de cartão usando `getCardInvoiceStatus()`. Para lançamentos normais já usa `r.status` corretamente, mas para faturas de cartão infere o status pela data.
 
-| Tela | Tabelas/Views | Situação |
-|---|---|---|
-| **Compras no Cartão** | `card_purchases` (join `cards`, `categories`, `financial_entities`) | Vazia se não há registros em `card_purchases` |
-| **Faturas Projetadas** | `vw_card_billing_projection` / `card_installments` | Vazia se não há `card_installments` |
-| **Cartões** | `cards` (join `financial_entities`) | Exibe cartões cadastrados, sem dados de uso detalhado |
-| **Recorrências** | `recurrences` | Depende de dados na tabela |
+**Correção:**
+- Alterar `resolveStatus` para usar **sempre** `r.status` vindo do banco
+- Remover a chamada a `getCardInvoiceStatus` na resolução de status (manter apenas para identificação visual de fatura)
+- O `StatusBadge` já está correto: `paid` → Realizado, `planned`/`pending` → Previsto, `cancelled` → Cancelado
+- Ajustar o badge para aceitar `planned` como equivalente a `pending` (ambos = Previsto)
 
-### Telas que NÃO existem no app
+### 2. Parâmetros — Apresentação amigável
 
-| Tela solicitada | Situação |
+**Arquivo:** `src/components/configuracoes/SystemParametersTab.tsx`
+
+Criar mapeamento `PARAMETER_LABELS`:
+
+```text
+reference_month          → "Mês de Referência" / "Mês base para cálculos do sistema"
+minimum_reserve_personal → "Reserva Mínima Pessoal" / "Valor mínimo de reserva para finanças pessoais"
+minimum_reserve_business → "Reserva Mínima Empresarial" / "Valor mínimo de reserva para a empresa"
+surplus_investment_ratio  → "Proporção de Investimento" / "Percentual do superávit destinado a investimentos"
+containment_reduction_target → "Meta de Redução" / "Meta percentual de contenção de despesas"
+initial_consolidated_balance → "Saldo Inicial Consolidado" / "Saldo inicial para cálculo do fluxo consolidado"
+default_patrimony_entity → "Entidade Padrão Patrimônio" / "Entidade financeira padrão para patrimônio"
+default_investments_entity → "Entidade Padrão Investimentos" / "Entidade financeira padrão para investimentos"
+primary_business_account → "Conta Principal Empresa" / "Conta bancária principal da empresa"
+```
+
+- Substituir coluna "Chave" por "Parâmetro" mostrando nome amigável (fallback para key original)
+- Adicionar coluna "Descrição" com texto explicativo
+- Manter coluna "Valor" e "Tipo"
+
+### 3. Logout
+
+**Arquivo:** `src/components/layout/AppSidebar.tsx`
+
+- Adicionar botão "Sair" no rodapé do sidebar com ícone `LogOut`
+- Chamar `supabase.auth.signOut()` ao clicar
+- Redirecionar para `/` após logout
+
+### 4. Modo claro/escuro
+
+**Arquivos:** `src/hooks/useTheme.ts` (novo), `src/components/layout/AppLayout.tsx`
+
+- Criar hook `useTheme` que gerencia classe `dark` no `<html>` e persiste em `localStorage`
+- Adicionar botão toggle (Sun/Moon) no header do `AppLayout`, ao lado do título
+- O CSS já possui variáveis `.dark` definidas em `index.css` — basta alternar a classe
+
+### Arquivos alterados
+
+| Arquivo | Alteração |
 |---|---|
-| **Patrimônio** | Não existe página, rota ou componente. O campo `total_portfolio_value` existe na view de cashflow mas não tem tela dedicada. |
-| **Investimentos** | Não existe página, rota ou componente. O campo `investment_estimated_return` existe na view de cashflow. Não há tabela `investments` ou `investment_movements` sendo consumida. |
+| `src/pages/Lancamentos.tsx` | Usar `r.status` sempre, aceitar `planned` como Previsto |
+| `src/components/configuracoes/SystemParametersTab.tsx` | Mapeamento amigável de nomes e descrições |
+| `src/components/layout/AppSidebar.tsx` | Botão Logout no rodapé |
+| `src/components/layout/AppLayout.tsx` | Toggle claro/escuro no header |
+| `src/hooks/useTheme.ts` | Novo hook para gerenciar tema |
 
-### Limitações atuais do MVP
-
-1. **Patrimônio e Investimentos** — não há telas implementadas. Precisam ser criadas do zero (página, rota, sidebar, hook). Antes de criar, preciso saber quais tabelas/views do banco externo existem para patrimônio e investimentos.
-
-2. **Compras no Cartão e Faturas** — funcionais no código, mas dependem de dados em `card_purchases` e `card_installments`.
-
-3. **Recorrências** — página existe mas pode não estar completa com CRUD funcional.
-
-4. **Contas com saldo zero** — `current_balance` retorna 0.00 em todas as contas. Pode ser que os saldos reais precisem ser atualizados no banco.
-
-### Próximos passos recomendados
-
-Para avançar com Patrimônio e Investimentos, preciso que você informe:
-- Quais tabelas ou views existem no banco externo para patrimônio e investimentos?
-- Exemplos: `investments`, `investment_positions`, `portfolio_assets`, `vw_portfolio_summary`, etc.
-
-Com essa informação, posso criar as telas correspondentes sem alterar a modelagem.
+Sem alteração no banco.
 
