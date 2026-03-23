@@ -10,6 +10,11 @@ export const CARD_MAP: Record<string, string> = {
   "Cartões de Crédito - Prof.": "Nu Infotkt",
 };
 
+// Mapeamento reverso: nome do cartão → categoria
+export const REVERSE_CARD_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(CARD_MAP).map(([cat, card]) => [card, cat])
+);
+
 export function isCardInvoice(categoryName?: string | null): boolean {
   if (!categoryName) return false;
   return CARD_INVOICE_CATEGORIES.includes(categoryName);
