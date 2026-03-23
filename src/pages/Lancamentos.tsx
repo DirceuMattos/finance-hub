@@ -276,6 +276,16 @@ export default function Lancamentos() {
       />
 
       <DeleteDialog open={!!deleting} onOpenChange={() => setDeleting(null)} onConfirm={() => { if (deleting) remove.mutate(deleting, { onSuccess: () => setDeleting(null) }); }} loading={remove.isPending} />
+
+      <PaymentDialog
+        transaction={settling}
+        open={!!settling}
+        onOpenChange={(o) => { if (!o) setSettling(null); }}
+        onConfirm={(data) => {
+          update.mutate(data as any, { onSuccess: () => setSettling(null) });
+        }}
+        loading={update.isPending}
+      />
     </AppLayout>
   );
 }
