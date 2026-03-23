@@ -1,42 +1,39 @@
 
 
-## Plano: Corrigir status dos lançamentos futuros
+## Plano: Ação "Registrar Baixa" em Lançamentos
 
-### Diagnóstico
+### Alterações
 
-O código do frontend **já está correto** — `resolveStatus = (r) => r.status` usa exclusivamente o campo do banco. O problema está nos **dados importados**: todos os registros foram carregados com `status = 'paid'`, inclusive lançamentos de dezembro 2026.
+**1. Novo componente: `src/components/lancamentos/PaymentDialog.tsx`**
 
-Evidência do response da API:
-```text
-competence_date: "2026-12-01"
-due_date: "2026-12-25"
-status: "paid"          ← dado real do banco, incorreto para lançamento futuro
-```
+Modal simples com:
+- Campo "Data efetiva" (DatePicker)
+- Campo "Valor realizado" (Input numérico, pré-preenchido com `amount` atual)
+- Botões Cancelar / Confirmar
 
-### Solução
+Ao confirmar, chama `update.mutate({ id, status: "paid", payment_date, amount })`.
 
-Executar uma **correção pontual de dados** via migration (UPDATE, não altera schema):
+**2. Arquivo: `src/pages/Lancamentos.tsx`**
 
-```sql
-UPDATE transactions
-SET status = 'planned', updated_at = now()
-WHERE due_date > CURRENT_DATE
-  AND status = 'paid';
-```
+- Importar `PaymentDialog` e ícone `CheckCircle`
+- Adicionar estado `settling: Transaction | null`
+- Na coluna "Ações", adicionar botão "Registrar baixa" (ícone CheckCircle verde) **apenas** quando `r.status === "planned" || r.status === "pending"`
+- Ao clicar, abre o `PaymentDialog` com os dados do lançamento
+- Ao confirmar, executa `update.mutate` e fecha o modal
+- A listagem se atualiza automaticamente via `invalidateQueries`
 
-Isso corrige todos os lançamentos com vencimento futuro para `planned` (Previsto), mantendo os passados como `paid` (Realizado).
+### Lógica de visibilidade
 
-Nenhuma alteração no frontend — o código já está preparado para exibir:
-- `paid` → Realizado (verde)
-- `planned` → Previsto (amarelo)
-- `cancelled` → Cancelado (vermelho)
+| Status | Editar | Cancelar | Baixa | Excluir |
+|---|---|---|---|---|
+| planned/pending | ✓ | ✓ | ✓ | ✓ |
+| paid | ✓ | — | — | ✓ |
+| cancelled | ✓ | — | — | ✓ |
 
-### Resumo
-
-| Item | Detalhe |
+| Arquivo | Alteração |
 |---|---|
-| Causa raiz | Dados importados com `status = 'paid'` para todos os registros |
-| Correção | UPDATE em `transactions` onde `due_date > CURRENT_DATE` |
-| Frontend | Sem alteração — já usa `r.status` corretamente |
-| Schema | Sem alteração |
+| `src/components/lancamentos/PaymentDialog.tsx` | Novo — modal de baixa |
+| `src/pages/Lancamentos.tsx` | Botão condicional + estado para abrir modal |
+
+Sem alteração no banco.
 
