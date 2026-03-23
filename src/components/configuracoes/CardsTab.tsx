@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { FilterBar } from "@/components/shared/FilterBar";
@@ -19,6 +19,12 @@ export function CardsTab() {
   const [editing, setEditing] = useState<Card | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
+  const entityMap = useMemo(() => {
+    const map = new Map<string, string>();
+    entities.forEach(e => map.set(e.id, e.entity_type));
+    return map;
+  }, [entities]);
+
   const filtered = data.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -28,7 +34,18 @@ export function CardsTab() {
     { key: "credit_limit", header: "Limite", render: (r) => fmt(r.credit_limit) },
     { key: "closing_day", header: "Fecha Dia", render: (r) => String(r.closing_day) },
     { key: "due_day", header: "Vence Dia", render: (r) => String(r.due_day) },
-    { key: "financial_entity", header: "Entidade", render: (r) => r.financial_entities?.name || "—" },
+    {
+      key: "financial_entity", header: "Entidade", render: (r) => {
+        const type = entityMap.get(r.financial_entity_id);
+        return (
+          <div className="flex items-center gap-1.5">
+            <span>{r.financial_entities?.name || "—"}</span>
+            {type === "personal" && <Badge variant="outline" className="text-[10px] border-primary text-primary">Pessoal</Badge>}
+            {type === "business" && <Badge variant="outline" className="text-[10px] border-accent-foreground text-accent-foreground">Empresa</Badge>}
+          </div>
+        );
+      },
+    },
     { key: "is_active", header: "Status", render: (r) => r.is_active ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge> },
     {
       key: "actions", header: "Ações", render: (r) => (

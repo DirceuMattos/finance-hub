@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth } from "date-fns";
+import type { FinancialEntity } from "@/types/database";
+
+type ViewType = "consolidated" | "personal" | "business";
 
 const currentMonthRange = () => {
   const now = new Date();
@@ -9,38 +12,74 @@ const currentMonthRange = () => {
   return { start, end };
 };
 
-export function useDashboardData() {
+const cashflowViewMap: Record<ViewType, string> = {
+  consolidated: "vw_monthly_cashflow_consolidated",
+  personal: "vw_monthly_cashflow_personal",
+  business: "vw_monthly_cashflow_business",
+};
+
+export function useDashboardData(view: ViewType = "consolidated") {
   const { start, end } = currentMonthRange();
 
-  const accountBalances = useQuery({
-    queryKey: ["dashboard_account_balances"],
+  // Fetch entities to build entity_ids filter for personal/business
+  const entitiesQuery = useQuery({
+    queryKey: ["dashboard_entities"],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("accounts")
-        .select("current_balance, is_active")
+        .from("financial_entities")
+        .select("id, entity_type, is_active")
         .eq("is_active", true);
       if (error) throw error;
-      return (data as { current_balance: number }[]).reduce((s, a) => s + a.current_balance, 0);
+      return data as FinancialEntity[];
     },
   });
 
-  const monthlyFlow = useQuery({
-    queryKey: ["dashboard_monthly_flow", start],
+  const entities = entitiesQuery.data ?? [];
+  const entityTypeMap = (type: string) => entities.filter(e => e.entity_type === type).map(e => e.id);
+
+  const personalIds = entityTypeMap("personal");
+  const businessIds = entityTypeMap("business");
+  const filterIds = view === "personal" ? personalIds : view === "business" ? businessIds : null;
+
+  const accountBalances = useQuery({
+    queryKey: ["dashboard_account_balances", view],
     queryFn: async () => {
+      let query = (supabase as any)
+        .from("accounts")
+        .select("current_balance, is_active, financial_entity_id")
+        .eq("is_active", true);
+      if (filterIds && filterIds.length > 0) {
+        query = query.in("financial_entity_id", filterIds);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data as { current_balance: number }[]).reduce((s, a) => s + a.current_balance, 0);
+    },
+    enabled: view === "consolidated" || filterIds !== null,
+  });
+
+  const monthlyFlow = useQuery({
+    queryKey: ["dashboard_monthly_flow", start, view],
+    queryFn: async () => {
+      const viewName = cashflowViewMap[view];
       const { data, error } = await (supabase as any)
-        .from("vw_monthly_cashflow_consolidated")
+        .from(viewName)
         .select("*")
         .gte("reference_month", start)
         .lt("reference_month", end)
         .maybeSingle();
       if (error) {
         // Fallback: compute from transactions
-        const { data: txs, error: e2 } = await (supabase as any)
+        let txQuery = (supabase as any)
           .from("transactions")
           .select("transaction_type, amount, status")
           .gte("competence_date", start)
           .lt("competence_date", end)
           .neq("status", "cancelled");
+        if (filterIds && filterIds.length > 0) {
+          txQuery = txQuery.in("financial_entity_id", filterIds);
+        }
+        const { data: txs, error: e2 } = await txQuery;
         if (e2) throw e2;
         const income = (txs || []).filter((t: any) => t.transaction_type === "income").reduce((s: number, t: any) => s + t.amount, 0);
         const expense = (txs || []).filter((t: any) => t.transaction_type === "expense").reduce((s: number, t: any) => s + t.amount, 0);
@@ -51,12 +90,36 @@ export function useDashboardData() {
   });
 
   const cardBilling = useQuery({
-    queryKey: ["dashboard_card_billing", start],
+    queryKey: ["dashboard_card_billing", start, view],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      // Get cards filtered by entity if needed
+      let cardIds: string[] | null = null;
+      if (filterIds && filterIds.length > 0) {
+        const { data: cards } = await (supabase as any)
+          .from("cards")
+          .select("id")
+          .in("financial_entity_id", filterIds);
+        cardIds = (cards || []).map((c: any) => c.id);
+        if (cardIds!.length === 0) return { currentTotal: 0, futureTotal: 0 };
+      }
+
+      let query = (supabase as any)
         .from("card_installments")
         .select("amount, billing_month, status")
         .in("status", ["pending", "open"]);
+      
+      if (cardIds) {
+        // Need to filter via card_purchases
+        const { data: purchases } = await (supabase as any)
+          .from("card_purchases")
+          .select("id")
+          .in("card_id", cardIds);
+        const purchaseIds = (purchases || []).map((p: any) => p.id);
+        if (purchaseIds.length === 0) return { currentTotal: 0, futureTotal: 0 };
+        query = query.in("card_purchase_id", purchaseIds);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       const items = data as { amount: number; billing_month: string; status: string }[];
       const currentTotal = items.filter(i => i.billing_month >= start && i.billing_month < end).reduce((s, i) => s + i.amount, 0);
@@ -66,15 +129,19 @@ export function useDashboardData() {
   });
 
   const expensesByCategory = useQuery({
-    queryKey: ["dashboard_expenses_category", start],
+    queryKey: ["dashboard_expenses_category", start, view],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("transactions")
         .select("amount, categories(name)")
         .eq("transaction_type", "expense")
         .neq("status", "cancelled")
         .gte("competence_date", start)
         .lt("competence_date", end);
+      if (filterIds && filterIds.length > 0) {
+        query = query.in("financial_entity_id", filterIds);
+      }
+      const { data, error } = await query;
       if (error) throw error;
       const map = new Map<string, number>();
       for (const t of (data || []) as { amount: number; categories: { name: string } | null }[]) {
@@ -89,10 +156,11 @@ export function useDashboardData() {
   });
 
   const cashflowChart = useQuery({
-    queryKey: ["dashboard_cashflow_chart"],
+    queryKey: ["dashboard_cashflow_chart", view],
     queryFn: async () => {
+      const viewName = cashflowViewMap[view];
       const { data, error } = await (supabase as any)
-        .from("vw_monthly_cashflow_consolidated")
+        .from(viewName)
         .select("reference_month, income_paid, expense_paid, projected_balance")
         .order("reference_month")
         .limit(12);

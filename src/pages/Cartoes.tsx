@@ -1,23 +1,52 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCards } from "@/hooks/useCards";
+import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { CreditCard } from "lucide-react";
 
+type FilterView = "all" | "personal" | "business";
+
 export default function Cartoes() {
   const { data: cards = [], isLoading } = useCards();
+  const { data: entities = [] } = useFinancialEntities();
   const [search, setSearch] = useState("");
+  const [view, setView] = useState<FilterView>("all");
 
-  const filtered = cards.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const entityMap = useMemo(() => {
+    const map = new Map<string, string>();
+    entities.forEach(e => map.set(e.id, e.entity_type));
+    return map;
+  }, [entities]);
+
+  const filtered = cards.filter((c) => {
+    if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (view !== "all") {
+      const type = entityMap.get(c.financial_entity_id);
+      if (type !== view) return false;
+    }
+    return true;
+  });
+
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   return (
     <AppLayout>
       <PageHeader title="Cartões" description="Visão geral dos seus cartões de crédito" />
+
+      <Tabs value={view} onValueChange={(v) => setView(v as FilterView)} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="all">Todos</TabsTrigger>
+          <TabsTrigger value="personal">Pessoal</TabsTrigger>
+          <TabsTrigger value="business">Empresarial</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão..." />
 
       {isLoading ? (
@@ -31,9 +60,8 @@ export default function Cartoes() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((card) => {
-            const limitUsage = card.credit_limit > 0 ? 0 : 0; // Real usage would come from a view
             const managerialLimit = card.managerial_limit || card.credit_limit;
-            const managerialPct = managerialLimit > 0 ? 0 : 0;
+            const entityType = entityMap.get(card.financial_entity_id);
 
             return (
               <Card key={card.id} className="relative overflow-hidden">
@@ -43,10 +71,14 @@ export default function Cartoes() {
                       <CreditCard className="h-5 w-5 text-primary" />
                       <CardTitle className="text-base">{card.name}</CardTitle>
                     </div>
-                    {card.is_active
-                      ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Ativo</Badge>
-                      : <Badge variant="secondary">Inativo</Badge>
-                    }
+                    <div className="flex items-center gap-1.5">
+                      {entityType === "personal" && <Badge variant="outline" className="text-[10px] border-primary text-primary">Pessoal</Badge>}
+                      {entityType === "business" && <Badge variant="outline" className="text-[10px] border-accent-foreground text-accent-foreground">Empresa</Badge>}
+                      {card.is_active
+                        ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Ativo</Badge>
+                        : <Badge variant="secondary">Inativo</Badge>
+                      }
+                    </div>
                   </div>
                   {card.issuer_bank && <p className="text-xs text-muted-foreground mt-1">{card.issuer_bank}</p>}
                 </CardHeader>
@@ -74,7 +106,7 @@ export default function Cartoes() {
                       <span className="text-muted-foreground">Uso do Limite</span>
                       <span className="font-medium">{fmt(0)} / {fmt(card.credit_limit)}</span>
                     </div>
-                    <Progress value={limitUsage} className="h-2" />
+                    <Progress value={0} className="h-2" />
                   </div>
                   {card.managerial_limit && card.managerial_limit < card.credit_limit && (
                     <div>
@@ -82,7 +114,7 @@ export default function Cartoes() {
                         <span className="text-muted-foreground">Uso do Teto Gerencial</span>
                         <span className="font-medium">{fmt(0)} / {fmt(card.managerial_limit)}</span>
                       </div>
-                      <Progress value={managerialPct} className="h-2" />
+                      <Progress value={0} className="h-2" />
                     </div>
                   )}
                   <p className="text-xs text-muted-foreground">
