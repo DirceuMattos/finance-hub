@@ -1,12 +1,16 @@
+import { useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DollarSign, TrendingUp, TrendingDown, CreditCard, CalendarClock, Scale } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useDashboardData } from "@/hooks/useDashboardData";
+
+type ViewType = "consolidated" | "personal" | "business";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const fmtShort = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", notation: "compact" }).format(v);
@@ -19,7 +23,8 @@ const fmtMonth = (m: string) => {
 };
 
 export default function Dashboard() {
-  const { balance, flow, cardBilling, expensesByCategory, cashflowChart, isLoading } = useDashboardData();
+  const [view, setView] = useState<ViewType>("consolidated");
+  const { balance, flow, cardBilling, expensesByCategory, cashflowChart, isLoading } = useDashboardData(view);
 
   const income = flow?.income_paid ?? 0;
   const expense = flow?.expense_paid ?? 0;
@@ -32,9 +37,19 @@ export default function Dashboard() {
     Saldo: d.projected_balance,
   }));
 
+  const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
+
   return (
     <AppLayout>
-      <PageHeader title="Dashboard" description="Visão geral das suas finanças" />
+      <PageHeader title="Dashboard" description={`Visão ${viewLabel.toLowerCase()} das suas finanças`} />
+
+      <Tabs value={view} onValueChange={(v) => setView(v as ViewType)} className="mb-6">
+        <TabsList>
+          <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
+          <TabsTrigger value="personal">Pessoal</TabsTrigger>
+          <TabsTrigger value="business">Empresarial</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <StatCard title="Saldo Atual" value={fmt(balance)} icon={DollarSign} description="Contas ativas" />

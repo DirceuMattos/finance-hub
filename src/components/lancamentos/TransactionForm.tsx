@@ -52,6 +52,18 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     },
   });
 
+  const watchAccountId = form.watch("account_id");
+
+  // Auto-fill entity when account is selected
+  useEffect(() => {
+    if (watchAccountId && watchAccountId !== "none" && watchAccountId !== "") {
+      const account = accounts.find(a => a.id === watchAccountId);
+      if (account?.financial_entity_id) {
+        form.setValue("financial_entity_id", account.financial_entity_id);
+      }
+    }
+  }, [watchAccountId, accounts, form]);
+
   useEffect(() => {
     if (transaction) {
       form.reset({
@@ -88,6 +100,9 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     };
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
   };
+
+  const personalEntities = entities.filter(e => e.is_active && e.entity_type === "personal");
+  const businessEntities = entities.filter(e => e.is_active && e.entity_type === "business");
 
   const DateField = ({ name, label }: { name: "competence_date" | "due_date" | "payment_date"; label: string }) => (
     <FormField control={form.control} name={name} render={({ field }) => (
@@ -158,17 +173,6 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             </FormControl><FormMessage /></FormItem>
           )} />
 
-          <FormField control={form.control} name="financial_entity_id" render={({ field }) => (
-            <FormItem><FormLabel>Entidade Financeira *</FormLabel><FormControl>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  {entities.filter(e => e.is_active).map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FormControl><FormMessage /></FormItem>
-          )} />
-
           <FormField control={form.control} name="account_id" render={({ field }) => (
             <FormItem><FormLabel>Conta</FormLabel><FormControl>
               <Select onValueChange={field.onChange} value={field.value || ""}>
@@ -176,6 +180,28 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
                   {accounts.filter(a => a.is_active).map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </FormControl><FormMessage /></FormItem>
+          )} />
+
+          <FormField control={form.control} name="financial_entity_id" render={({ field }) => (
+            <FormItem><FormLabel>Entidade Financeira *</FormLabel><FormControl>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {personalEntities.length > 0 && (
+                    <>
+                      <SelectItem value="__p_hdr" disabled className="text-xs font-semibold text-muted-foreground">— Pessoais —</SelectItem>
+                      {personalEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                    </>
+                  )}
+                  {businessEntities.length > 0 && (
+                    <>
+                      <SelectItem value="__b_hdr" disabled className="text-xs font-semibold text-muted-foreground">— Empresariais —</SelectItem>
+                      {businessEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </FormControl><FormMessage /></FormItem>

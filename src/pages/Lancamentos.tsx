@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
@@ -20,7 +19,6 @@ import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import type { Transaction } from "@/types/database";
 
-const typeLabels: Record<string, string> = { income: "Receita", expense: "Despesa", transfer: "Transferência" };
 const statusLabels: Record<string, string> = { pending: "Previsto", paid: "Realizado", cancelled: "Cancelado" };
 
 function StatusBadge({ status }: { status: string }) {
@@ -33,6 +31,12 @@ function TypeBadge({ type }: { type: string }) {
   if (type === "income") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Receita</Badge>;
   if (type === "transfer") return <Badge variant="secondary">Transferência</Badge>;
   return <Badge variant="destructive">Despesa</Badge>;
+}
+
+function EntityTypeBadge({ entityType }: { entityType?: string }) {
+  if (entityType === "personal") return <Badge variant="outline" className="text-xs border-primary text-primary">Pessoal</Badge>;
+  if (entityType === "business") return <Badge variant="outline" className="text-xs border-accent-foreground text-accent-foreground">Empresa</Badge>;
+  return null;
 }
 
 export default function Lancamentos() {
@@ -53,6 +57,15 @@ export default function Lancamentos() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+
+  const entityMap = useMemo(() => {
+    const map = new Map<string, string>();
+    entities.forEach(e => map.set(e.id, e.entity_type));
+    return map;
+  }, [entities]);
+
+  const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
+  const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
 
   const filtered = useMemo(() => {
     return data.filter((t) => {
@@ -82,7 +95,14 @@ export default function Lancamentos() {
     { key: "description", header: "Descrição" },
     { key: "transaction_type", header: "Tipo", render: (r) => <TypeBadge type={r.transaction_type} /> },
     { key: "category", header: "Categoria", render: (r) => r.categories?.name || "—" },
-    { key: "entity", header: "Entidade", render: (r) => r.financial_entities?.name || "—" },
+    {
+      key: "entity", header: "Entidade", render: (r) => (
+        <div className="flex items-center gap-1.5">
+          <span>{r.financial_entities?.name || "—"}</span>
+          <EntityTypeBadge entityType={entityMap.get(r.financial_entity_id)} />
+        </div>
+      ),
+    },
     { key: "account", header: "Conta", render: (r) => r.accounts?.name || "—" },
     { key: "amount", header: "Valor", render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
@@ -150,10 +170,21 @@ export default function Lancamentos() {
           </SelectContent>
         </Select>
         <Select value={filterEntity} onValueChange={setFilterEntity}>
-          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Entidade" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Entidade" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas entidades</SelectItem>
-            {entities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+            {personalEntities.length > 0 && (
+              <>
+                <SelectItem value="__personal_header" disabled className="text-xs font-semibold text-muted-foreground">— Pessoais —</SelectItem>
+                {personalEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+              </>
+            )}
+            {businessEntities.length > 0 && (
+              <>
+                <SelectItem value="__business_header" disabled className="text-xs font-semibold text-muted-foreground">— Empresariais —</SelectItem>
+                {businessEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+              </>
+            )}
           </SelectContent>
         </Select>
         <Select value={filterAccount} onValueChange={setFilterAccount}>

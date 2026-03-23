@@ -48,6 +48,18 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
     },
   });
 
+  const watchCardId = form.watch("card_id");
+
+  // Auto-fill entity when card is selected
+  useEffect(() => {
+    if (watchCardId && watchCardId !== "") {
+      const card = cards.find(c => c.id === watchCardId);
+      if (card?.financial_entity_id) {
+        form.setValue("financial_entity_id", card.financial_entity_id);
+      }
+    }
+  }, [watchCardId, cards, form]);
+
   useEffect(() => {
     if (purchase) {
       form.reset({
@@ -71,6 +83,9 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
   const totalAmount = form.watch("total_amount");
   const installmentsCount = form.watch("installments_count");
   const installmentAmount = installmentsCount > 0 ? totalAmount / installmentsCount : 0;
+
+  const personalEntities = entities.filter(e => e.is_active && e.entity_type === "personal");
+  const businessEntities = entities.filter(e => e.is_active && e.entity_type === "business");
 
   const handleSubmit = (data: FormData) => {
     const payload: any = {
@@ -119,7 +134,18 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
               <Select onValueChange={field.onChange} value={field.value}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
-                  {entities.filter(e => e.is_active).map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  {personalEntities.length > 0 && (
+                    <>
+                      <SelectItem value="__p_hdr" disabled className="text-xs font-semibold text-muted-foreground">— Pessoais —</SelectItem>
+                      {personalEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                    </>
+                  )}
+                  {businessEntities.length > 0 && (
+                    <>
+                      <SelectItem value="__b_hdr" disabled className="text-xs font-semibold text-muted-foreground">— Empresariais —</SelectItem>
+                      {businessEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </FormControl><FormMessage /></FormItem>
