@@ -1,11 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
-import { format } from "date-fns";
+import { format, addMonths, startOfMonth } from "date-fns";
 
-const currentMonth = () => format(new Date(), "yyyy-MM");
+const currentMonthRange = () => {
+  const now = new Date();
+  const start = format(startOfMonth(now), "yyyy-MM-dd");
+  const end = format(startOfMonth(addMonths(now, 1)), "yyyy-MM-dd");
+  return { start, end };
+};
 
 export function useDashboardData() {
-  const month = currentMonth();
+  const { start, end } = currentMonthRange();
 
   const accountBalances = useQuery({
     queryKey: ["dashboard_account_balances"],
@@ -20,34 +25,33 @@ export function useDashboardData() {
   });
 
   const monthlyFlow = useQuery({
-    queryKey: ["dashboard_monthly_flow", month],
+    queryKey: ["dashboard_monthly_flow", start],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("vw_monthly_cashflow_consolidated")
         .select("*")
-        .eq("reference_month", month)
+        .gte("reference_month", start)
+        .lt("reference_month", end)
         .maybeSingle();
       if (error) {
         // Fallback: compute from transactions
-        const start = `${month}-01`;
-        const end = `${month}-31`;
         const { data: txs, error: e2 } = await (supabase as any)
           .from("transactions")
           .select("transaction_type, amount, status")
           .gte("competence_date", start)
-          .lte("competence_date", end)
+          .lt("competence_date", end)
           .neq("status", "cancelled");
         if (e2) throw e2;
         const income = (txs || []).filter((t: any) => t.transaction_type === "income").reduce((s: number, t: any) => s + t.amount, 0);
         const expense = (txs || []).filter((t: any) => t.transaction_type === "expense").reduce((s: number, t: any) => s + t.amount, 0);
-        return { total_income: income, total_expense: expense, net_balance: income - expense };
+        return { income_paid: income, expense_paid: expense, projected_balance: income - expense };
       }
-      return data as { total_income: number; total_expense: number; net_balance: number } | null;
+      return data as { income_paid: number; expense_paid: number; projected_balance: number } | null;
     },
   });
 
   const cardBilling = useQuery({
-    queryKey: ["dashboard_card_billing", month],
+    queryKey: ["dashboard_card_billing", start],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("card_installments")
@@ -55,24 +59,22 @@ export function useDashboardData() {
         .in("status", ["pending", "open"]);
       if (error) throw error;
       const items = data as { amount: number; billing_month: string; status: string }[];
-      const currentTotal = items.filter(i => i.billing_month === month).reduce((s, i) => s + i.amount, 0);
-      const futureTotal = items.filter(i => i.billing_month > month).reduce((s, i) => s + i.amount, 0);
+      const currentTotal = items.filter(i => i.billing_month >= start && i.billing_month < end).reduce((s, i) => s + i.amount, 0);
+      const futureTotal = items.filter(i => i.billing_month >= end).reduce((s, i) => s + i.amount, 0);
       return { currentTotal, futureTotal };
     },
   });
 
   const expensesByCategory = useQuery({
-    queryKey: ["dashboard_expenses_category", month],
+    queryKey: ["dashboard_expenses_category", start],
     queryFn: async () => {
-      const start = `${month}-01`;
-      const end = `${month}-31`;
       const { data, error } = await (supabase as any)
         .from("transactions")
         .select("amount, categories(name)")
         .eq("transaction_type", "expense")
         .neq("status", "cancelled")
         .gte("competence_date", start)
-        .lte("competence_date", end);
+        .lt("competence_date", end);
       if (error) throw error;
       const map = new Map<string, number>();
       for (const t of (data || []) as { amount: number; categories: { name: string } | null }[]) {
@@ -91,14 +93,11 @@ export function useDashboardData() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("vw_monthly_cashflow_consolidated")
-        .select("reference_month, total_income, total_expense, net_balance")
+        .select("reference_month, income_paid, expense_paid, projected_balance")
         .order("reference_month")
         .limit(12);
-      if (error) {
-        // Fallback empty
-        return [];
-      }
-      return (data || []) as { reference_month: string; total_income: number; total_expense: number; net_balance: number }[];
+      if (error) return [];
+      return (data || []) as { reference_month: string; income_paid: number; expense_paid: number; projected_balance: number }[];
     },
   });
 

@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, TrendingUp, TrendingDown, CreditCard, CalendarClock, Scale } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useDashboardData } from "@/hooks/useDashboardData";
@@ -13,30 +13,29 @@ const fmtShort = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currenc
 
 const fmtMonth = (m: string) => {
   try {
-    const [year, month] = m.split("-");
-    return format(new Date(parseInt(year), parseInt(month) - 1, 1), "MMM yy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+    const d = new Date(m);
+    return format(d, "MMM yy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
   } catch { return m; }
 };
 
 export default function Dashboard() {
   const { balance, flow, cardBilling, expensesByCategory, cashflowChart, isLoading } = useDashboardData();
 
-  const income = flow?.total_income ?? 0;
-  const expense = flow?.total_expense ?? 0;
-  const projected = flow?.net_balance ?? 0;
+  const income = flow?.income_paid ?? 0;
+  const expense = flow?.expense_paid ?? 0;
+  const projected = flow?.projected_balance ?? 0;
 
   const chartData = cashflowChart.map(d => ({
     month: fmtMonth(d.reference_month),
-    Receitas: d.total_income,
-    Despesas: d.total_expense,
-    Saldo: d.net_balance,
+    Receitas: d.income_paid,
+    Despesas: d.expense_paid,
+    Saldo: d.projected_balance,
   }));
 
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description="Visão geral das suas finanças" />
 
-      {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <StatCard title="Saldo Atual" value={fmt(balance)} icon={DollarSign} description="Contas ativas" />
         <StatCard title="Receitas" value={fmt(income)} icon={TrendingUp} description="Este mês" />
@@ -47,7 +46,6 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Cashflow Chart */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Fluxo Mensal</CardTitle>
@@ -70,7 +68,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Expense Ranking */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Top Despesas por Categoria</CardTitle>

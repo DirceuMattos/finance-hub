@@ -16,12 +16,20 @@ const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", c
 
 const fmtMonth = (m: string) => {
   try {
-    const [year, month] = m.split("-");
-    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
-    return format(date, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
+    const d = new Date(m);
+    return format(d, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
   } catch {
     return m;
   }
+};
+
+const trafficLightVariant = (light: string | undefined) => {
+  if (!light) return undefined;
+  const l = light.toLowerCase();
+  if (l === "green" || l === "verde") return "default";
+  if (l === "yellow" || l === "amarelo") return "secondary";
+  if (l === "red" || l === "vermelho") return "destructive";
+  return "outline";
 };
 
 export default function FluxoMensal() {
@@ -29,16 +37,9 @@ export default function FluxoMensal() {
   const { data = [], isLoading } = useMonthlyCashflow(view);
 
   const totals = useMemo(() => {
-    const income = data.reduce((s, r) => s + (r.total_income || 0), 0);
-    const expense = data.reduce((s, r) => s + (r.total_expense || 0), 0);
+    const income = data.reduce((s, r) => s + (r.income_paid || 0), 0);
+    const expense = data.reduce((s, r) => s + (r.expense_paid || 0), 0);
     return { income, expense, net: income - expense };
-  }, [data]);
-
-  // Detect extra columns from the view dynamically
-  const extraKeys = useMemo(() => {
-    if (data.length === 0) return [];
-    const base = new Set(["reference_month", "total_income", "total_expense", "net_balance", "accumulated_balance"]);
-    return Object.keys(data[0]).filter((k) => !base.has(k));
   }, [data]);
 
   const columns: Column<MonthlyCashflow>[] = [
@@ -47,44 +48,45 @@ export default function FluxoMensal() {
       render: (r) => <span className="font-medium">{fmtMonth(r.reference_month)}</span>,
     },
     {
-      key: "total_income", header: "Receitas",
-      render: (r) => <span className="text-[hsl(var(--success))]">{fmt(r.total_income)}</span>,
+      key: "income_planned", header: "Receita Prevista",
+      render: (r) => <span className="text-muted-foreground">{fmt(r.income_planned ?? 0)}</span>,
     },
     {
-      key: "total_expense", header: "Despesas",
-      render: (r) => <span className="text-destructive">{fmt(r.total_expense)}</span>,
+      key: "income_paid", header: "Receita Realizada",
+      render: (r) => <span className="text-[hsl(var(--success,152_60%_40%))]">{fmt(r.income_paid ?? 0)}</span>,
     },
     {
-      key: "net_balance", header: "Saldo",
+      key: "expense_planned", header: "Despesa Prevista",
+      render: (r) => <span className="text-muted-foreground">{fmt(r.expense_planned ?? 0)}</span>,
+    },
+    {
+      key: "expense_paid", header: "Despesa Realizada",
+      render: (r) => <span className="text-destructive">{fmt(r.expense_paid ?? 0)}</span>,
+    },
+    {
+      key: "projected_card_amount", header: "Cartão Projetado",
+      render: (r) => <span>{fmt(r.projected_card_amount ?? 0)}</span>,
+    },
+    {
+      key: "projected_balance", header: "Saldo Projetado",
       render: (r) => {
-        const val = r.net_balance;
-        const isCritical = val < 0;
+        const val = r.projected_balance ?? 0;
         return (
-          <span className={isCritical ? "text-destructive font-bold" : "text-foreground font-semibold"}>
+          <span className={val < 0 ? "text-destructive font-bold" : "text-foreground font-semibold"}>
             {fmt(val)}
-            {isCritical && <Badge variant="destructive" className="ml-2 text-[10px]">Déficit</Badge>}
+            {val < 0 && <Badge variant="destructive" className="ml-2 text-[10px]">Déficit</Badge>}
           </span>
         );
       },
     },
-    ...(data.some(r => r.accumulated_balance !== undefined) ? [{
-      key: "accumulated_balance" as const, header: "Acumulado",
-      render: (r: MonthlyCashflow) => {
-        const val = r.accumulated_balance ?? 0;
-        return <span className={val < 0 ? "text-destructive font-semibold" : "text-foreground"}>{fmt(val)}</span>;
+    {
+      key: "traffic_light", header: "Semáforo",
+      render: (r) => {
+        const variant = trafficLightVariant(r.traffic_light);
+        if (!variant) return "—";
+        return <Badge variant={variant as any}>{r.traffic_light}</Badge>;
       },
-    }] : []),
-    // Render any extra columns from the view (like risk indicators)
-    ...extraKeys.map((key) => ({
-      key,
-      header: key.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase()),
-      render: (r: MonthlyCashflow) => {
-        const val = r[key];
-        if (val === null || val === undefined) return "—";
-        if (typeof val === "number") return fmt(val);
-        return String(val);
-      },
-    })),
+    },
   ];
 
   return (
@@ -99,15 +101,14 @@ export default function FluxoMensal() {
         </TabsList>
       </Tabs>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Receitas</CardTitle>
-            <TrendingUp className="h-4 w-4 text-[hsl(var(--success))]" />
+            <TrendingUp className="h-4 w-4 text-[hsl(152,60%,40%)]" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-[hsl(var(--success))]">{fmt(totals.income)}</p>
+            <p className="text-2xl font-bold text-[hsl(152,60%,40%)]">{fmt(totals.income)}</p>
           </CardContent>
         </Card>
         <Card>
