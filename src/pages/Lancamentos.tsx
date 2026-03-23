@@ -103,7 +103,7 @@ export default function Lancamentos() {
   }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-  const fmtDate = (d: string | null) => d ? format(new Date(d), "dd/MM/yyyy") : "—";
+  const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
 
   const resolveStatus = (r: Transaction) => {
     const catName = r.categories?.name;
