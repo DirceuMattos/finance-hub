@@ -77,6 +77,8 @@ export default function Lancamentos() {
       if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterType !== "all" && t.transaction_type !== filterType) return false;
+      if (filterCardInvoice === "card_invoice" && !isCardInvoice(t.categories?.name)) return false;
+      if (filterCardInvoice === "non_card_invoice" && isCardInvoice(t.categories?.name)) return false;
       if (dateFrom) {
         const cd = new Date(t.competence_date);
         if (cd < dateFrom) return false;
