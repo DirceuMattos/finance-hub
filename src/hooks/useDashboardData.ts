@@ -5,10 +5,9 @@ import type { FinancialEntity } from "@/types/database";
 
 type ViewType = "consolidated" | "personal" | "business";
 
-const currentMonthRange = () => {
-  const now = new Date();
-  const start = format(startOfMonth(now), "yyyy-MM-dd");
-  const end = format(startOfMonth(addMonths(now, 1)), "yyyy-MM-dd");
+const monthRange = (month: Date) => {
+  const start = format(startOfMonth(month), "yyyy-MM-dd");
+  const end = format(startOfMonth(addMonths(month, 1)), "yyyy-MM-dd");
   return { start, end };
 };
 
@@ -18,10 +17,9 @@ const cashflowViewMap: Record<ViewType, string> = {
   business: "vw_monthly_cashflow_business",
 };
 
-export function useDashboardData(view: ViewType = "consolidated") {
-  const { start, end } = currentMonthRange();
+export function useDashboardData(view: ViewType = "consolidated", selectedMonth: Date = new Date()) {
+  const { start, end } = monthRange(selectedMonth);
 
-  // Fetch entities to build entity_ids filter for personal/business
   const entitiesQuery = useQuery({
     queryKey: ["dashboard_entities"],
     queryFn: async () => {
@@ -69,7 +67,6 @@ export function useDashboardData(view: ViewType = "consolidated") {
         .lt("reference_month", end)
         .maybeSingle();
       if (error) {
-        // Fallback: compute from transactions
         let txQuery = (supabase as any)
           .from("transactions")
           .select("transaction_type, amount, status")
@@ -92,7 +89,6 @@ export function useDashboardData(view: ViewType = "consolidated") {
   const cardBilling = useQuery({
     queryKey: ["dashboard_card_billing", start, view],
     queryFn: async () => {
-      // Get cards filtered by entity if needed
       let cardIds: string[] | null = null;
       if (filterIds && filterIds.length > 0) {
         const { data: cards } = await (supabase as any)
@@ -109,7 +105,6 @@ export function useDashboardData(view: ViewType = "consolidated") {
         .in("status", ["pending", "open"]);
       
       if (cardIds) {
-        // Need to filter via card_purchases
         const { data: purchases } = await (supabase as any)
           .from("card_purchases")
           .select("id")

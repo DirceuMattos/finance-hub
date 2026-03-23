@@ -4,9 +4,10 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DollarSign, TrendingUp, TrendingDown, CreditCard, CalendarClock, Scale } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { format } from "date-fns";
+import { format, subMonths, addMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useDashboardData } from "@/hooks/useDashboardData";
 
@@ -22,9 +23,25 @@ const fmtMonth = (m: string) => {
   } catch { return m; }
 };
 
+function buildMonthOptions() {
+  const options: { value: string; label: string }[] = [];
+  const now = startOfMonth(new Date());
+  for (let i = -6; i <= 6; i++) {
+    const d = i < 0 ? subMonths(now, -i) : addMonths(now, i);
+    const val = format(d, "yyyy-MM");
+    const label = format(d, "MMMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+    options.push({ value: val, label });
+  }
+  return options;
+}
+
 export default function Dashboard() {
   const [view, setView] = useState<ViewType>("consolidated");
-  const { balance, flow, cardBilling, expensesByCategory, cashflowChart, isLoading } = useDashboardData(view);
+  const [selectedMonthStr, setSelectedMonthStr] = useState(() => format(new Date(), "yyyy-MM"));
+  const selectedMonth = new Date(selectedMonthStr + "-01");
+  const monthOptions = buildMonthOptions();
+
+  const { balance, flow, cardBilling, expensesByCategory, cashflowChart, isLoading } = useDashboardData(view, selectedMonth);
 
   const income = flow?.income_paid ?? 0;
   const expense = flow?.expense_paid ?? 0;
@@ -43,13 +60,25 @@ export default function Dashboard() {
     <AppLayout>
       <PageHeader title="Dashboard" description={`Visão ${viewLabel.toLowerCase()} das suas finanças`} />
 
-      <Tabs value={view} onValueChange={(v) => setView(v as ViewType)} className="mb-6">
-        <TabsList>
-          <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
-          <TabsTrigger value="personal">Pessoal</TabsTrigger>
-          <TabsTrigger value="business">Empresarial</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-6">
+        <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
+          <TabsList>
+            <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
+            <TabsTrigger value="personal">Pessoal</TabsTrigger>
+            <TabsTrigger value="business">Empresarial</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Select value={selectedMonthStr} onValueChange={setSelectedMonthStr}>
+          <SelectTrigger className="h-9 w-[180px] text-xs">
+            <SelectValue placeholder="Mês" />
+          </SelectTrigger>
+          <SelectContent>
+            {monthOptions.map(o => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
         <StatCard title="Saldo Atual" value={fmt(balance)} icon={DollarSign} description="Contas ativas" />

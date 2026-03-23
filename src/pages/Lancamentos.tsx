@@ -1,16 +1,16 @@
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import { format, subMonths, addMonths, startOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { useSearchParams } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon, Plus, Pencil, Trash2, Ban, CreditCard } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Plus, Pencil, Trash2, Ban, CreditCard } from "lucide-react";
 import { isCardInvoice, getCardInvoiceStatus, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
@@ -19,8 +19,6 @@ import { useCategories } from "@/hooks/useCategories";
 import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import type { Transaction } from "@/types/database";
-
-const statusLabels: Record<string, string> = { pending: "Previsto", paid: "Realizado", cancelled: "Cancelado" };
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "paid") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Realizado</Badge>;
@@ -40,21 +38,35 @@ function EntityTypeBadge({ entityType }: { entityType?: string }) {
   return null;
 }
 
+function buildMonthOptions() {
+  const options: { value: string; label: string }[] = [{ value: "all", label: "Todos os meses" }];
+  const now = startOfMonth(new Date());
+  for (let i = -12; i <= 6; i++) {
+    const d = i < 0 ? subMonths(now, -i) : addMonths(now, i);
+    const val = format(d, "yyyy-MM");
+    const label = format(d, "MMMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+    options.push({ value: val, label });
+  }
+  return options;
+}
+
 export default function Lancamentos() {
   const { data = [], isLoading, create, update, remove } = useTransactions();
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
 
+  const [searchParams] = useSearchParams();
+  const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
+
   const [search, setSearch] = useState("");
+  const [filterMonth, setFilterMonth] = useState(initialMonth);
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterAccount, setFilterAccount] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [filterType, setFilterType] = useState("all");
+  const [filterTypeTab, setFilterTypeTab] = useState("all");
   const [filterCardInvoice, setFilterCardInvoice] = useState("all");
-  const [dateFrom, setDateFrom] = useState<Date | undefined>();
-  const [dateTo, setDateTo] = useState<Date | undefined>();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
@@ -68,6 +80,7 @@ export default function Lancamentos() {
 
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
+  const monthOptions = useMemo(() => buildMonthOptions(), []);
 
   const filtered = useMemo(() => {
     return data.filter((t) => {
@@ -76,20 +89,18 @@ export default function Lancamentos() {
       if (filterAccount !== "all" && t.account_id !== filterAccount) return false;
       if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
-      if (filterType !== "all" && t.transaction_type !== filterType) return false;
+      if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
       if (filterCardInvoice === "card_invoice" && !isCardInvoice(t.categories?.name)) return false;
       if (filterCardInvoice === "non_card_invoice" && isCardInvoice(t.categories?.name)) return false;
-      if (dateFrom) {
-        const cd = new Date(t.competence_date);
-        if (cd < dateFrom) return false;
-      }
-      if (dateTo) {
-        const cd = new Date(t.competence_date);
-        if (cd > dateTo) return false;
+      if (filterMonth !== "all") {
+        const monthStart = filterMonth + "-01";
+        const [y, m] = filterMonth.split("-").map(Number);
+        const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+        if (t.competence_date < monthStart || t.competence_date >= nextMonth) return false;
       }
       return true;
     });
-  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterType, filterCardInvoice, dateFrom, dateTo]);
+  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(new Date(d), "dd/MM/yyyy") : "—";
@@ -101,9 +112,10 @@ export default function Lancamentos() {
   };
 
   const columns: Column<Transaction>[] = [
-    { key: "competence_date", header: "Data", render: (r) => fmtDate(r.competence_date) },
+    { key: "competence_date", header: "Data", sortable: true, sortValue: (r) => r.competence_date || "", render: (r) => fmtDate(r.competence_date) },
     {
-      key: "description", header: "Descrição", render: (r) => {
+      key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
+      render: (r) => {
         const catName = r.categories?.name;
         if (isCardInvoice(catName)) {
           return (
@@ -118,9 +130,10 @@ export default function Lancamentos() {
         return r.description;
       },
     },
-    { key: "transaction_type", header: "Tipo", render: (r) => <TypeBadge type={r.transaction_type} /> },
+    { key: "transaction_type", header: "Tipo", sortable: true, sortValue: (r) => r.transaction_type, render: (r) => <TypeBadge type={r.transaction_type} /> },
     {
-      key: "category", header: "Categoria", render: (r) => {
+      key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "",
+      render: (r) => {
         const catName = r.categories?.name;
         const cardLabel = catName ? getCardInvoiceLabel(catName) : "";
         return (
@@ -132,16 +145,17 @@ export default function Lancamentos() {
       },
     },
     {
-      key: "entity", header: "Entidade", render: (r) => (
+      key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
+      render: (r) => (
         <div className="flex items-center gap-1.5">
           <span>{r.financial_entities?.name || "—"}</span>
           <EntityTypeBadge entityType={entityMap.get(r.financial_entity_id)} />
         </div>
       ),
     },
-    { key: "account", header: "Conta", render: (r) => r.accounts?.name || "—" },
-    { key: "amount", header: "Valor", render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
-    { key: "status", header: "Status", render: (r) => <StatusBadge status={resolveStatus(r)} /> },
+    { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
+    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
+    { key: "status", header: "Status", sortable: true, sortValue: (r) => resolveStatus(r), render: (r) => <StatusBadge status={resolveStatus(r)} /> },
     {
       key: "actions", header: "Ações", render: (r) => (
         <div className="flex gap-1">
@@ -164,36 +178,28 @@ export default function Lancamentos() {
     mutation.mutate(d as any, { onSuccess: () => { setFormOpen(false); setEditing(null); } });
   };
 
-  const DateFilter = ({ value, onChange, placeholder }: { value?: Date; onChange: (d?: Date) => void; placeholder: string }) => (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn("h-9 w-[140px] justify-start text-left text-xs font-normal", !value && "text-muted-foreground")}>
-          <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-          {value ? format(value, "dd/MM/yyyy") : placeholder}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
-        <Calendar mode="single" selected={value} onSelect={(d) => onChange(d ?? undefined)} initialFocus className={cn("p-3 pointer-events-auto")} />
-      </PopoverContent>
-    </Popover>
-  );
-
   return (
     <AppLayout>
       <PageHeader title="Lançamentos" description="Gerencie receitas e despesas" actions={
         <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Novo</Button>
       } />
 
+      <Tabs value={filterTypeTab} onValueChange={setFilterTypeTab} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="all">Todos</TabsTrigger>
+          <TabsTrigger value="income">Receitas</TabsTrigger>
+          <TabsTrigger value="expense">Despesas</TabsTrigger>
+          <TabsTrigger value="transfer">Transferências</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento...">
-        <DateFilter value={dateFrom} onChange={setDateFrom} placeholder="De" />
-        <DateFilter value={dateTo} onChange={setDateTo} placeholder="Até" />
-        <Select value={filterType} onValueChange={setFilterType}>
-          <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos os tipos</SelectItem>
-            <SelectItem value="income">Receita</SelectItem>
-            <SelectItem value="expense">Despesa</SelectItem>
-            <SelectItem value="transfer">Transferência</SelectItem>
+            {monthOptions.map(o => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={filterCardInvoice} onValueChange={setFilterCardInvoice}>
@@ -247,7 +253,14 @@ export default function Lancamentos() {
         </Select>
       </FilterBar>
 
-      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhum lançamento encontrado." />
+      <DataTable
+        columns={columns}
+        data={filtered as any}
+        loading={isLoading}
+        emptyMessage="Nenhum lançamento encontrado."
+        defaultSortKey="competence_date"
+        defaultSortDir="asc"
+      />
 
       <TransactionForm
         open={formOpen}
