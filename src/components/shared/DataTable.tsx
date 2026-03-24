@@ -18,13 +18,14 @@ export interface Column<T> {
   sortValue?: (row: T) => string | number;
 }
 
-interface DataTableProps<T> {
+export interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   loading?: boolean;
   emptyMessage?: string;
   defaultSortKey?: string;
   defaultSortDir?: "asc" | "desc";
+  className?: string;
 }
 
 export function DataTable<T extends object>({
