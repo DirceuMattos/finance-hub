@@ -136,13 +136,7 @@ export default function Lancamentos() {
       key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "",
       render: (r) => {
         const catName = r.categories?.name;
-        const cardLabel = catName ? getCardInvoiceLabel(catName) : "";
-        return (
-          <div className="flex items-center gap-1.5">
-            <span>{catName || "—"}</span>
-            {cardLabel && <Badge variant="secondary" className="text-xs">{cardLabel}</Badge>}
-          </div>
-        );
+        return catName || "—";
       },
     },
     {
