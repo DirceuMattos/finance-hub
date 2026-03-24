@@ -1,39 +1,59 @@
 
 
-## Plano: Clarificar leitura de cartões no Dashboard
+## Plano: Indicador de Risco Financeiro do Mês
 
-### Estado atual
+### Conceito
 
-O hook `useDashboardData` já agrupa corretamente por cartão e mês via `center_cost`, separa paid/planned pelo `status`, e filtra por `competence_date`. A lógica de dados está correta.
+Criar um card de destaque no topo do Dashboard com semáforo visual (Verde/Amarelo/Vermelho) que cruza três dados: resultado previsto do mês, total de cartão previsto, e reserva mínima configurada.
 
-O problema é apenas de **clareza visual**: falta o total do mês por cartão e a apresentação não diferencia visualmente pago vs previsto.
+### Lógica do semáforo
+
+```text
+closingBalance = saldo_atual + forecast_result
+reserveMin = minimum_reserve (do system_parameters, por view)
+cardPlanned = soma dos cartões com status planned no mês
+
+VERDE:  forecast_result > 0 AND closingBalance > reserveMin
+AMARELO: forecast_result entre 0 e -5% da receita total
+         OR closingBalance entre reserveMin e reserveMin * 1.1
+         OR cardPlanned > 30% da despesa total do mês
+VERMELHO: forecast_result < 0 OR closingBalance < reserveMin
+```
 
 ### Alterações
 
-**`src/pages/Dashboard.tsx`** — Seção de cartões
+**1. `src/hooks/useDashboardData.ts`**
 
-- Adicionar linha "Total do Mês" (pago + previsto) com destaque
-- Aplicar cores semânticas: verde para pago, laranja/amarelo para previsto
-- Remover contagem de lançamentos do dashboard (informação de detalhe, não executiva)
-- Adicionar barra de proporção visual pago/previsto
+- Adicionar query de `system_parameters` para buscar `minimum_reserve_personal` e `minimum_reserve_business`
+- Retornar `reserveMin` (filtrado por view: personal, business, ou soma para consolidated)
+- Calcular `riskLevel`: "controlled" | "attention" | "critical"
+- Calcular `closingBalance`: `balance + forecast_result`
+- Retornar `riskData: { level, closingBalance, reserveMin, cardPlannedTotal, forecastResult, message }`
 
-Layout por cartão:
+**2. `src/pages/Dashboard.tsx`**
+
+- Adicionar card de Risco Financeiro acima da linha operacional
+- Visual: ícone de semáforo + cor de fundo (verde/amarelo/vermelho)
+- Conteúdo:
+  - Status: "Controlado" / "Atenção" / "Crítico"
+  - Resultado previsto do mês
+  - Total cartão previsto no mês
+  - Reserva mínima
+  - Mensagem curta contextual
+
+Layout:
 ```text
-[CreditCard icon] BRA Pessoal              Pessoal
-─────────────────────────────────────────────
-Pago:      R$ 3.245,60  (verde)
-Previsto:  R$ 4.127,33  (amarelo)
-[barra proporcional pago/previsto]
-Total Mês: R$ 7.372,93  (destaque bold)
+[●] Risco Financeiro do Mês — CONTROLADO
+Resultado previsto: R$ 2.340    Cartão previsto: R$ 4.127    Reserva mín.: R$ 10.000
+"Mês controlado. Saldo de fechamento acima da reserva."
 ```
 
-Nenhuma alteração no hook — a lógica de agrupamento e queries permanece idêntica.
-
-### Arquivo alterado
+### Arquivos alterados
 
 | Arquivo | O que muda |
 |---|---|
-| `src/pages/Dashboard.tsx` | Redesenhar cards de cartão: total do mês, cores semânticas, remover contagem |
+| `src/hooks/useDashboardData.ts` | Query system_parameters, cálculo de risco, retornar riskData |
+| `src/pages/Dashboard.tsx` | Card de risco no topo com semáforo visual |
 
-Sem alteração no banco. Sem novas queries.
+Sem alteração no banco. Sem novas tabelas.
 
