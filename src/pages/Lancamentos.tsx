@@ -119,8 +119,11 @@ export default function Lancamentos() {
 
   const resolveStatus = (r: Transaction) => r.status;
 
+  const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
+
   const columns: Column<Transaction>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
+    { key: "competence_date", header: "Competência", sortable: true, sortValue: (r) => r.competence_date || "", render: (r) => fmtMonth(r.competence_date) },
     {
       key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
       render: (r) => {
@@ -143,32 +146,33 @@ export default function Lancamentos() {
       },
     },
     { key: "transaction_type", header: "Tipo", sortable: true, sortValue: (r) => r.transaction_type, render: (r) => <TypeBadge type={r.transaction_type} /> },
-    {
-      key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "",
-      render: (r) => {
-        const catName = r.categories?.name;
-        return catName || "—";
-      },
-    },
+    { key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "", render: (r) => r.categories?.name || "—" },
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
       render: (r) => {
+        const name = r.financial_entities?.name;
         const entityType = (r.financial_entities as any)?.entity_type;
-        if (!entityType) return "—";
-        return <EntityTypeBadge entityType={entityType} />;
+        if (!name) return "—";
+        return (
+          <div className="flex items-center gap-1.5">
+            <span>{name}</span>
+            <EntityTypeBadge entityType={entityType} />
+          </div>
+        );
       },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
-    { key: "status", header: "Status", sortable: true, sortValue: (r) => resolveStatus(r), render: (r) => <StatusBadge status={resolveStatus(r)} /> },
+    { key: "status", header: "Status", sortable: true, sortValue: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
+    { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => (r as any).payment_date || "", render: (r) => fmtDate((r as any).payment_date) },
     {
       key: "actions", header: "Ações", render: (r) => (
         <div className="flex gap-1">
           <Button variant="ghost" size="icon" onClick={() => { setEditing(r); setFormOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-          {(r.status === "planned" || r.status === "pending") && (
+          {r.status === "planned" && (
             <Button variant="ghost" size="icon" onClick={() => setSettling(r)} title="Registrar baixa"><CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" /></Button>
           )}
-          {(r.status === "planned" || r.status === "pending") && (
+          {r.status === "planned" && (
             <Button variant="ghost" size="icon" onClick={() => handleCancel(r.id)} title="Cancelar"><Ban className="h-4 w-4 text-[hsl(var(--warning))]" /></Button>
           )}
           <Button variant="ghost" size="icon" onClick={() => setDeleting(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
