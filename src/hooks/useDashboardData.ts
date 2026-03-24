@@ -2,11 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth } from "date-fns";
 import type { FinancialEntity } from "@/types/database";
-import {
-  CARD_INVOICE_CENTER_COSTS,
-  CENTER_COST_CARD_MAP,
-  CENTER_COST_ENTITY_MAP,
-} from "@/lib/cardInvoiceRules";
+import type { MonthlyCashflow } from "@/hooks/useMonthlyCashflow";
 
 type ViewType = "consolidated" | "personal" | "business";
 
@@ -22,12 +18,14 @@ const cashflowViewMap: Record<ViewType, string> = {
   business: "vw_monthly_cashflow_business",
 };
 
-export interface CardSummaryItem {
+export interface CardBillingProjection {
   card_name: string;
-  entity_type: "personal" | "business" | null;
-  historicalTotal: number;
-  projectedTotal: number;
-  count: number;
+  billing_month: string;
+  total_amount: number;
+  paid_amount: number;
+  planned_amount: number;
+  installments_count: number;
+  due_date: string | null;
 }
 
 export interface CategoryBreakdown {
@@ -43,6 +41,8 @@ export interface MonthForecast {
   total_income: number;
   total_expense: number;
   forecast_result: number;
+  projected_card_amount: number;
+  potential_containment: number;
 }
 
 const fmtCur = (v: number) =>
@@ -50,6 +50,7 @@ const fmtCur = (v: number) =>
 
 export function useDashboardData(view: ViewType = "consolidated", selectedMonth: Date = new Date()) {
   const { start, end } = monthRange(selectedMonth);
+  const monthStr = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
 
   // --- Financial entities ---
   const entitiesQuery = useQuery({
@@ -70,7 +71,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   const businessIds = entityTypeMap("business");
   const filterIds = view === "personal" ? personalIds : view === "business" ? businessIds : null;
 
-  // --- Account balances (consolidated + split) ---
+  // --- Account balances ---
   const accountBalances = useQuery({
     queryKey: ["dashboard_account_balances_split", view],
     queryFn: async () => {
@@ -96,117 +97,96 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     enabled: entities.length > 0,
   });
 
-  // --- Monthly flow (with planned + paid) ---
+  // --- Monthly cashflow from view (single source of truth) ---
   const monthlyFlow = useQuery({
-    queryKey: ["dashboard_monthly_flow", start, view],
+    queryKey: ["dashboard_monthly_flow_view", start, view],
     queryFn: async () => {
       const viewName = cashflowViewMap[view];
       const { data, error } = await (supabase as any)
         .from(viewName)
         .select("*")
-        .gte("reference_month", start)
-        .lt("reference_month", end)
+        .eq("reference_month", monthStr)
         .maybeSingle();
-      if (error) {
-        // Fallback: query transactions directly
-        let txQuery = (supabase as any)
-          .from("transactions")
-          .select("transaction_type, amount, status")
-          .gte("competence_date", start)
-          .lt("competence_date", end)
-          .neq("status", "cancelled");
-        if (filterIds && filterIds.length > 0) {
-          txQuery = txQuery.in("financial_entity_id", filterIds);
-        }
-        const { data: txs, error: e2 } = await txQuery;
-        if (e2) throw e2;
-        const rows = txs || [];
-        const income_paid = rows.filter((t: any) => t.transaction_type === "income" && t.status === "paid").reduce((s: number, t: any) => s + t.amount, 0);
-        const income_planned = rows.filter((t: any) => t.transaction_type === "income" && t.status === "planned").reduce((s: number, t: any) => s + t.amount, 0);
-        const expense_paid = rows.filter((t: any) => t.transaction_type === "expense" && t.status === "paid").reduce((s: number, t: any) => s + t.amount, 0);
-        const expense_planned = rows.filter((t: any) => t.transaction_type === "expense" && t.status === "planned").reduce((s: number, t: any) => s + t.amount, 0);
-        return { income_paid, income_planned, expense_paid, expense_planned, projected_balance: income_paid - expense_paid };
-      }
-      return data as { income_paid: number; income_planned: number; expense_paid: number; expense_planned: number; projected_balance: number } | null;
-    },
-  });
-
-  // --- Forecast (sanitize future months: paid→planned) ---
-  const flow = monthlyFlow.data;
-  const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
-  const isFutureMonth = start > currentMonthStart;
-
-  const sanitizedFlow = {
-    income_paid: isFutureMonth ? 0 : (flow?.income_paid ?? 0),
-    income_planned: isFutureMonth
-      ? (flow?.income_paid ?? 0) + (flow?.income_planned ?? 0)
-      : (flow?.income_planned ?? 0),
-    expense_paid: isFutureMonth ? 0 : (flow?.expense_paid ?? 0),
-    expense_planned: isFutureMonth
-      ? (flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0)
-      : (flow?.expense_planned ?? 0),
-  };
-
-  const forecast: MonthForecast = {
-    income_paid: sanitizedFlow.income_paid,
-    income_planned: sanitizedFlow.income_planned,
-    expense_paid: sanitizedFlow.expense_paid,
-    expense_planned: sanitizedFlow.expense_planned,
-    total_income: sanitizedFlow.income_paid + sanitizedFlow.income_planned,
-    total_expense: sanitizedFlow.expense_paid + sanitizedFlow.expense_planned,
-    forecast_result: (sanitizedFlow.income_paid + sanitizedFlow.income_planned) - (sanitizedFlow.expense_paid + sanitizedFlow.expense_planned),
-  };
-
-  // --- Card summary via center_cost (FILTERED BY MONTH) ---
-  const cardSummary = useQuery({
-    queryKey: ["dashboard_card_summary", view, start, end],
-    queryFn: async () => {
-      let query = (supabase as any)
-        .from("transactions")
-        .select("amount, competence_date, center_cost, financial_entity_id, status")
-        .gte("competence_date", start)
-        .lt("competence_date", end)
-        .neq("status", "cancelled");
-
-      if (filterIds && filterIds.length > 0) {
-        query = query.in("financial_entity_id", filterIds);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
-
-      const items = (data || []).filter((t: any) =>
-        t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost)
-      );
-
-      const map = new Map<string, CardSummaryItem>();
-      items.forEach((t: any) => {
-        const cardName = CENTER_COST_CARD_MAP[t.center_cost] || t.center_cost;
-        let s = map.get(cardName);
-        if (!s) {
-          s = {
-            card_name: cardName,
-            entity_type: CENTER_COST_ENTITY_MAP[t.center_cost] || null,
-            historicalTotal: 0,
-            projectedTotal: 0,
-            count: 0,
-          };
-          map.set(cardName, s);
-        }
-        s.count += 1;
-        const amt = Math.abs(t.amount);
-        if (t.status === "paid") {
-          s.historicalTotal += amt;
-        } else {
-          s.projectedTotal += amt;
-        }
-      });
-
-      return Array.from(map.values());
+      return data as MonthlyCashflow | null;
     },
   });
 
-  // --- Expenses by category ---
+  const flow = monthlyFlow.data;
+
+  // Build forecast directly from view data (zero business logic in frontend)
+  const forecast: MonthForecast = {
+    income_paid: flow?.income_paid ?? 0,
+    income_planned: flow?.income_planned ?? 0,
+    expense_paid: flow?.expense_paid ?? 0,
+    expense_planned: flow?.expense_planned ?? 0,
+    total_income: (flow?.income_paid ?? 0) + (flow?.income_planned ?? 0),
+    total_expense: (flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0),
+    forecast_result: (flow?.projected_balance ?? 0) - (accountBalances.data?.filtered ?? 0),
+    projected_card_amount: flow?.projected_card_amount ?? 0,
+    potential_containment: flow?.potential_containment ?? 0,
+  };
+
+  // Use projected_balance from view as the actual forecast result
+  // The view already computes: income - expense + balance adjustments
+  const forecastResult = ((flow?.income_paid ?? 0) + (flow?.income_planned ?? 0)) -
+    ((flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0));
+  forecast.forecast_result = forecastResult;
+
+  // --- Risk: directly from view's traffic_light ---
+  const trafficLight = flow?.traffic_light ?? "green";
+  const minimumReserve = flow?.minimum_reserve ?? 0;
+  const projectedBalance = flow?.projected_balance ?? 0;
+  const cardPlannedTotal = flow?.projected_card_amount ?? 0;
+
+  const riskLevelMap: Record<string, "controlled" | "attention" | "critical"> = {
+    green: "controlled",
+    yellow: "attention",
+    red: "critical",
+  };
+  const riskLevel = riskLevelMap[trafficLight] ?? "controlled";
+
+  const riskMessageMap: Record<string, string> = {
+    green: "Mês controlado. Saldo de fechamento acima da reserva.",
+    yellow: "Atenção: resultado apertado ou cartão com peso relevante.",
+    red: "Risco de fechamento negativo ou abaixo da reserva mínima.",
+  };
+
+  const riskData = {
+    level: riskLevel,
+    closingBalance: projectedBalance,
+    reserveMin: minimumReserve,
+    cardPlannedTotal,
+    forecastResult: forecastResult,
+    message: riskMessageMap[trafficLight] ?? riskMessageMap.green,
+  };
+
+  // --- Card billing projection from view ---
+  const cardBilling = useQuery({
+    queryKey: ["dashboard_card_billing_projection", start],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("vw_card_billing_projection")
+        .select("*")
+        .eq("billing_month", format(selectedMonth, "yyyy-MM"));
+      if (error) {
+        console.warn("vw_card_billing_projection not available:", error.message);
+        return [];
+      }
+      return (data || []) as CardBillingProjection[];
+    },
+  });
+
+  // Build cardSummary from billing projection view
+  const cardSummary = (cardBilling.data ?? []).map(p => ({
+    card_name: p.card_name,
+    entity_type: null as "personal" | "business" | null,
+    historicalTotal: p.paid_amount ?? 0,
+    projectedTotal: p.planned_amount ?? 0,
+    count: p.installments_count ?? 0,
+  }));
+
+  // --- Expenses by category (no dedicated view — keep query) ---
   const expensesByCategory = useQuery({
     queryKey: ["dashboard_expenses_category", start, view],
     queryFn: async () => {
@@ -234,7 +214,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- Cashflow chart ---
+  // --- Cashflow chart (12 months from view) ---
   const cashflowChart = useQuery({
     queryKey: ["dashboard_cashflow_chart", view],
     queryFn: async () => {
@@ -331,75 +311,14 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- System parameters (reserves) ---
-  const systemParams = useQuery({
-    queryKey: ["dashboard_system_params"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("system_parameters")
-        .select("parameter_key, parameter_value")
-        .in("parameter_key", ["minimum_reserve_personal", "minimum_reserve_business"]);
-      if (error) throw error;
-      const map: Record<string, number> = {};
-      for (const p of (data || []) as { parameter_key: string; parameter_value: string }[]) {
-        map[p.parameter_key] = parseFloat(p.parameter_value) || 0;
-      }
-      return map;
-    },
-  });
-
   const balances = accountBalances.data ?? { total: 0, personal: 0, business: 0, filtered: 0 };
-  const params = systemParams.data ?? {};
-
-  // --- Risk calculation ---
-  const reservePersonal = params["minimum_reserve_personal"] ?? 0;
-  const reserveBusiness = params["minimum_reserve_business"] ?? 0;
-  const reserveMin = view === "personal" ? reservePersonal : view === "business" ? reserveBusiness : reservePersonal + reserveBusiness;
-
-  const closingBalance = balances.filtered + forecast.forecast_result;
-  const cardPlannedTotal = (cardSummary.data ?? []).reduce((s, c) => s + c.projectedTotal, 0);
-
-  let riskLevel: "controlled" | "attention" | "critical" = "controlled";
-  let riskMessage = "Mês controlado. Saldo de fechamento acima da reserva.";
-
-  const totalIncome = forecast.total_income;
-  const totalExpense = forecast.total_expense;
-
-  if (forecast.forecast_result < 0 || (reserveMin > 0 && closingBalance < reserveMin)) {
-    riskLevel = "critical";
-    riskMessage = forecast.forecast_result < 0
-      ? "Risco de fechamento negativo. Revise despesas previstas."
-      : "Saldo de fechamento abaixo da reserva mínima.";
-  } else if (
-    (totalIncome > 0 && forecast.forecast_result < totalIncome * 0.05) ||
-    (reserveMin > 0 && closingBalance < reserveMin * 1.1) ||
-    (totalExpense > 0 && cardPlannedTotal > totalExpense * 0.3)
-  ) {
-    riskLevel = "attention";
-    if (totalExpense > 0 && cardPlannedTotal > totalExpense * 0.3) {
-      riskMessage = "Atenção ao comprometimento do cartão no mês.";
-    } else if (reserveMin > 0 && closingBalance < reserveMin * 1.1) {
-      riskMessage = "Saldo de fechamento próximo da reserva mínima.";
-    } else {
-      riskMessage = "Resultado previsto baixo. Acompanhe de perto.";
-    }
-  }
-
-  const riskData = {
-    level: riskLevel,
-    closingBalance,
-    reserveMin,
-    cardPlannedTotal,
-    forecastResult: forecast.forecast_result,
-    message: riskMessage,
-  };
 
   return {
     balance: balances.filtered,
     balanceSplit: { personal: balances.personal, business: balances.business, total: balances.total },
-    flow: isFutureMonth ? { ...flow, income_paid: 0, expense_paid: 0, income_planned: sanitizedFlow.income_planned, expense_planned: sanitizedFlow.expense_planned } : monthlyFlow.data,
+    flow: monthlyFlow.data,
     forecast,
-    cardSummary: cardSummary.data ?? [],
+    cardSummary,
     expensesByCategory: expensesByCategory.data ?? [],
     patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null },
     patrimonyEvolution: patrimonyEvolution.data ?? [],
