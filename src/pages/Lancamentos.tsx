@@ -115,7 +115,7 @@ export default function Lancamentos() {
       if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
-      const isCCInvoice = t.source_type === "card" || isCardInvoiceByCenterCost((t as any).center_cost) || isCardInvoice(t.categories?.name);
+      const isCCInvoice = isCardInvoiceByCenterCost((t as any).center_cost) || isCardInvoice(t.categories?.name);
       if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
       if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
       if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "BRA Pessoal")) return false;
