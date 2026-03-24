@@ -336,11 +336,10 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   return {
     balance: balances.filtered,
     balanceSplit: { personal: balances.personal, business: balances.business, total: balances.total },
-    flow: monthlyFlow.data,
+    flow: isFutureMonth ? { ...flow, income_paid: 0, expense_paid: 0, income_planned: sanitizedFlow.income_planned, expense_planned: sanitizedFlow.expense_planned } : monthlyFlow.data,
     forecast,
     cardSummary: cardSummary.data ?? [],
     expensesByCategory: expensesByCategory.data ?? [],
-    cashflowChart: cashflowChart.data ?? [],
     patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null },
     patrimonyEvolution: patrimonyEvolution.data ?? [],
     investment: investmentData.data ?? { total: 0, byClass: [] },
