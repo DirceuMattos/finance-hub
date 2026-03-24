@@ -1,66 +1,66 @@
 
 
-## Plano: Supabase como Fonte Única da Verdade
+## Plano: Corrigir Dashboard para usar views reais
 
-### Diagnóstico
+### Problemas encontrados
 
-O `useDashboardData.ts` atualmente faz **3 queries redundantes** em `transactions` que duplicam lógica já presente nas views:
+| Problema | Causa |
+|---|---|
+| Query `vw_card_billing_projection` falha com erro 400 | Coluna `billing_month` não existe na view. A view existe mas está **vazia** (retorna `[]`) |
+| Forecast recalculado no frontend | Linhas 122-134 recalculam `forecast_result` com soma manual em vez de usar `projected_balance` da view |
+| Interface `CardBillingProjection` assume colunas fictícias | `card_name`, `billing_month`, `paid_amount`, `planned_amount` — nenhuma confirmada |
 
-| Dado | Hoje (frontend) | View disponível |
-|---|---|---|
-| Cartões (pago/previsto) | Query em `transactions` + filtro `center_cost` + agrupamento JS | `vw_card_billing_projection` + campos `projected_card_amount` na cashflow view |
-| Risco/semáforo | Cálculo manual com regras JS | `traffic_light` já vem da cashflow view |
-| Reserva mínima | Query em `system_parameters` | `minimum_reserve` já vem da cashflow view |
-| Forecast | Cálculo manual paid+planned | `projected_balance` já vem da cashflow view |
-| Contenção | Não usado | `potential_containment` na cashflow view + `vw_expense_containment` |
+### Dados reais confirmados das views
+
+**`vw_monthly_cashflow_consolidated`** (status 200, com dados):
+- `reference_month`, `current_balance_base`, `income_planned`, `income_paid`, `expense_planned`, `expense_paid`, `projected_card_amount`, `potential_containment`, `total_portfolio_value`, `investment_estimated_return`, `projected_balance`, `minimum_reserve`, `traffic_light`
+
+**`vw_card_billing_projection`** (status 200, mas vazia `[]`):
+- Colunas desconhecidas — view sem dados para descobrir schema
+
+**`vw_expense_containment`** (status 200, com dados):
+- `reference_month`, `financial_entity_id`, `category_id`, `category_name`, `category_group`, `is_containable`, `total_amount`
 
 ### Alterações
 
-**1. `src/hooks/useDashboardData.ts` — Simplificar drasticamente**
+**1. `src/hooks/useDashboardData.ts`**
 
-- **Remover** query `cardSummary` (transactions com center_cost) → substituir por query a `vw_card_billing_projection`
-- **Remover** query `systemParams` (system_parameters) → usar `minimum_reserve` da cashflow view
-- **Remover** cálculo de `forecast` manual → usar `projected_balance` da cashflow view
-- **Remover** cálculo de `riskLevel`/`riskMessage` → usar `traffic_light` da cashflow view
-- **Remover** lógica `sanitizedFlow` (future month fix) → confiar nos dados da view
-- **Manter** queries de `accounts` (saldo atual), `patrimony_snapshots`, `investment_snapshots`, `expensesByCategory` (não têm views dedicadas)
-- **Adicionar** query a `vw_expense_containment` para alimentar dados de contenção
+- **Remover** query `cardBilling` e interface `CardBillingProjection` — view vazia e colunas desconhecidas
+- **Remover** `cardSummary` derivado dessa query
+- **Usar** `projected_card_amount` da cashflow view como dado de cartão (já vem calculado)
+- **Usar** `projected_balance` da view diretamente como `forecast_result` — sem recalcular
+- **Usar** `potential_containment` da view diretamente
+- **Remover** cálculos manuais de `total_income`, `total_expense` no forecast
+- Retornar `cardProjectedAmount` (número único do mês, vindo da view)
 
-O hook passará a retornar:
-- `flow`: direto da cashflow view (income_paid, expense_paid, income_planned, expense_planned, projected_card_amount, potential_containment, projected_balance, minimum_reserve, traffic_light)
-- `cardSummary`: de `vw_card_billing_projection` (agrupado por cartão/mês)
-- `riskData`: derivado do `traffic_light` da view (sem recalcular)
+**2. `src/pages/Dashboard.tsx`**
 
-**2. `src/hooks/useMonthlyCashflow.ts` — Sem alteração**
+- **Substituir** seção de cartões (cards individuais por cartão) por card único "Comprometimento com Cartão" usando `projected_card_amount` da view
+- **Simplificar** bloco de Previsão: usar `income_paid`, `expense_paid`, `income_planned`, `expense_planned`, `projected_balance` direto da view
+- **Remover** referências a `cardSummary` (array de cartões)
 
-Já usa as views corretamente.
+### Dados exibidos no Dashboard
 
-**3. `src/pages/Dashboard.tsx` — Adaptar ao novo formato**
-
-- Usar `traffic_light` da view para o semáforo (mapear green/yellow/red para Controlado/Atenção/Crítico)
-- Usar `projected_balance` da view para previsão de fechamento
-- Usar `projected_card_amount` da view no card de cartões
-- Usar `potential_containment` para mostrar potencial de contenção
-- Usar `minimum_reserve` da view no card de risco
-
-**4. `src/pages/FaturasProjetadas.tsx` — Usar `vw_card_billing_projection`**
-
-- Substituir a lógica de projeção manual por query à view `vw_card_billing_projection`
-
-### Regra aplicada
-
-Toda leitura analítica vem do banco. O frontend apenas:
-1. Busca dados das views
-2. Formata para exibição
-3. Aplica filtros de UI (entidade, mês)
-
-Zero lógica de negócio no frontend.
+| Indicador | Fonte |
+|---|---|
+| Saldo Atual | `accounts.current_balance` (query direta, sem view) |
+| Receitas pagas | `flow.income_paid` da cashflow view |
+| Despesas pagas | `flow.expense_paid` da cashflow view |
+| Saldo projetado | `flow.projected_balance` da cashflow view |
+| Cartão previsto | `flow.projected_card_amount` da cashflow view |
+| Risco | `flow.traffic_light` da cashflow view |
+| Reserva mínima | `flow.minimum_reserve` da cashflow view |
+| Contenção | `flow.potential_containment` da cashflow view |
+| Despesas por categoria | `transactions` (sem view dedicada) |
+| Patrimônio | `patrimony_snapshots` (sem view dedicada) |
+| Investimentos | `investment_snapshots` (sem view dedicada) |
 
 ### Arquivos alterados
 
 | Arquivo | O que muda |
 |---|---|
-| `src/hooks/useDashboardData.ts` | Remover queries redundantes, usar views como fonte única |
-| `src/pages/Dashboard.tsx` | Adaptar ao novo formato de dados (traffic_light, projected_balance da view) |
-| `src/pages/FaturasProjetadas.tsx` | Usar `vw_card_billing_projection` |
+| `src/hooks/useDashboardData.ts` | Remover cardBilling query, usar projected_balance direto, simplificar forecast |
+| `src/pages/Dashboard.tsx` | Substituir seção de cartões individuais por card único com projected_card_amount |
+
+Zero lógica de negócio no frontend. Zero colunas inventadas.
 
