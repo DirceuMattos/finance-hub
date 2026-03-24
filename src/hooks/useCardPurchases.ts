@@ -31,7 +31,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
       toast.success("Compra registrada com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
