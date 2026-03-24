@@ -5,13 +5,16 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatCard } from "@/components/shared/StatCard";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Landmark, TrendingUp, TrendingDown, Wallet } from "lucide-react";
-import { usePatrimonySnapshots, usePatrimonyEvolution, PatrimonySnapshot, PatrimonyEvolution } from "@/hooks/usePatrimony";
-import { useFinancialEntities } from "@/hooks/useFinancialEntities";
+import { Landmark, TrendingUp, TrendingDown, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { usePatrimonySnapshots, usePatrimonyEvolution, usePatrimonyCrud, PatrimonySnapshot } from "@/hooks/usePatrimony";
+import { PatrimonyForm } from "@/components/patrimonio/PatrimonyForm";
+import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -33,20 +36,21 @@ const BUSINESS_ENTITY_ID = "750b0ab2-09b4-44eb-9309-78c4b4d2dab0";
 export default function Patrimonio() {
   const [view, setView] = useState<ViewType>("all");
   const { data: snapshots = [], isLoading: loadingSnapshots } = usePatrimonySnapshots();
-  const { data: evolution = [], isLoading: loadingEvolution } = usePatrimonyEvolution();
+  const { data: evolution = [] } = usePatrimonyEvolution();
+  const { create, update, remove } = usePatrimonyCrud();
 
-  // Get unique months from snapshots
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingSnapshot, setEditingSnapshot] = useState<PatrimonySnapshot | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const months = useMemo(() => {
     const set = new Set(snapshots.map((s) => s.reference_month));
     return Array.from(set).sort().reverse();
   }, [snapshots]);
 
   const [selectedMonth, setSelectedMonth] = useState<string>("");
-
-  // Auto-select latest month
   const activeMonth = selectedMonth || months[0] || "";
 
-  // Filter by entity
   const filterByEntity = <T extends { financial_entity_id: string }>(data: T[]) => {
     if (view === "personal") return data.filter((d) => d.financial_entity_id === PERSONAL_ENTITY_ID);
     if (view === "business") return data.filter((d) => d.financial_entity_id === BUSINESS_ENTITY_ID);
@@ -61,37 +65,35 @@ export default function Patrimonio() {
 
   const filteredEvolution = useMemo(() => filterByEntity(evolution), [evolution, view]);
 
-  // Totals for stat cards
-  const totals = useMemo(() => {
-    const assets = filteredSnapshots
-      .filter((s) => s.closing_value > 0)
-      .reduce((sum, s) => sum + s.closing_value, 0);
-    const liabilities = filteredSnapshots
-      .filter((s) => s.closing_value < 0)
-      .reduce((sum, s) => sum + Math.abs(s.closing_value), 0);
-    return { assets, liabilities, net: assets - liabilities };
-  }, [filteredSnapshots]);
-
-  // Evolution for latest month
-  const latestEvolution = useMemo(() => {
-    if (!filteredEvolution.length) return null;
-    // Aggregate if "all" view
+  // Aggregate evolution for chart
+  const chartData = useMemo(() => {
     if (view === "all") {
-      const byMonth = new Map<string, { total_assets: number; total_liabilities: number; net_patrimony: number }>();
+      const byMonth = new Map<string, { reference_month: string; total_assets: number; total_liabilities: number; net_patrimony: number }>();
       filteredEvolution.forEach((e) => {
-        const existing = byMonth.get(e.reference_month) || { total_assets: 0, total_liabilities: 0, net_patrimony: 0 };
+        const existing = byMonth.get(e.reference_month) || { reference_month: e.reference_month, total_assets: 0, total_liabilities: 0, net_patrimony: 0 };
         existing.total_assets += e.total_assets;
         existing.total_liabilities += e.total_liabilities;
         existing.net_patrimony += e.net_patrimony;
         byMonth.set(e.reference_month, existing);
       });
-      const sorted = Array.from(byMonth.entries()).sort((a, b) => b[0].localeCompare(a[0]));
-      return sorted[0]?.[1] || null;
+      return Array.from(byMonth.values()).sort((a, b) => a.reference_month.localeCompare(b.reference_month));
     }
-    return filteredEvolution[filteredEvolution.length - 1] || null;
+    return filteredEvolution.map((e) => ({
+      reference_month: e.reference_month,
+      total_assets: e.total_assets,
+      total_liabilities: e.total_liabilities,
+      net_patrimony: e.net_patrimony,
+    }));
   }, [filteredEvolution, view]);
 
-  // Group by category
+  const hasEnoughHistory = chartData.length >= 2;
+
+  const totals = useMemo(() => {
+    const assets = filteredSnapshots.filter((s) => s.closing_value > 0).reduce((sum, s) => sum + s.closing_value, 0);
+    const liabilities = filteredSnapshots.filter((s) => s.closing_value < 0).reduce((sum, s) => sum + Math.abs(s.closing_value), 0);
+    return { assets, liabilities, net: assets - liabilities };
+  }, [filteredSnapshots]);
+
   const byCategory = useMemo(() => {
     const map = new Map<string, { name: string; total: number; items: number }>();
     filteredSnapshots.forEach((s) => {
@@ -104,80 +106,78 @@ export default function Patrimonio() {
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [filteredSnapshots]);
 
+  const handleFormSubmit = (data: any) => {
+    if (data.id) {
+      update.mutate(data, { onSuccess: () => { setFormOpen(false); setEditingSnapshot(null); } });
+    } else {
+      create.mutate(data, { onSuccess: () => { setFormOpen(false); } });
+    }
+  };
+
+  const handleEdit = (snapshot: PatrimonySnapshot) => {
+    setEditingSnapshot(snapshot);
+    setFormOpen(true);
+  };
+
+  const handleDelete = () => {
+    if (deleteId) {
+      remove.mutate(deleteId, { onSuccess: () => setDeleteId(null) });
+    }
+  };
+
   const columns: Column<PatrimonySnapshot>[] = [
+    { key: "item_name", header: "Item", sortable: true, sortValue: (r) => r.item_name },
     {
-      key: "item_name",
-      header: "Item",
-      sortable: true,
-      sortValue: (r) => r.item_name,
+      key: "category", header: "Categoria", sortable: true,
+      sortValue: (r) => r.asset_categories?.name || "",
+      render: (r) => <Badge variant="outline" className="text-[10px]">{r.asset_categories?.name || "—"}</Badge>,
     },
     {
-      key: "category",
-      header: "Categoria",
-      sortable: true,
-      sortValue: (r) => r.asset_categories?.name || "",
+      key: "entity", header: "Entidade", sortable: true,
+      sortValue: (r) => r.financial_entities?.name || "",
       render: (r) => (
-        <Badge variant="outline" className="text-[10px]">
-          {r.asset_categories?.name || "—"}
+        <Badge variant={r.financial_entity_id === PERSONAL_ENTITY_ID ? "default" : "secondary"} className="text-[10px]">
+          {r.financial_entities?.name || "—"}
         </Badge>
       ),
     },
     {
-      key: "entity",
-      header: "Entidade",
-      sortable: true,
-      sortValue: (r) => r.financial_entities?.name || "",
-      render: (r) => {
-        const name = r.financial_entities?.name || "—";
-        const isPersoanl = r.financial_entity_id === PERSONAL_ENTITY_ID;
-        return (
-          <Badge variant={isPersoanl ? "default" : "secondary"} className="text-[10px]">
-            {name}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: "opening_value",
-      header: "Abertura",
-      sortable: true,
+      key: "opening_value", header: "Abertura", sortable: true,
       sortValue: (r) => r.opening_value,
       render: (r) => <span className="font-mono">{fmt(r.opening_value)}</span>,
     },
     {
-      key: "closing_value",
-      header: "Fechamento",
-      sortable: true,
+      key: "closing_value", header: "Fechamento", sortable: true,
       sortValue: (r) => r.closing_value,
-      render: (r) => (
-        <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>
-          {fmt(r.closing_value)}
-        </span>
-      ),
+      render: (r) => <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
     },
     {
-      key: "variation",
-      header: "Variação",
-      sortable: true,
+      key: "variation", header: "Variação", sortable: true,
       sortValue: (r) => r.closing_value - r.opening_value,
       render: (r) => {
         const diff = r.closing_value - r.opening_value;
         if (diff === 0) return <span className="text-muted-foreground">—</span>;
-        return (
-          <span className={`font-mono text-[10px] ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>
-            {diff > 0 ? "+" : ""}{fmt(diff)}
-          </span>
-        );
+        return <span className={`font-mono text-[10px] ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>{diff > 0 ? "+" : ""}{fmt(diff)}</span>;
       },
+    },
+    {
+      key: "actions", header: "",
+      render: (r) => (
+        <div className="flex gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+        </div>
+      ),
     },
   ];
 
   return (
     <AppLayout>
-      <PageHeader
-        title="Patrimônio"
-        description="Visão consolidada do patrimônio por mês"
-      />
+      <PageHeader title="Patrimônio" description="Visão consolidada do patrimônio por mês">
+        <Button onClick={() => { setEditingSnapshot(null); setFormOpen(true); }} size="sm">
+          <Plus className="h-4 w-4 mr-1" /> Novo registro
+        </Button>
+      </PageHeader>
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
@@ -194,31 +194,53 @@ export default function Patrimonio() {
           </SelectTrigger>
           <SelectContent>
             {months.map((m) => (
-              <SelectItem key={m} value={m}>
-                {fmtMonth(m)}
-              </SelectItem>
+              <SelectItem key={m} value={m}>{fmtMonth(m)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <StatCard title="Ativos" value={fmt(totals.assets)} icon={TrendingUp} />
         <StatCard title="Passivos" value={fmt(totals.liabilities)} icon={TrendingDown} />
         <StatCard title="Patrimônio Líquido" value={fmt(totals.net)} icon={Landmark} />
       </div>
 
-      {/* By category summary */}
+      {/* Evolution Chart */}
+      {hasEnoughHistory ? (
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <h3 className="text-sm font-semibold mb-4">Evolução Patrimonial</h3>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                <XAxis dataKey="reference_month" tickFormatter={fmtMonth} className="text-[10px]" />
+                <YAxis tickFormatter={(v) => fmt(v)} className="text-[10px]" width={100} />
+                <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={fmtMonth} />
+                <Legend />
+                <Line type="monotone" dataKey="total_assets" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="total_liabilities" name="Passivos" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="net_patrimony" name="Patrimônio Líquido" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="mb-6">
+          <CardContent className="py-8 flex items-center justify-center gap-2 text-muted-foreground">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm">Histórico insuficiente para análise (mínimo 2 meses)</span>
+          </CardContent>
+        </Card>
+      )}
+
       {byCategory.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3 mb-6">
           {byCategory.map((cat) => (
             <Card key={cat.name}>
               <CardContent className="p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{cat.name}</p>
-                <p className={`text-sm font-semibold font-mono mt-1 ${cat.total < 0 ? "text-destructive" : ""}`}>
-                  {fmt(cat.total)}
-                </p>
+                <p className={`text-sm font-semibold font-mono mt-1 ${cat.total < 0 ? "text-destructive" : ""}`}>{fmt(cat.total)}</p>
                 <p className="text-[10px] text-muted-foreground">{cat.items} itens</p>
               </CardContent>
             </Card>
@@ -226,7 +248,6 @@ export default function Patrimonio() {
         </div>
       )}
 
-      {/* Detail table */}
       <DataTable
         columns={columns}
         data={filteredSnapshots}
@@ -234,6 +255,23 @@ export default function Patrimonio() {
         emptyMessage="Nenhum registro de patrimônio encontrado."
         defaultSortKey="closing_value"
         defaultSortDir="desc"
+      />
+
+      <PatrimonyForm
+        open={formOpen}
+        onOpenChange={(open) => { setFormOpen(open); if (!open) setEditingSnapshot(null); }}
+        snapshot={editingSnapshot}
+        onSubmit={handleFormSubmit}
+        loading={create.isPending || update.isPending}
+      />
+
+      <DeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={handleDelete}
+        loading={remove.isPending}
+        title="Excluir registro"
+        description="Tem certeza que deseja excluir este registro de patrimônio?"
       />
     </AppLayout>
   );
