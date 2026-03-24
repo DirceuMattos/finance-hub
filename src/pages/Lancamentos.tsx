@@ -143,7 +143,7 @@ export default function Lancamentos() {
     {
       key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
       render: (r) => {
-        const isCCInvoice = r.source_type === "card" || isCardInvoiceByCenterCost((r as any).center_cost) || isCardInvoice(r.categories?.name);
+        const isCCInvoice = isCardInvoiceByCenterCost((r as any).center_cost) || isCardInvoice(r.categories?.name);
         if (isCCInvoice) {
           const cardLabel = getCardNameFromCenterCost((r as any).center_cost) || getCardInvoiceLabel(r.categories?.name || "");
           return (
