@@ -9,10 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Info } from "lucide-react";
-import { useCards } from "@/hooks/useCards";
-import { useBillingProjection } from "@/hooks/useCardInstallments";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabaseClient";
+import { useCardInvoiceProjections } from "@/hooks/useCardInvoiceTransactions";
 
 interface BillingRow {
   key: string;
@@ -23,92 +20,46 @@ interface BillingRow {
   paid_amount: number;
   planned_amount: number;
   count: number;
-  source: string;
 }
 
 export default function FaturasProjetadas() {
-  const { data: cards = [] } = useCards();
+  const { projections, isLoading } = useCardInvoiceProjections();
   const [filterCard, setFilterCard] = useState("all");
   const [search, setSearch] = useState("");
 
-  // Primary source: vw_card_billing_projection
-  const { data: viewData, isLoading: loadingView } = useQuery({
-    queryKey: ["faturas_card_billing_projection"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("vw_card_billing_projection")
-        .select("*")
-        .order("billing_month")
-        .order("card_name");
-      if (error) {
-        console.warn("vw_card_billing_projection not available:", error.message);
-        return null;
-      }
-      return data as {
-        card_name: string;
-        billing_month: string;
-        total_amount: number;
-        paid_amount: number;
-        planned_amount: number;
-        installments_count: number;
-        due_date: string | null;
-      }[];
-    },
-  });
+  const currentMonth = format(new Date(), "yyyy-MM");
 
-  // Fallback: useBillingProjection (card_installments)
-  const { data: installmentProjections = [], isLoading: loadingFallback } = useBillingProjection();
+  // Unique card names for filter
+  const cardNames = useMemo(() => {
+    const names = new Set(projections.map((p) => p.card_name));
+    return Array.from(names).sort();
+  }, [projections]);
 
   const rows = useMemo(() => {
-    const result: BillingRow[] = [];
-
-    if (viewData && viewData.length > 0) {
-      // Use view data as single source of truth
-      viewData.forEach((p) => {
-        result.push({
-          key: `view_${p.card_name}_${p.billing_month}`,
-          card_name: p.card_name,
-          billing_month: p.billing_month,
-          due_date: p.due_date ?? null,
-          total_amount: p.total_amount,
-          paid_amount: p.paid_amount ?? 0,
-          planned_amount: p.planned_amount ?? 0,
-          count: p.installments_count ?? 0,
-          source: "view",
-        });
-      });
-    } else {
-      // Fallback to installment projections
-      installmentProjections.forEach((p) => {
-        result.push({
-          key: `inst_${p.card_id}_${p.billing_month}`,
-          card_name: p.card_name,
-          billing_month: p.billing_month,
-          due_date: p.due_date,
-          total_amount: p.total_amount,
-          paid_amount: 0,
-          planned_amount: p.total_amount,
-          count: p.installments_count,
-          source: "fallback",
-        });
-      });
-    }
-
-    return result.sort((a, b) => a.billing_month.localeCompare(b.billing_month) || a.card_name.localeCompare(b.card_name));
-  }, [viewData, installmentProjections]);
+    return projections
+      .filter((p) => p.billing_month >= currentMonth)
+      .map((p): BillingRow => ({
+        key: `${p.card_name}_${p.billing_month}`,
+        card_name: p.card_name,
+        billing_month: p.billing_month,
+        due_date: p.due_date,
+        total_amount: p.total_amount,
+        paid_amount: p.status === "paid" ? p.total_amount : 0,
+        planned_amount: p.status === "planned" ? p.total_amount : 0,
+        count: p.invoices_count,
+      }));
+  }, [projections, currentMonth]);
 
   const filtered = useMemo(() => {
-    return rows.filter((p) => {
-      if (filterCard !== "all") {
-        const selectedCard = cards.find(c => c.id === filterCard);
-        if (selectedCard && selectedCard.name !== p.card_name) return false;
-      }
-      if (search && !p.card_name.toLowerCase().includes(search.toLowerCase())) return false;
+    return rows.filter((r) => {
+      if (filterCard !== "all" && r.card_name !== filterCard) return false;
+      if (search && !r.card_name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [rows, filterCard, search, cards]);
+  }, [rows, filterCard, search]);
 
-  const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+  const fmt = (v: number) =>
+    new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   const fmtMonth = (m: string) => {
     try {
@@ -139,16 +90,14 @@ export default function FaturasProjetadas() {
   }, [filtered]);
 
   const columns: Column<BillingRow>[] = [
-    { key: "billing_month" as any, header: "Mês", render: (r) => <Badge variant="outline">{fmtMonth(r.billing_month)}</Badge> },
-    { key: "card_name" as any, header: "Cartão" },
-    { key: "total_amount" as any, header: "Total da Fatura", render: (r) => <span className="font-semibold">{fmt(r.total_amount)}</span> },
-    { key: "paid_amount" as any, header: "Pago", render: (r) => <span className="text-emerald-600 dark:text-emerald-400">{fmt(r.paid_amount)}</span> },
-    { key: "planned_amount" as any, header: "Previsto", render: (r) => <span className="text-amber-600 dark:text-amber-400">{fmt(r.planned_amount)}</span> },
-    { key: "status" as any, header: "Status", render: (r) => statusBadge(r) },
-    { key: "due_date" as any, header: "Vencimento", render: (r) => r.due_date ? format(new Date(r.due_date), "dd/MM/yyyy") : "—" },
+    { key: "billing_month", header: "Mês", render: (r) => <Badge variant="outline">{fmtMonth(r.billing_month)}</Badge> },
+    { key: "card_name", header: "Cartão" },
+    { key: "total_amount", header: "Total da Fatura", render: (r) => <span className="font-semibold">{fmt(r.total_amount)}</span> },
+    { key: "paid_amount", header: "Pago", render: (r) => <span className="text-emerald-600 dark:text-emerald-400">{fmt(r.paid_amount)}</span> },
+    { key: "planned_amount", header: "Previsto", render: (r) => <span className="text-amber-600 dark:text-amber-400">{fmt(r.planned_amount)}</span> },
+    { key: "status", header: "Status", render: (r) => statusBadge(r) },
+    { key: "due_date", header: "Vencimento", render: (r) => r.due_date ? format(new Date(r.due_date), "dd/MM/yyyy") : "—" },
   ];
-
-  const isLoading = loadingView || (viewData === null && loadingFallback);
 
   return (
     <AppLayout>
@@ -159,7 +108,7 @@ export default function FaturasProjetadas() {
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos cartões</SelectItem>
-            {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+            {cardNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
           </SelectContent>
         </Select>
       </FilterBar>
@@ -179,11 +128,11 @@ export default function FaturasProjetadas() {
         </div>
       )}
 
-      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma fatura projetada disponível." />
+      <DataTable columns={columns} data={filtered} loading={isLoading} emptyMessage="Nenhuma fatura projetada disponível." />
 
       <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
         <Info className="h-3 w-3" />
-        Dados provenientes da view vw_card_billing_projection. Fonte única de verdade no banco.
+        Dados baseados em lançamentos marcados com center_cost de cartão de crédito.
       </p>
     </AppLayout>
   );
