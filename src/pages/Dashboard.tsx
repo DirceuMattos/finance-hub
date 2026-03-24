@@ -307,6 +307,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Investimentos por Classe</CardTitle>
+            <p className="text-lg font-bold text-foreground">{fmtCur(investment.total)}</p>
           </CardHeader>
           <CardContent>
             <HorizontalBreakdown items={investment.byClass} label="investimentos" />
