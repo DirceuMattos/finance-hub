@@ -28,7 +28,7 @@ export function useSystemParameters() {
       queryClient.invalidateQueries({ queryKey: ["system_parameters"] });
       toast.success("Parâmetro criado com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
