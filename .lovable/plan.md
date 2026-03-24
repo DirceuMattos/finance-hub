@@ -1,54 +1,83 @@
 
 
-## Plano: Integração completa do módulo de Cartões via `center_cost`
+## Plano: Dashboard Executivo com Dados Reais
 
-### Diagnóstico
+### Visão geral
 
-O código atual já filtra por `center_cost` no hook `useCardInvoiceTransactions`, mas há dois problemas:
+Evoluir o Dashboard existente para um painel executivo completo com 5 seções: Resumo Executivo, Cartões, Fluxo Mensal, Patrimônio e Investimentos. Usar exclusivamente dados já existentes no banco.
 
-1. **Valores de `center_cost` inconsistentes** — O código usa `"Cartão de Crédito - Prof."` (singular) mas os dados reais no banco usam `"Cartões de Crédito - Prof."` (plural). Precisa suportar ambas as variantes.
-2. **Dados subutilizados** — As telas de Cartões e Faturas Projetadas consomem os dados mas não exibem resumos ricos (histórico vs. futuro, contagens).
+### Arquitetura de dados
+
+| Seção | Fonte de dados | Queries |
+|---|---|---|
+| Resumo Executivo | `accounts`, `transactions`, `patrimony_snapshots`, `investment_snapshots` | Saldos, fluxo mensal, último snapshot |
+| Cartões | `transactions` (center_cost) | Filtro por `CARD_INVOICE_CENTER_COSTS` |
+| Fluxo Mensal | Views `vw_monthly_cashflow_*` | Já existente, manter |
+| Patrimônio | `patrimony_snapshots`, `vw_patrimony_evolution` | Último mês + evolução |
+| Investimentos | `investment_snapshots`, `investment_classes` | Último mês, agrupado por classe |
 
 ### Alterações por arquivo
 
-**1. `src/lib/cardInvoiceRules.ts`**
-- Incluir ambos os formatos (singular e plural) nos arrays de `center_cost` para cobrir variações nos dados
-- Adicionar mapeamento `CENTER_COST_ENTITY_MAP` (center_cost → "personal"/"business")
-- Adicionar `CUTOFF_DATE` para regra temporal de leitura UX
+**1. `src/hooks/useDashboardData.ts` — Expandir**
 
-**2. `src/hooks/useCardInvoiceTransactions.ts`**
-- Expor dados separados: total histórico (paid), total futuro (planned), contagem por cartão
-- Nova função `useCardInvoiceSummaryByCard()` retornando `{ paidTotal, plannedTotal, count }` por cartão
-- Aplicar regra temporal UX: `competence_date <= 2026-02-25` = histórico, `>= 2026-02-26` = futuro (sem sobrescrever status do banco)
+Adicionar novas queries ao hook existente:
 
-**3. `src/pages/Cartoes.tsx`**
-- Adicionar seção resumo por cartão: total histórico, total futuro previsto, contagem de lançamentos
-- Manter barras de progresso existentes (uso do limite)
-- Nota contextual: "Dados calculados a partir de lançamentos identificados por centro de custo"
+- `accountBalancesSplit`: retornar saldo pessoal E empresarial separados (além do consolidado)
+- `patrimonyTotal`: último mês de `patrimony_snapshots` → soma `closing_value` (filtrado por view)
+- `investmentTotal`: último mês de `investment_snapshots` → soma `closing_value` (filtrado por view)
+- `patrimonyByCategory`: breakdown do último mês por `asset_categories.name`
+- `investmentByClass`: breakdown do último mês por `investment_classes.name`
+- `patrimonyEvolution`: dados de `vw_patrimony_evolution` para gráfico de linha
+- `cardSummary`: reusar lógica de `useCardInvoiceSummaryByCard` inline (totais histórico/futuro por cartão, usando `center_cost`)
 
-**4. `src/pages/FaturasProjetadas.tsx`**
-- Exibir leitura auxiliar de pagamentos históricos/futuros de cartão vindos de `transactions.center_cost`
-- Nota contextual: "Dados provenientes de lançamentos por centro de custo. Parcelas detalhadas dependem de carga em Compras no Cartão"
-- Sem inventar parcelas
+Retornar tudo no objeto de retorno do hook.
 
-**5. `src/pages/ComprasCartao.tsx`**
-- Adicionar nota contextual informando que dados atuais de cartão vêm de `transactions.center_cost` e que compras parceladas detalhadas dependem de carga em `card_purchases`
+**2. `src/pages/Dashboard.tsx` — Redesenhar layout**
 
-**6. `src/pages/Lancamentos.tsx`**
-- Descrição de card invoice: "Pagamento de Fatura — BRA Pessoal" / "Pagamento de Fatura — Nu Infotkt"
-- Adicionar filtros por cartão específico (BRA Pessoal / Nu Infotkt) no dropdown de fatura de cartão
-- Manter registros como transactions, sem conversão
+Layout em seções verticais:
+
+```text
+[Filtros: Consolidado | Pessoal | Empresa] [Mês]
+
+[Saldo Atual] [Receitas] [Despesas] [Saldo Mês] [Patrimônio] [Investido]
+  (com sub-labels pessoal/empresa no saldo)
+
+[Cartões - BRA Pessoal]     [Cartões - Nu Infotkt]
+  Histórico: R$ X             Histórico: R$ X
+  Previsto: R$ X              Previsto: R$ X
+  Lançamentos: N              Lançamentos: N
+
+[Fluxo Mensal - BarChart]   [Top Despesas por Categoria]
+
+[Patrimônio - LineChart]    [Composição Patrimônio - barras horizontais]
+
+[Investimentos por Classe - barras horizontais ou donut simplificado]
+```
+
+- Cores: verde para receitas/entradas, vermelho para despesas/saídas
+- Formato monetário pt-BR
+- Manter filtro de entidade (tabs) e mês (select)
+- Seções de patrimônio e investimentos mostram "Sem dados" se snapshots estiverem vazios
+
+**3. `src/components/shared/StatCard.tsx` — Adicionar suporte a sub-label**
+
+Adicionar prop opcional `subLabel` para mostrar detalhamento (ex: "Pessoal: R$ X | Empresa: R$ Y") abaixo do valor principal.
+
+### Regras de negócio aplicadas
+
+- **Cartões via center_cost**: Usar `CARD_INVOICE_CENTER_COSTS` (singular e plural) do `cardInvoiceRules.ts`
+- **Temporal**: `<= 2026-02-25` = histórico, `>= 2026-02-26` = futuro (somente UX, sem alterar status do banco)
+- **Patrimônio**: Pegar o `reference_month` mais recente disponível em `patrimony_snapshots`
+- **Investimentos**: Pegar o `reference_month` mais recente em `investment_snapshots`
+- **Filtro por entidade**: Usar `financial_entity_id` em todas as queries quando view != consolidated
 
 ### Arquivos alterados
 
 | Arquivo | O que muda |
 |---|---|
-| `src/lib/cardInvoiceRules.ts` | Suportar variantes singular/plural, entity map, cutoff |
-| `src/hooks/useCardInvoiceTransactions.ts` | Resumo por cartão (histórico/futuro/contagem) |
-| `src/pages/Cartoes.tsx` | Totais histórico/futuro, contagem, nota contextual |
-| `src/pages/FaturasProjetadas.tsx` | Leitura auxiliar de transactions, nota contextual |
-| `src/pages/ComprasCartao.tsx` | Nota contextual sobre fonte dos dados |
-| `src/pages/Lancamentos.tsx` | Rótulo "Pagamento de Fatura", filtro por cartão |
+| `src/hooks/useDashboardData.ts` | Adicionar queries de patrimônio, investimentos, cartões, saldos split |
+| `src/pages/Dashboard.tsx` | Layout executivo com 5 seções, gráficos de patrimônio e investimentos |
+| `src/components/shared/StatCard.tsx` | Prop `subLabel` opcional |
 
-Sem alteração no banco. Sem novas tabelas. Sem duplicação de dados.
+Sem alteração no banco. Sem novas tabelas. Sem dados fictícios.
 
