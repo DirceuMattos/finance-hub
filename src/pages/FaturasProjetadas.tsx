@@ -7,6 +7,8 @@ import { DataTable, Column } from "@/components/shared/DataTable";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Info } from "lucide-react";
 import { useCardInvoiceProjections } from "@/hooks/useCardInvoiceTransactions";
@@ -26,6 +28,7 @@ export default function FaturasProjetadas() {
   const { projections, isLoading } = useCardInvoiceProjections();
   const [filterCard, setFilterCard] = useState("all");
   const [search, setSearch] = useState("");
+  const [includePast, setIncludePast] = useState(false);
 
   const currentMonth = format(new Date(), "yyyy-MM");
 
@@ -37,7 +40,7 @@ export default function FaturasProjetadas() {
 
   const rows = useMemo(() => {
     return projections
-      .filter((p) => p.billing_month >= currentMonth)
+      .filter((p) => includePast || p.billing_month >= currentMonth)
       .map((p): BillingRow => ({
         key: `${p.card_name}_${p.billing_month}`,
         card_name: p.card_name,
@@ -48,7 +51,7 @@ export default function FaturasProjetadas() {
         planned_amount: p.status === "planned" ? p.total_amount : 0,
         count: p.invoices_count,
       }));
-  }, [projections, currentMonth]);
+  }, [projections, currentMonth, includePast]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
@@ -111,6 +114,10 @@ export default function FaturasProjetadas() {
             {cardNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
           </SelectContent>
         </Select>
+        <div className="flex items-center gap-2">
+          <Switch id="include-past" checked={includePast} onCheckedChange={setIncludePast} />
+          <Label htmlFor="include-past" className="text-xs cursor-pointer">Incluir passadas</Label>
+        </div>
       </FilterBar>
 
       {monthlyTotals.length > 0 && (

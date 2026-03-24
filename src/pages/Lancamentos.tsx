@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { format, subMonths, addMonths, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSearchParams } from "react-router-dom";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy } from "lucide-react";
 import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
@@ -24,7 +24,6 @@ import type { Transaction } from "@/types/database";
 function StatusBadge({ status }: { status: string }) {
   if (status === "paid") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Realizado</Badge>;
   if (status === "cancelled") return <Badge variant="destructive">Cancelado</Badge>;
-  // Both "pending" and "planned" = Previsto
   return <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Previsto</Badge>;
 }
 
@@ -38,6 +37,13 @@ function EntityTypeBadge({ entityType }: { entityType?: string }) {
   if (entityType === "personal") return <Badge variant="outline" className="text-xs border-primary text-primary">Pessoal</Badge>;
   if (entityType === "business") return <Badge variant="outline" className="text-xs border-accent-foreground text-accent-foreground">Empresa</Badge>;
   return null;
+}
+
+function InstallmentBadge({ number, total }: { number: number | null; total: number | null }) {
+  const n = number ?? 1;
+  const t = total ?? 1;
+  if (t <= 1) return null;
+  return <Badge variant="outline" className="text-[10px] font-mono">{n}/{t}</Badge>;
 }
 
 function buildMonthOptions() {
@@ -75,6 +81,9 @@ export default function Lancamentos() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
 
+  // Track last saved transaction for "repeat last"
+  const lastSavedRef = useRef<Transaction | null>(null);
+
   const entityMap = useMemo(() => {
     const map = new Map<string, string>();
     entities.forEach(e => map.set(e.id, e.entity_type));
@@ -84,7 +93,6 @@ export default function Lancamentos() {
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
 
-  // Contas filtradas por tipo de entidade quando filtro ativo
   const filteredAccounts = useMemo(() => {
     if (filterEntity === "all_personal") {
       const personalIds = new Set(personalEntities.map(e => e.id));
@@ -132,9 +140,6 @@ export default function Lancamentos() {
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
-
-  const resolveStatus = (r: Transaction) => r.status;
-
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
 
   const columns: Column<Transaction>[] = [
@@ -158,7 +163,12 @@ export default function Lancamentos() {
             </div>
           );
         }
-        return r.description;
+        return (
+          <div className="flex items-center gap-1.5">
+            <span>{r.description}</span>
+            <InstallmentBadge number={r.installment_number} total={r.installment_total} />
+          </div>
+        );
       },
     },
     { key: "transaction_type", header: "Tipo", sortable: true, sortValue: (r) => r.transaction_type, render: (r) => <TypeBadge type={r.transaction_type} /> },
@@ -195,15 +205,44 @@ export default function Lancamentos() {
     update.mutate({ id, status: "cancelled" } as any);
   };
 
+  const handleRepeatLast = () => {
+    if (lastSavedRef.current) {
+      // Clone last saved as a new entry (no id, reset dates)
+      const last = { ...lastSavedRef.current };
+      delete (last as any).id;
+      delete (last as any).created_at;
+      delete (last as any).updated_at;
+      last.status = "planned";
+      last.payment_date = null;
+      last.competence_date = format(new Date(), "yyyy-MM") + "-01";
+      setEditing(last as any);
+    } else {
+      setEditing(null);
+    }
+    setFormOpen(true);
+  };
+
   const handleSubmit = (d: Partial<Transaction>) => {
     const mutation = d.id ? update : create;
-    mutation.mutate(d as any, { onSuccess: () => { setFormOpen(false); setEditing(null); } });
+    mutation.mutate(d as any, {
+      onSuccess: () => {
+        // Save as last transaction for repeat
+        lastSavedRef.current = d as Transaction;
+        setFormOpen(false);
+        setEditing(null);
+      },
+    });
   };
 
   return (
     <AppLayout>
       <PageHeader title="Lançamentos" description="Gerencie receitas e despesas" actions={
-        <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Novo</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={handleRepeatLast} title="Repetir último lançamento salvo">
+            <Copy className="h-4 w-4 mr-1" />Repetir último
+          </Button>
+          <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Novo</Button>
+        </div>
       } />
 
       <Tabs value={filterTypeTab} onValueChange={setFilterTypeTab} className="mb-4">

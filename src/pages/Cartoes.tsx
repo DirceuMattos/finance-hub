@@ -1,8 +1,11 @@
 import { useState, useMemo } from "react";
+import { format, subMonths, addMonths, startOfMonth } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useCardInvoicesByCard, useCardInvoiceSummaryByCard } from "@/hooks/useCardInvoiceTransactions";
@@ -13,6 +16,18 @@ import { CreditCard, Info, TrendingUp, TrendingDown, Hash } from "lucide-react";
 
 type FilterView = "all" | "personal" | "business";
 
+function buildMonthOptions() {
+  const options: { value: string; label: string }[] = [{ value: "all", label: "Todos os meses" }];
+  const now = startOfMonth(new Date());
+  for (let i = -6; i <= 3; i++) {
+    const d = i < 0 ? subMonths(now, -i) : addMonths(now, i);
+    const val = format(d, "yyyy-MM");
+    const label = format(d, "MMMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+    options.push({ value: val, label });
+  }
+  return options;
+}
+
 export default function Cartoes() {
   const { data: cards = [], isLoading } = useCards();
   const { data: entities = [] } = useFinancialEntities();
@@ -20,6 +35,9 @@ export default function Cartoes() {
   const { summaries } = useCardInvoiceSummaryByCard();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<FilterView>("all");
+  const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
+
+  const monthOptions = useMemo(() => buildMonthOptions(), []);
 
   const entityMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -59,7 +77,16 @@ export default function Cartoes() {
         </TabsList>
       </Tabs>
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão..." />
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão...">
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
+          <SelectContent>
+            {monthOptions.map(o => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FilterBar>
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -118,7 +145,6 @@ export default function Cartoes() {
                     </div>
                   </div>
 
-                  {/* Resumo de lançamentos de fatura */}
                   {summary && (
                     <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
                       <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
