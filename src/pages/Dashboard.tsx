@@ -220,35 +220,49 @@ export default function Dashboard() {
       {/* ===== CARTÕES (mês selecionado) ===== */}
       {cardSummary.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {cardSummary.map(card => (
-            <Card key={card.card_name}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-primary" />
-                  {card.card_name}
-                  <span className="text-xs font-normal text-muted-foreground ml-auto">
-                    {card.entity_type === "personal" ? "Pessoal" : "Empresa"}
-                  </span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-xs text-muted-foreground">Pago</p>
-                    <p className="text-lg font-semibold text-foreground">{fmtCur(card.historicalTotal)}</p>
+          {cardSummary.map(card => {
+            const total = card.historicalTotal + card.projectedTotal;
+            const paidPct = total > 0 ? (card.historicalTotal / total) * 100 : 0;
+            return (
+              <Card key={card.card_name}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    {card.card_name}
+                    <span className="text-xs font-normal text-muted-foreground ml-auto">
+                      {card.entity_type === "personal" ? "Pessoal" : "Empresa"}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 space-y-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Pago</p>
+                      <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{fmtCur(card.historicalTotal)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Previsto</p>
+                      <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{fmtCur(card.projectedTotal)}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Previsto</p>
-                    <p className="text-lg font-semibold text-foreground">{fmtCur(card.projectedTotal)}</p>
+                  <div className="h-2 rounded-full bg-muted overflow-hidden flex">
+                    <div
+                      className="h-full bg-emerald-500 transition-all"
+                      style={{ width: `${paidPct}%` }}
+                    />
+                    <div
+                      className="h-full bg-amber-500 transition-all"
+                      style={{ width: `${100 - paidPct}%` }}
+                    />
                   </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Lançamentos</p>
-                    <p className="text-lg font-semibold text-foreground">{card.count}</p>
+                  <div className="flex items-center justify-between pt-1 border-t border-border">
+                    <p className="text-xs font-medium text-muted-foreground">Total do Mês</p>
+                    <p className="text-xl font-bold text-foreground">{fmtCur(total)}</p>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
