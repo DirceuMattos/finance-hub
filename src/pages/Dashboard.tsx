@@ -295,6 +295,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Composição do Patrimônio</CardTitle>
+            <p className="text-lg font-bold text-foreground">{fmtCur(patrimony.total)}</p>
           </CardHeader>
           <CardContent>
             <HorizontalBreakdown items={patrimony.byCategory} label="patrimônio" />
