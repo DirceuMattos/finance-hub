@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle } from "lucide-react";
-import { isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
+import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -93,8 +93,9 @@ export default function Lancamentos() {
       if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
-      if (filterCardInvoice === "card_invoice" && !isCardInvoice(t.categories?.name)) return false;
-      if (filterCardInvoice === "non_card_invoice" && isCardInvoice(t.categories?.name)) return false;
+      const isCCInvoice = isCardInvoiceByCenterCost((t as any).center_cost) || isCardInvoice(t.categories?.name);
+      if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
+      if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
       if (filterMonth !== "all") {
         const monthStart = filterMonth + "-01";
         const [y, m] = filterMonth.split("-").map(Number);
@@ -115,13 +116,14 @@ export default function Lancamentos() {
     {
       key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
       render: (r) => {
-        const catName = r.categories?.name;
-        if (isCardInvoice(catName)) {
+        const isCCInvoice = isCardInvoiceByCenterCost((r as any).center_cost) || isCardInvoice(r.categories?.name);
+        if (isCCInvoice) {
+          const cardLabel = getCardNameFromCenterCost((r as any).center_cost) || getCardInvoiceLabel(r.categories?.name || "");
           return (
             <div className="flex items-center gap-1.5">
               <span>{r.description}</span>
               <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
-                <CreditCard className="h-3 w-3" />Fatura
+                <CreditCard className="h-3 w-3" />{cardLabel || "Fatura"}
               </Badge>
             </div>
           );
@@ -134,13 +136,7 @@ export default function Lancamentos() {
       key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "",
       render: (r) => {
         const catName = r.categories?.name;
-        const cardLabel = catName ? getCardInvoiceLabel(catName) : "";
-        return (
-          <div className="flex items-center gap-1.5">
-            <span>{catName || "—"}</span>
-            {cardLabel && <Badge variant="secondary" className="text-xs">{cardLabel}</Badge>}
-          </div>
-        );
+        return catName || "—";
       },
     },
     {

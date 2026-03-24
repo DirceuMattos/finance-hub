@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
-import { CARD_INVOICE_CATEGORIES, CARD_MAP } from "@/lib/cardInvoiceRules";
+import { CARD_INVOICE_CENTER_COSTS, CENTER_COST_CARD_MAP } from "@/lib/cardInvoiceRules";
 
 interface CardInvoiceTransaction {
   id: string;
@@ -10,7 +10,7 @@ interface CardInvoiceTransaction {
   competence_date: string;
   due_date: string | null;
   status: string;
-  category_name: string;
+  center_cost: string;
   card_name: string;
 }
 
@@ -29,14 +29,13 @@ function useCardInvoiceTransactionsQuery() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("transactions")
-        .select("id, description, amount, competence_date, due_date, status, categories(name)")
+        .select("id, description, amount, competence_date, due_date, status, center_cost")
         .order("competence_date", { ascending: false });
       if (error) throw error;
 
       return (data || [])
         .filter((t: any) => {
-          const catName = t.categories?.name;
-          return catName && CARD_INVOICE_CATEGORIES.includes(catName);
+          return t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost);
         })
         .map((t: any): CardInvoiceTransaction => ({
           id: t.id,
@@ -45,8 +44,8 @@ function useCardInvoiceTransactionsQuery() {
           competence_date: t.competence_date,
           due_date: t.due_date,
           status: t.status,
-          category_name: t.categories.name,
-          card_name: CARD_MAP[t.categories.name] || t.categories.name,
+          center_cost: t.center_cost,
+          card_name: CENTER_COST_CARD_MAP[t.center_cost] || t.center_cost,
         }));
     },
   });
@@ -77,14 +76,13 @@ export function useCardInvoiceProjections() {
     const grouped = new Map<string, CardInvoiceProjection>();
 
     invoices.forEach((inv) => {
-      const month = inv.competence_date.substring(0, 7); // yyyy-MM
+      const month = inv.competence_date.substring(0, 7);
       const key = `${inv.card_name}_${month}`;
       const existing = grouped.get(key);
 
       if (existing) {
         existing.total_amount += inv.amount;
         existing.invoices_count += 1;
-        // If any invoice in the month is planned, the group is planned
         if (inv.status === "planned") existing.status = "planned";
       } else {
         grouped.set(key, {
