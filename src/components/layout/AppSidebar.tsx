@@ -63,6 +63,12 @@ const navGroups = [
     ],
   },
   {
+    label: "Relatórios",
+    items: [
+      { title: "Relatórios", url: "/relatorios", icon: FileDown },
+    ],
+  },
+  {
     label: "Configurações",
     items: [
       { title: "Configurações", url: "/configuracoes", icon: Settings },
