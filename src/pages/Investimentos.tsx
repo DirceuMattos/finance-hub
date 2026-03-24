@@ -5,16 +5,24 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { StatCard } from "@/components/shared/StatCard";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PieChart, TrendingUp, Wallet, BarChart3 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PieChart, TrendingUp, Wallet, BarChart3, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import {
+  useInvestmentSnapshots,
   useInvestmentReturnByClass,
   useInvestmentPortfolioSummary,
-  InvestmentReturnByClass,
+  useInvestmentCrud,
+  useInvestmentClasses,
+  InvestmentSnapshot,
 } from "@/hooks/useInvestments";
+import { InvestmentForm } from "@/components/investimentos/InvestmentForm";
+import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -35,14 +43,20 @@ const BUSINESS_ENTITY_ID = "750b0ab2-09b4-44eb-9309-78c4b4d2dab0";
 
 export default function Investimentos() {
   const [view, setView] = useState<ViewType>("all");
+  const [formOpen, setFormOpen] = useState(false);
+  const [editSnapshot, setEditSnapshot] = useState<InvestmentSnapshot | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const { data: snapshots = [], isLoading: loadingSnapshots } = useInvestmentSnapshots();
   const { data: returnByClass = [], isLoading: loadingReturns } = useInvestmentReturnByClass();
   const { data: portfolioSummary = [], isLoading: loadingSummary } = useInvestmentPortfolioSummary();
+  const { create, update, remove } = useInvestmentCrud();
 
-  // Unique months
+  // Unique months from snapshots
   const months = useMemo(() => {
-    const set = new Set(returnByClass.map((r) => r.reference_month));
+    const set = new Set(snapshots.map((s) => s.reference_month));
     return Array.from(set).sort().reverse();
-  }, [returnByClass]);
+  }, [snapshots]);
 
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const activeMonth = selectedMonth || months[0] || "";
@@ -53,6 +67,14 @@ export default function Investimentos() {
     return data;
   };
 
+  // Snapshots for table (with CRUD)
+  const filteredSnapshots = useMemo(() => {
+    let data = filterByEntity(snapshots);
+    if (activeMonth) data = data.filter((s) => s.reference_month === activeMonth);
+    return data;
+  }, [snapshots, activeMonth, view]);
+
+  // Return by class for stat cards and allocation
   const filteredReturns = useMemo(() => {
     let data = filterByEntity(returnByClass);
     if (activeMonth) data = data.filter((r) => r.reference_month === activeMonth);
@@ -88,12 +110,59 @@ export default function Investimentos() {
       .sort((a, b) => b.value - a.value);
   }, [filteredReturns]);
 
-  const columns: Column<InvestmentReturnByClass>[] = [
+  // Evolution chart data
+  const chartData = useMemo(() => {
+    const filtered = filterByEntity(portfolioSummary);
+    const byMonth = new Map<string, { month: string; portfolio: number; retorno: number }>();
+    filtered.forEach((p) => {
+      const existing = byMonth.get(p.reference_month) || { month: p.reference_month, portfolio: 0, retorno: 0 };
+      existing.portfolio += p.total_portfolio_value;
+      existing.retorno += p.total_estimated_return;
+      byMonth.set(p.reference_month, existing);
+    });
+    return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+  }, [portfolioSummary, view]);
+
+  const hasEnoughHistory = chartData.length >= 2;
+
+  // CRUD handlers
+  const handleSubmit = (data: any) => {
+    if (data.id) {
+      update.mutate(data, { onSuccess: () => setFormOpen(false) });
+    } else {
+      create.mutate(data, { onSuccess: () => setFormOpen(false) });
+    }
+  };
+
+  const handleEdit = (snapshot: InvestmentSnapshot) => {
+    setEditSnapshot(snapshot);
+    setFormOpen(true);
+  };
+
+  const handleDelete = () => {
+    if (deleteId) {
+      remove.mutate(deleteId, { onSuccess: () => setDeleteId(null) });
+    }
+  };
+
+  const columns: Column<InvestmentSnapshot>[] = [
     {
-      key: "investment_class_name",
+      key: "investment_class",
       header: "Classe",
       sortable: true,
-      sortValue: (r) => r.investment_class_name,
+      sortValue: (r) => r.investment_classes?.name || "",
+      render: (r) => <span>{r.investment_classes?.name || "—"}</span>,
+    },
+    {
+      key: "financial_entity",
+      header: "Entidade",
+      sortable: true,
+      sortValue: (r) => r.financial_entities?.name || "",
+      render: (r) => (
+        <Badge variant="outline" className="text-[10px]">
+          {r.financial_entities?.name || "—"}
+        </Badge>
+      ),
     },
     {
       key: "opening_value",
@@ -110,45 +179,6 @@ export default function Investimentos() {
       render: (r) => <span className="font-mono font-medium">{fmt(r.closing_value)}</span>,
     },
     {
-      key: "contributions",
-      header: "Aportes",
-      sortable: true,
-      sortValue: (r) => r.contributions,
-      render: (r) =>
-        r.contributions > 0 ? (
-          <span className="font-mono text-emerald-600">+{fmt(r.contributions)}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    },
-    {
-      key: "redemptions",
-      header: "Resgates",
-      sortable: true,
-      sortValue: (r) => r.redemptions,
-      render: (r) =>
-        r.redemptions > 0 ? (
-          <span className="font-mono text-destructive">-{fmt(r.redemptions)}</span>
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        ),
-    },
-    {
-      key: "estimated_return",
-      header: "Retorno Est.",
-      sortable: true,
-      sortValue: (r) => r.estimated_return,
-      render: (r) => {
-        if (r.estimated_return === 0) return <span className="text-muted-foreground">—</span>;
-        return (
-          <span className={`font-mono ${r.estimated_return > 0 ? "text-emerald-600" : "text-destructive"}`}>
-            {r.estimated_return > 0 ? "+" : ""}
-            {fmt(r.estimated_return)}
-          </span>
-        );
-      },
-    },
-    {
       key: "variation",
       header: "Variação",
       sortable: true,
@@ -157,12 +187,25 @@ export default function Investimentos() {
         const diff = r.closing_value - r.opening_value;
         if (diff === 0) return <span className="text-muted-foreground">—</span>;
         return (
-          <span className={`font-mono text-[10px] ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>
-            {diff > 0 ? "+" : ""}
-            {fmt(diff)}
+          <span className={`font-mono text-xs ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>
+            {diff > 0 ? "+" : ""}{fmt(diff)}
           </span>
         );
       },
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (r) => (
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(r)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(r.id)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
     },
   ];
 
@@ -171,6 +214,11 @@ export default function Investimentos() {
       <PageHeader
         title="Investimentos"
         description="Carteira de investimentos por classe e período"
+        actions={
+          <Button size="sm" onClick={() => { setEditSnapshot(null); setFormOpen(true); }}>
+            <Plus className="h-4 w-4 mr-1" /> Novo registro
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
@@ -204,6 +252,36 @@ export default function Investimentos() {
         <StatCard title="Resgates" value={fmt(totals.total_redemptions)} icon={BarChart3} />
       </div>
 
+      {/* Evolution chart */}
+      {hasEnoughHistory ? (
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Evolução da Carteira</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="month" tickFormatter={fmtMonth} className="text-xs" />
+                <YAxis tickFormatter={(v) => fmt(v)} className="text-xs" width={100} />
+                <Tooltip
+                  formatter={(value: number) => fmt(value)}
+                  labelFormatter={fmtMonth}
+                />
+                <Legend />
+                <Line type="monotone" dataKey="portfolio" name="Carteira" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="retorno" name="Retorno Est." stroke="hsl(142 76% 36%)" strokeWidth={2} dot={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      ) : (
+        <Alert className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>Histórico insuficiente para análise (mínimo 2 meses).</AlertDescription>
+        </Alert>
+      )}
+
       {/* Allocation summary */}
       {allocation.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
@@ -221,14 +299,31 @@ export default function Investimentos() {
         </div>
       )}
 
-      {/* Detail table */}
+      {/* Detail table with CRUD */}
       <DataTable
         columns={columns}
-        data={filteredReturns}
-        loading={loadingReturns || loadingSummary}
+        data={filteredSnapshots}
+        loading={loadingSnapshots || loadingReturns || loadingSummary}
         emptyMessage="Nenhum registro de investimento encontrado."
         defaultSortKey="closing_value"
         defaultSortDir="desc"
+      />
+
+      {/* Form drawer */}
+      <InvestmentForm
+        open={formOpen}
+        onOpenChange={(open) => { setFormOpen(open); if (!open) setEditSnapshot(null); }}
+        snapshot={editSnapshot}
+        onSubmit={handleSubmit}
+        loading={create.isPending || update.isPending}
+      />
+
+      {/* Delete dialog */}
+      <DeleteDialog
+        open={!!deleteId}
+        onOpenChange={(open) => { if (!open) setDeleteId(null); }}
+        onConfirm={handleDelete}
+        loading={remove.isPending}
       />
     </AppLayout>
   );

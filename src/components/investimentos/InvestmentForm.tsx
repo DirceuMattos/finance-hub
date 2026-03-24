@@ -1,0 +1,143 @@
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { FormDrawer } from "@/components/shared/FormDrawer";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { useInvestmentClasses, type InvestmentSnapshot } from "@/hooks/useInvestments";
+import { useFinancialEntities } from "@/hooks/useFinancialEntities";
+
+const schema = z.object({
+  reference_month: z.string().min(1, "Mês de referência é obrigatório"),
+  investment_class_id: z.string().min(1, "Classe é obrigatória"),
+  financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
+  opening_value: z.coerce.number(),
+  closing_value: z.coerce.number(),
+});
+
+type FormData = z.infer<typeof schema>;
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  snapshot?: InvestmentSnapshot | null;
+  onSubmit: (data: any) => void;
+  loading?: boolean;
+}
+
+export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading }: Props) {
+  const { data: classes = [] } = useInvestmentClasses();
+  const { data: entities = [] } = useFinancialEntities();
+
+  const form = useForm<FormData>({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      reference_month: "",
+      investment_class_id: "",
+      financial_entity_id: "",
+      opening_value: 0,
+      closing_value: 0,
+    },
+  });
+
+  useEffect(() => {
+    if (snapshot) {
+      form.reset({
+        reference_month: snapshot.reference_month,
+        investment_class_id: snapshot.investment_class_id,
+        financial_entity_id: snapshot.financial_entity_id,
+        opening_value: snapshot.opening_value,
+        closing_value: snapshot.closing_value,
+      });
+    } else {
+      form.reset({
+        reference_month: "",
+        investment_class_id: "",
+        financial_entity_id: "",
+        opening_value: 0,
+        closing_value: 0,
+      });
+    }
+  }, [snapshot, open]);
+
+  const handleSubmit = (data: FormData) => {
+    onSubmit(snapshot ? { id: snapshot.id, ...data } : data);
+  };
+
+  return (
+    <FormDrawer
+      open={open}
+      onOpenChange={onOpenChange}
+      title={snapshot ? "Editar Registro" : "Novo Registro de Investimento"}
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <FormField control={form.control} name="reference_month" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Mês de Referência *</FormLabel>
+              <FormControl><Input type="month" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+
+          <FormField control={form.control} name="investment_class_id" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Classe *</FormLabel>
+              <FormControl>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {classes.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+
+          <FormField control={form.control} name="financial_entity_id" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Entidade *</FormLabel>
+              <FormControl>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {entities.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField control={form.control} name="opening_value" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Valor Abertura</FormLabel>
+                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+
+            <FormField control={form.control} name="closing_value" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Valor Fechamento *</FormLabel>
+                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading}>Salvar</Button>
+        </form>
+      </Form>
+    </FormDrawer>
+  );
+}
