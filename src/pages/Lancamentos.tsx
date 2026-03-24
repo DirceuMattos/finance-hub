@@ -297,6 +297,7 @@ export default function Lancamentos() {
         emptyMessage="Nenhum lançamento encontrado."
         defaultSortKey="due_date"
         defaultSortDir="asc"
+        className="text-xs [&_th]:text-xs [&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-1.5"
       />
 
       <TransactionForm
