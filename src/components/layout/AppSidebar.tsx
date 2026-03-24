@@ -11,12 +11,11 @@ import {
   Settings,
   LogOut,
   DollarSign,
-  Bell,
   FileDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -78,12 +77,12 @@ const navGroups = [
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const location = useLocation();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
+    await signOut();
+    navigate("/login");
   };
 
   return (
@@ -126,7 +125,12 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="p-2">
+      <SidebarFooter className="p-2 space-y-1">
+        {!collapsed && user?.email && (
+          <p className="px-2 text-xs text-muted-foreground truncate" title={user.email}>
+            {user.email}
+          </p>
+        )}
         <Button
           variant="ghost"
           size={collapsed ? "icon" : "sm"}

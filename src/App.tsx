@@ -1,8 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import Lancamentos from "./pages/Lancamentos";
 import Recorrencias from "./pages/Recorrencias";
@@ -13,8 +14,12 @@ import FluxoMensal from "./pages/FluxoMensal";
 import Configuracoes from "./pages/Configuracoes";
 import Patrimonio from "./pages/Patrimonio";
 import Investimentos from "./pages/Investimentos";
-
 import Relatorios from "./pages/Relatorios";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import ResetPassword from "./pages/ResetPassword";
+import MfaSetup from "./pages/MfaSetup";
+import MfaVerify from "./pages/MfaVerify";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,18 +31,25 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/lancamentos" element={<Lancamentos />} />
-          <Route path="/recorrencias" element={<Recorrencias />} />
-          <Route path="/cartoes" element={<Cartoes />} />
-          <Route path="/compras-cartao" element={<ComprasCartao />} />
-          <Route path="/faturas-projetadas" element={<FaturasProjetadas />} />
-          <Route path="/fluxo-mensal" element={<FluxoMensal />} />
-          <Route path="/patrimonio" element={<Patrimonio />} />
-          <Route path="/investimentos" element={<Investimentos />} />
-          <Route path="/configuracoes" element={<Configuracoes />} />
-          
-          <Route path="/relatorios" element={<Relatorios />} />
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/mfa-verify" element={<MfaVerify />} />
+          <Route path="/mfa-setup" element={<MfaSetup />} />
+
+          {/* Protected routes */}
+          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/lancamentos" element={<ProtectedRoute><Lancamentos /></ProtectedRoute>} />
+          <Route path="/recorrencias" element={<ProtectedRoute><Recorrencias /></ProtectedRoute>} />
+          <Route path="/cartoes" element={<ProtectedRoute><Cartoes /></ProtectedRoute>} />
+          <Route path="/compras-cartao" element={<ProtectedRoute><ComprasCartao /></ProtectedRoute>} />
+          <Route path="/faturas-projetadas" element={<ProtectedRoute><FaturasProjetadas /></ProtectedRoute>} />
+          <Route path="/fluxo-mensal" element={<ProtectedRoute><FluxoMensal /></ProtectedRoute>} />
+          <Route path="/patrimonio" element={<ProtectedRoute><Patrimonio /></ProtectedRoute>} />
+          <Route path="/investimentos" element={<ProtectedRoute><Investimentos /></ProtectedRoute>} />
+          <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />
+          <Route path="/relatorios" element={<ProtectedRoute><Relatorios /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
