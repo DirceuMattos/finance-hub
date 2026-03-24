@@ -99,7 +99,7 @@ export function DataTable<T extends object>({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card">
+    <div className={`rounded-lg border border-border bg-card ${className || ""}`}>
       <Table>
         <TableHeader>
           <TableRow>
