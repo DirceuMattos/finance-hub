@@ -28,7 +28,7 @@ export function useFinancialEntities() {
       queryClient.invalidateQueries({ queryKey: ["financial_entities"] });
       toast.success("Entidade criada com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
