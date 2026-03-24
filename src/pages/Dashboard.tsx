@@ -82,12 +82,12 @@ export default function Dashboard() {
 
   const {
     balance, balanceSplit, flow, forecast, cardSummary,
-    expensesByCategory, cashflowChart,
+    expensesByCategory,
     patrimony, patrimonyEvolution, investment,
   } = useDashboardData(view, selectedMonth);
 
-  const income = flow?.income_paid ?? 0;
-  const expense = flow?.expense_paid ?? 0;
+  const income = forecast.income_paid;
+  const expense = forecast.expense_paid;
   const result = income - expense;
 
   const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
@@ -96,11 +96,6 @@ export default function Dashboard() {
     ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
     : undefined;
 
-  const chartData = cashflowChart.map(d => ({
-    month: fmtMonth(d.reference_month),
-    Receitas: d.income_paid,
-    Despesas: d.expense_paid,
-  }));
 
   const patrimonyChartData = patrimonyEvolution.map(d => ({
     month: fmtMonth(d.reference_month),
