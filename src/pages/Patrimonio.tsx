@@ -173,11 +173,11 @@ export default function Patrimonio() {
 
   return (
     <AppLayout>
-      <PageHeader title="Patrimônio" description="Visão consolidada do patrimônio por mês">
+      <PageHeader title="Patrimônio" description="Visão consolidada do patrimônio por mês" actions={
         <Button onClick={() => { setEditingSnapshot(null); setFormOpen(true); }} size="sm">
           <Plus className="h-4 w-4 mr-1" /> Novo registro
         </Button>
-      </PageHeader>
+      } />
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
         <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
