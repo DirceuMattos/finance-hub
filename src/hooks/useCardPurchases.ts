@@ -60,13 +60,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
       toast.success("Compra excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem parcelas vinculadas.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

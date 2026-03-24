@@ -52,13 +52,7 @@ export function useFinancialEntities() {
       queryClient.invalidateQueries({ queryKey: ["financial_entities"] });
       toast.success("Entidade excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem registros vinculados a esta entidade.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

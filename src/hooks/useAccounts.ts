@@ -54,13 +54,7 @@ export function useAccounts() {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success("Conta excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem registros vinculados a esta conta.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

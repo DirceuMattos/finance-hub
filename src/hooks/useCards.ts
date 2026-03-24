@@ -54,13 +54,7 @@ export function useCards() {
       queryClient.invalidateQueries({ queryKey: ["cards"] });
       toast.success("Cartão excluído");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem registros vinculados a este cartão.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

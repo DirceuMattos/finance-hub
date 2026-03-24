@@ -52,7 +52,7 @@ export function useSystemParameters() {
       queryClient.invalidateQueries({ queryKey: ["system_parameters"] });
       toast.success("Parâmetro excluído");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

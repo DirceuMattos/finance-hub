@@ -145,7 +145,7 @@ export function useInvestmentCrud() {
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro excluído"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { create, update, remove };

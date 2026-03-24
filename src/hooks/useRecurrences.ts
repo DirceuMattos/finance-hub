@@ -73,13 +73,7 @@ export function useRecurrences() {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
       toast.success("Recorrência excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem registros vinculados.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };
