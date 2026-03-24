@@ -270,8 +270,6 @@ export default function Patrimonio() {
         onOpenChange={(open) => { if (!open) setDeleteId(null); }}
         onConfirm={handleDelete}
         loading={remove.isPending}
-        title="Excluir registro"
-        description="Tem certeza que deseja excluir este registro de patrimônio?"
       />
     </AppLayout>
   );
