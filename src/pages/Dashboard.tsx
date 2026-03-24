@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard,
-  Landmark, PiggyBank, Scale,
+  Landmark, PiggyBank, Scale, Target,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -16,6 +16,7 @@ import {
 import { format, subMonths, addMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { cn } from "@/lib/utils";
 
 type ViewType = "consolidated" | "personal" | "business";
 
@@ -80,14 +81,20 @@ export default function Dashboard() {
   const monthOptions = buildMonthOptions();
 
   const {
-    balance, balanceSplit, flow, cardSummary,
+    balance, balanceSplit, flow, forecast, cardSummary,
     expensesByCategory, cashflowChart,
     patrimony, patrimonyEvolution, investment,
   } = useDashboardData(view, selectedMonth);
 
   const income = flow?.income_paid ?? 0;
   const expense = flow?.expense_paid ?? 0;
-  const projected = flow?.projected_balance ?? 0;
+  const result = income - expense;
+
+  const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
+
+  const balanceSubLabel = view === "consolidated"
+    ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
+    : undefined;
 
   const chartData = cashflowChart.map(d => ({
     month: fmtMonth(d.reference_month),
@@ -99,12 +106,6 @@ export default function Dashboard() {
     month: fmtMonth(d.reference_month),
     Patrimônio: d.net_patrimony,
   }));
-
-  const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
-
-  const balanceSubLabel = view === "consolidated"
-    ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
-    : undefined;
 
   return (
     <AppLayout>
@@ -131,8 +132,8 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      {/* ===== 1. RESUMO EXECUTIVO ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+      {/* ===== LINHA 1 — Operacional ===== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard
           title="Saldo Atual"
           value={fmtCur(balance)}
@@ -140,9 +141,31 @@ export default function Dashboard() {
           subLabel={balanceSubLabel}
           description="Contas ativas"
         />
-        <StatCard title="Receitas" value={fmtCur(income)} icon={TrendingUp} description="No mês" />
-        <StatCard title="Despesas" value={fmtCur(expense)} icon={TrendingDown} description="No mês" />
-        <StatCard title="Resultado" value={fmtCur(projected)} icon={Scale} description="Receitas − Despesas" />
+        <StatCard
+          title="Receitas do Mês"
+          value={fmtCur(income)}
+          icon={TrendingUp}
+          variant="positive"
+          description="Realizadas"
+        />
+        <StatCard
+          title="Despesas do Mês"
+          value={fmtCur(expense)}
+          icon={TrendingDown}
+          variant="negative"
+          description="Realizadas"
+        />
+        <StatCard
+          title="Resultado do Mês"
+          value={fmtCur(result)}
+          icon={Scale}
+          variant={result >= 0 ? "positive" : "negative"}
+          description="Receitas − Despesas"
+        />
+      </div>
+
+      {/* ===== LINHA 2 — Estrutural ===== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
         <StatCard
           title="Patrimônio"
           value={fmtCur(patrimony.total)}
@@ -150,14 +173,56 @@ export default function Dashboard() {
           description={patrimony.latestMonth ? `Ref. ${fmtMonth(patrimony.latestMonth)}` : "Sem dados"}
         />
         <StatCard
-          title="Investido"
+          title="Total Investido"
           value={fmtCur(investment.total)}
           icon={PiggyBank}
-          description="Último mês"
+          description="Último snapshot"
         />
       </div>
 
-      {/* ===== 2. CARTÕES (center_cost) ===== */}
+      {/* ===== PREVISÃO DE FECHAMENTO ===== */}
+      <Card className={cn(
+        "mb-6 border-2",
+        forecast.forecast_result >= 0 ? "border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" : "border-red-500/30 bg-red-50/30 dark:bg-red-950/10"
+      )}>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            Previsão de Fechamento do Mês
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+            <div>
+              <p className="text-xs text-muted-foreground">Receitas Realizadas</p>
+              <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{fmtCur(forecast.income_paid)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Receitas Previstas</p>
+              <p className="text-lg font-semibold text-emerald-600/70 dark:text-emerald-400/70">{fmtCur(forecast.income_planned)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Despesas Realizadas</p>
+              <p className="text-lg font-semibold text-red-600 dark:text-red-400">{fmtCur(forecast.expense_paid)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Despesas Previstas</p>
+              <p className="text-lg font-semibold text-red-600/70 dark:text-red-400/70">{fmtCur(forecast.expense_planned)}</p>
+            </div>
+            <div className="col-span-2 md:col-span-1">
+              <p className="text-xs text-muted-foreground">Resultado Previsto</p>
+              <p className={cn(
+                "text-2xl font-bold",
+                forecast.forecast_result >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+              )}>
+                {fmtCur(forecast.forecast_result)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ===== CARTÕES (mês selecionado) ===== */}
       {cardSummary.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           {cardSummary.map(card => (
@@ -174,7 +239,7 @@ export default function Dashboard() {
               <CardContent className="pt-0">
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <p className="text-xs text-muted-foreground">Realizado</p>
+                    <p className="text-xs text-muted-foreground">Pago</p>
                     <p className="text-lg font-semibold text-foreground">{fmtCur(card.historicalTotal)}</p>
                   </div>
                   <div>
@@ -192,7 +257,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ===== 3. FLUXO MENSAL + TOP DESPESAS ===== */}
+      {/* ===== FLUXO MENSAL + TOP DESPESAS ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
@@ -226,7 +291,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* ===== 4. PATRIMÔNIO ===== */}
+      {/* ===== PATRIMÔNIO + INVESTIMENTOS ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
@@ -242,13 +307,7 @@ export default function Dashboard() {
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtShort} className="fill-muted-foreground" />
                   <Tooltip formatter={(v: number) => fmtCur(v)} />
-                  <Line
-                    type="monotone"
-                    dataKey="Patrimônio"
-                    stroke="hsl(var(--chart-1))"
-                    strokeWidth={2}
-                    dot={false}
-                  />
+                  <Line type="monotone" dataKey="Patrimônio" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -265,7 +324,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* ===== 5. INVESTIMENTOS ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">

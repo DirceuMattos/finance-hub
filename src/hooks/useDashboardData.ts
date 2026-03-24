@@ -6,7 +6,6 @@ import {
   CARD_INVOICE_CENTER_COSTS,
   CENTER_COST_CARD_MAP,
   CENTER_COST_ENTITY_MAP,
-  CUTOFF_DATE,
 } from "@/lib/cardInvoiceRules";
 
 type ViewType = "consolidated" | "personal" | "business";
@@ -36,7 +35,17 @@ export interface CategoryBreakdown {
   total: number;
 }
 
-const fmt = (v: number) =>
+export interface MonthForecast {
+  income_paid: number;
+  income_planned: number;
+  expense_paid: number;
+  expense_planned: number;
+  total_income: number;
+  total_expense: number;
+  forecast_result: number;
+}
+
+const fmtCur = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 export function useDashboardData(view: ViewType = "consolidated", selectedMonth: Date = new Date()) {
@@ -87,7 +96,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     enabled: entities.length > 0,
   });
 
-  // --- Monthly flow ---
+  // --- Monthly flow (with planned + paid) ---
   const monthlyFlow = useQuery({
     queryKey: ["dashboard_monthly_flow", start, view],
     queryFn: async () => {
@@ -99,6 +108,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .lt("reference_month", end)
         .maybeSingle();
       if (error) {
+        // Fallback: query transactions directly
         let txQuery = (supabase as any)
           .from("transactions")
           .select("transaction_type, amount, status")
@@ -110,49 +120,75 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         }
         const { data: txs, error: e2 } = await txQuery;
         if (e2) throw e2;
-        const income = (txs || []).filter((t: any) => t.transaction_type === "income").reduce((s: number, t: any) => s + t.amount, 0);
-        const expense = (txs || []).filter((t: any) => t.transaction_type === "expense").reduce((s: number, t: any) => s + t.amount, 0);
-        return { income_paid: income, expense_paid: expense, projected_balance: income - expense };
+        const rows = txs || [];
+        const income_paid = rows.filter((t: any) => t.transaction_type === "income" && t.status === "paid").reduce((s: number, t: any) => s + t.amount, 0);
+        const income_planned = rows.filter((t: any) => t.transaction_type === "income" && t.status === "planned").reduce((s: number, t: any) => s + t.amount, 0);
+        const expense_paid = rows.filter((t: any) => t.transaction_type === "expense" && t.status === "paid").reduce((s: number, t: any) => s + t.amount, 0);
+        const expense_planned = rows.filter((t: any) => t.transaction_type === "expense" && t.status === "planned").reduce((s: number, t: any) => s + t.amount, 0);
+        return { income_paid, income_planned, expense_paid, expense_planned, projected_balance: income_paid - expense_paid };
       }
-      return data as { income_paid: number; expense_paid: number; projected_balance: number } | null;
+      return data as { income_paid: number; income_planned: number; expense_paid: number; expense_planned: number; projected_balance: number } | null;
     },
   });
 
-  // --- Card billing (card_installments) ---
-  const cardBilling = useQuery({
-    queryKey: ["dashboard_card_billing", start, view],
+  // --- Forecast ---
+  const flow = monthlyFlow.data;
+  const forecast: MonthForecast = {
+    income_paid: flow?.income_paid ?? 0,
+    income_planned: flow?.income_planned ?? 0,
+    expense_paid: flow?.expense_paid ?? 0,
+    expense_planned: flow?.expense_planned ?? 0,
+    total_income: (flow?.income_paid ?? 0) + (flow?.income_planned ?? 0),
+    total_expense: (flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0),
+    forecast_result: ((flow?.income_paid ?? 0) + (flow?.income_planned ?? 0)) - ((flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0)),
+  };
+
+  // --- Card summary via center_cost (FILTERED BY MONTH) ---
+  const cardSummary = useQuery({
+    queryKey: ["dashboard_card_summary", view, start, end],
     queryFn: async () => {
-      let cardIds: string[] | null = null;
-      if (filterIds && filterIds.length > 0) {
-        const { data: cards } = await (supabase as any)
-          .from("cards")
-          .select("id")
-          .in("financial_entity_id", filterIds);
-        cardIds = (cards || []).map((c: any) => c.id);
-        if (cardIds!.length === 0) return { currentTotal: 0, futureTotal: 0 };
-      }
-
       let query = (supabase as any)
-        .from("card_installments")
-        .select("amount, billing_month, status")
-        .in("status", ["pending", "open"]);
+        .from("transactions")
+        .select("amount, competence_date, center_cost, financial_entity_id, status")
+        .gte("competence_date", start)
+        .lt("competence_date", end)
+        .neq("status", "cancelled");
 
-      if (cardIds) {
-        const { data: purchases } = await (supabase as any)
-          .from("card_purchases")
-          .select("id")
-          .in("card_id", cardIds);
-        const purchaseIds = (purchases || []).map((p: any) => p.id);
-        if (purchaseIds.length === 0) return { currentTotal: 0, futureTotal: 0 };
-        query = query.in("card_purchase_id", purchaseIds);
+      if (filterIds && filterIds.length > 0) {
+        query = query.in("financial_entity_id", filterIds);
       }
 
       const { data, error } = await query;
       if (error) throw error;
-      const items = data as { amount: number; billing_month: string; status: string }[];
-      const currentTotal = items.filter(i => i.billing_month >= start && i.billing_month < end).reduce((s, i) => s + i.amount, 0);
-      const futureTotal = items.filter(i => i.billing_month >= end).reduce((s, i) => s + i.amount, 0);
-      return { currentTotal, futureTotal };
+
+      const items = (data || []).filter((t: any) =>
+        t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost)
+      );
+
+      const map = new Map<string, CardSummaryItem>();
+      items.forEach((t: any) => {
+        const cardName = CENTER_COST_CARD_MAP[t.center_cost] || t.center_cost;
+        let s = map.get(cardName);
+        if (!s) {
+          s = {
+            card_name: cardName,
+            entity_type: CENTER_COST_ENTITY_MAP[t.center_cost] || null,
+            historicalTotal: 0,
+            projectedTotal: 0,
+            count: 0,
+          };
+          map.set(cardName, s);
+        }
+        s.count += 1;
+        const amt = Math.abs(t.amount);
+        if (t.status === "paid") {
+          s.historicalTotal += amt;
+        } else {
+          s.projectedTotal += amt;
+        }
+      });
+
+      return Array.from(map.values());
     },
   });
 
@@ -199,69 +235,20 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- Card summary via center_cost ---
-  const cardSummary = useQuery({
-    queryKey: ["dashboard_card_summary", view],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("transactions")
-        .select("amount, competence_date, center_cost, financial_entity_id")
-        .order("competence_date", { ascending: false });
-      if (error) throw error;
-
-      const items = (data || []).filter((t: any) =>
-        t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost)
-      );
-
-      // Apply entity filter
-      const filtered = filterIds && filterIds.length > 0
-        ? items.filter((t: any) => filterIds.includes(t.financial_entity_id))
-        : items;
-
-      const map = new Map<string, CardSummaryItem>();
-      filtered.forEach((t: any) => {
-        const cardName = CENTER_COST_CARD_MAP[t.center_cost] || t.center_cost;
-        let s = map.get(cardName);
-        if (!s) {
-          s = {
-            card_name: cardName,
-            entity_type: CENTER_COST_ENTITY_MAP[t.center_cost] || null,
-            historicalTotal: 0,
-            projectedTotal: 0,
-            count: 0,
-          };
-          map.set(cardName, s);
-        }
-        s.count += 1;
-        const amt = Math.abs(t.amount);
-        if (t.competence_date <= CUTOFF_DATE) {
-          s.historicalTotal += amt;
-        } else {
-          s.projectedTotal += amt;
-        }
-      });
-
-      return Array.from(map.values());
-    },
-  });
-
   // --- Patrimony total (latest month) ---
   const patrimonyData = useQuery({
     queryKey: ["dashboard_patrimony", view],
     queryFn: async () => {
-      let query = (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("patrimony_snapshots")
         .select("closing_value, reference_month, asset_category_id, financial_entity_id, asset_categories(name)")
         .order("reference_month", { ascending: false });
-
-      const { data, error } = await query;
       if (error) throw error;
       if (!data || data.length === 0) return { total: 0, byCategory: [], latestMonth: null };
 
       const latestMonth = data[0].reference_month;
       const latestItems = (data as any[]).filter((d: any) => d.reference_month === latestMonth);
 
-      // Apply entity filter
       const filtered = filterIds && filterIds.length > 0
         ? latestItems.filter((d: any) => filterIds.includes(d.financial_entity_id))
         : latestItems;
@@ -336,7 +323,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     balance: balances.filtered,
     balanceSplit: { personal: balances.personal, business: balances.business, total: balances.total },
     flow: monthlyFlow.data,
-    cardBilling: cardBilling.data ?? { currentTotal: 0, futureTotal: 0 },
+    forecast,
     cardSummary: cardSummary.data ?? [],
     expensesByCategory: expensesByCategory.data ?? [],
     cashflowChart: cashflowChart.data ?? [],
@@ -344,6 +331,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     patrimonyEvolution: patrimonyEvolution.data ?? [],
     investment: investmentData.data ?? { total: 0, byClass: [] },
     isLoading: accountBalances.isLoading || monthlyFlow.isLoading,
-    fmt,
+    fmt: fmtCur,
   };
 }
