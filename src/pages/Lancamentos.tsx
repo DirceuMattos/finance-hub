@@ -122,11 +122,14 @@ export default function Lancamentos() {
         if (isCCInvoice) {
           const cardLabel = getCardNameFromCenterCost((r as any).center_cost) || getCardInvoiceLabel(r.categories?.name || "");
           return (
-            <div className="flex items-center gap-1.5">
-              <span>{r.description}</span>
-              <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
-                <CreditCard className="h-3 w-3" />{cardLabel || "Fatura"}
-              </Badge>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span>Pagamento de Fatura — {cardLabel || "Cartão"}</span>
+                <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
+                  <CreditCard className="h-3 w-3" />Fatura
+                </Badge>
+              </div>
+              <span className="text-xs text-muted-foreground">{r.description}</span>
             </div>
           );
         }
