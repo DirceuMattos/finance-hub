@@ -29,7 +29,7 @@ export function useCards() {
       queryClient.invalidateQueries({ queryKey: ["cards"] });
       toast.success("Cartão criado com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
