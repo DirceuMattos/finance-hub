@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DollarSign, Loader2 } from "lucide-react";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -37,7 +38,7 @@ export default function Signup() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getUserErrorMessage(error));
       return;
     }
 

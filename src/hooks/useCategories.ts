@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { Category } from "@/types/database";
 
 export function useCategories() {
@@ -28,7 +29,7 @@ export function useCategories() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       toast.success("Categoria criada com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
@@ -41,7 +42,7 @@ export function useCategories() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       toast.success("Categoria atualizada");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
@@ -53,13 +54,7 @@ export function useCategories() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       toast.success("Categoria excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem registros vinculados a esta categoria.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

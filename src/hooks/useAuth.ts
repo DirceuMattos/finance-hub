@@ -36,9 +36,15 @@ export function useAuth() {
       (f) => f.factor_type === "totp" && f.status === "verified"
     );
     if (!hasVerifiedTotp) return false;
+    // Sync check based on factors - async checkMfaLevel is more reliable
     const aal = (session as any)?.aal ?? "aal1";
     return aal !== "aal2";
   };
 
-  return { session, user, loading, signOut, hasMfaPending };
+  const checkMfaLevel = async (): Promise<boolean> => {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    return data?.currentLevel !== "aal2" && data?.nextLevel === "aal2";
+  };
+
+  return { session, user, loading, signOut, hasMfaPending, checkMfaLevel };
 }

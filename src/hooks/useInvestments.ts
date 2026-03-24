@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 
 export interface InvestmentClass {
   id: string;
@@ -126,7 +127,7 @@ export function useInvestmentCrud() {
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro criado com sucesso"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
@@ -135,7 +136,7 @@ export function useInvestmentCrud() {
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro atualizado"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
@@ -144,7 +145,7 @@ export function useInvestmentCrud() {
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro excluído"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { create, update, remove };

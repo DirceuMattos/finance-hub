@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { FinancialEntity } from "@/types/database";
 
 export function useFinancialEntities() {
@@ -27,7 +28,7 @@ export function useFinancialEntities() {
       queryClient.invalidateQueries({ queryKey: ["financial_entities"] });
       toast.success("Entidade criada com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
@@ -39,7 +40,7 @@ export function useFinancialEntities() {
       queryClient.invalidateQueries({ queryKey: ["financial_entities"] });
       toast.success("Entidade atualizada");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
@@ -51,13 +52,7 @@ export function useFinancialEntities() {
       queryClient.invalidateQueries({ queryKey: ["financial_entities"] });
       toast.success("Entidade excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem registros vinculados a esta entidade.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

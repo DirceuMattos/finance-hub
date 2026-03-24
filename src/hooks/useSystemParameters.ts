@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { SystemParameter } from "@/types/database";
 
 export function useSystemParameters() {
@@ -27,7 +28,7 @@ export function useSystemParameters() {
       queryClient.invalidateQueries({ queryKey: ["system_parameters"] });
       toast.success("Parâmetro criado com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
@@ -39,7 +40,7 @@ export function useSystemParameters() {
       queryClient.invalidateQueries({ queryKey: ["system_parameters"] });
       toast.success("Parâmetro atualizado");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
@@ -51,7 +52,7 @@ export function useSystemParameters() {
       queryClient.invalidateQueries({ queryKey: ["system_parameters"] });
       toast.success("Parâmetro excluído");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

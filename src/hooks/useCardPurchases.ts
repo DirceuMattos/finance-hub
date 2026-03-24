@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { CardPurchase } from "@/types/database";
 
 export function useCardPurchases() {
@@ -30,7 +31,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
       toast.success("Compra registrada com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
@@ -45,7 +46,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
       toast.success("Compra atualizada");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
@@ -59,13 +60,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
       toast.success("Compra excluída");
     },
-    onError: (e: any) => {
-      if (e.message?.includes("foreign key") || e.message?.includes("violates")) {
-        toast.error("Não é possível excluir: existem parcelas vinculadas.");
-      } else {
-        toast.error(e.message);
-      }
-    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   return { ...query, create, update, remove };

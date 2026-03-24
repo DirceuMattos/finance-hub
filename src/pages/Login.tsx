@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DollarSign, Loader2 } from "lucide-react";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ export default function Login() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getUserErrorMessage(error));
       return;
     }
 
@@ -52,7 +53,7 @@ export default function Login() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getUserErrorMessage(error));
       return;
     }
     toast.success("Email de recuperação enviado. Verifique sua caixa de entrada.");
