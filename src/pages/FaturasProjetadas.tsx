@@ -114,6 +114,10 @@ export default function FaturasProjetadas() {
             {cardNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
           </SelectContent>
         </Select>
+        <div className="flex items-center gap-2">
+          <Switch id="include-past" checked={includePast} onCheckedChange={setIncludePast} />
+          <Label htmlFor="include-past" className="text-xs cursor-pointer">Incluir passadas</Label>
+        </div>
       </FilterBar>
 
       {monthlyTotals.length > 0 && (
