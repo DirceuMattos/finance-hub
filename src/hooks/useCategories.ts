@@ -42,7 +42,7 @@ export function useCategories() {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       toast.success("Categoria atualizada");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
