@@ -46,11 +46,14 @@ export default function Cartoes() {
 
   return (
     <AppLayout>
-      <PageHeader title="Cartões" description="Visão geral dos seus cartões de crédito" />
+      <PageHeader
+        title="Cartões"
+        description={`Visão ${view === "all" ? "consolidada" : view === "personal" ? "pessoal" : "empresarial"} dos seus cartões de crédito`}
+      />
 
       <Tabs value={view} onValueChange={(v) => setView(v as FilterView)} className="mb-4">
         <TabsList>
-          <TabsTrigger value="all">Todos</TabsTrigger>
+          <TabsTrigger value="all">Consolidado</TabsTrigger>
           <TabsTrigger value="personal">Pessoal</TabsTrigger>
           <TabsTrigger value="business">Empresarial</TabsTrigger>
         </TabsList>

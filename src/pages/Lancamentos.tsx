@@ -83,6 +83,22 @@ export default function Lancamentos() {
 
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
+
+  // Contas filtradas por tipo de entidade quando filtro ativo
+  const filteredAccounts = useMemo(() => {
+    if (filterEntity === "all_personal") {
+      const personalIds = new Set(personalEntities.map(e => e.id));
+      return accounts.filter(a => personalIds.has(a.financial_entity_id));
+    }
+    if (filterEntity === "all_business") {
+      const businessIds = new Set(businessEntities.map(e => e.id));
+      return accounts.filter(a => businessIds.has(a.financial_entity_id));
+    }
+    if (filterEntity !== "all") {
+      return accounts.filter(a => a.financial_entity_id === filterEntity);
+    }
+    return accounts;
+  }, [accounts, filterEntity, personalEntities, businessEntities]);
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
   const filtered = useMemo(() => {
@@ -205,6 +221,17 @@ export default function Lancamentos() {
         </TabsList>
       </Tabs>
 
+      {filterEntity !== "all" && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm text-muted-foreground">Visualizando:</span>
+          {filterEntity === "all_personal" && <Badge variant="outline" className="border-primary text-primary">Pessoal</Badge>}
+          {filterEntity === "all_business" && <Badge variant="outline" className="border-accent-foreground text-accent-foreground">Empresa</Badge>}
+          {filterEntity !== "all_personal" && filterEntity !== "all_business" && (
+            <Badge variant="outline">{entities.find(e => e.id === filterEntity)?.name}</Badge>
+          )}
+        </div>
+      )}
+
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento...">
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
@@ -257,7 +284,7 @@ export default function Lancamentos() {
           <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas contas</SelectItem>
-            {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+            {filteredAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={filterCategory} onValueChange={setFilterCategory}>
