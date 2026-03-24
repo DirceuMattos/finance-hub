@@ -29,7 +29,7 @@ export function useTransactions() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Lançamento criado com sucesso");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
