@@ -27,6 +27,7 @@ const schema = z.object({
   payment_date: z.date().optional().nullable(),
   status: z.string().min(1, "Status é obrigatório"),
   notes: z.string().max(500).optional().nullable(),
+  is_card_movement: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
