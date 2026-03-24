@@ -1,35 +1,41 @@
 
 
-## Plano: Ajustar módulo de Lançamentos
+## Plano: Separação Pessoal / Empresa / Consolidado em todas as telas
 
-### Problemas identificados
+### Estado atual
 
-1. **Coluna "Entidade"** mostra apenas badge (Pessoal/Empresa), sem o nome da entidade
-2. **Colunas de data incompletas** — faltam `competence_date` e `payment_date` na tabela
-3. **Referências a "pending"** nas ações (linhas 162, 165) — status inválido
-4. **Filtro de entidade** lista entidades individuais mas não tem atalho "Pessoal" / "Empresa" como grupo
-5. **Filtro de conta** não filtra por entidade ativa selecionada
+| Tela | Separação por entidade | Status |
+|---|---|---|
+| **Dashboard** | ✅ Tabs Consolidado/Pessoal/Empresarial + views corretas | OK |
+| **Fluxo Mensal** | ✅ Tabs Consolidado/Pessoal/Empresarial + views corretas | OK |
+| **Lançamentos** | ⚠️ Filtro de entidade existe, mas não há visual de destaque da visão ativa | Ajustar |
+| **Cartões** | ⚠️ Usa "Todos/Pessoal/Empresarial" mas com valor "all" em vez de "consolidated" — inconsistente | Ajustar |
+| **TransactionForm** | ✅ Auto-fill entidade ao selecionar conta | OK |
 
-### Alterações
+### Alterações necessárias
 
-**`src/pages/Lancamentos.tsx`**
+**1. `src/pages/Lancamentos.tsx`**
 
-- **Coluna "Entidade"**: mostrar nome da entidade + badge de tipo (Pessoal/Empresa)
-- **Adicionar coluna "Competência"**: exibir `competence_date` formatado como MM/YYYY
-- **Adicionar coluna "Pagamento"**: exibir `payment_date` formatado como dd/MM/yyyy ou "—"
-- **Remover referências a "pending"**: ações de baixa e cancelamento usam apenas `status === "planned"`
-- **Filtro de entidade**: adicionar opções "Todas Pessoais" e "Todas Empresariais" que filtram pelo `entity_type` do join, além das entidades individuais
-- **Ordenar colunas**: Vencimento | Competência | Descrição | Tipo | Categoria | Entidade | Conta | Valor | Status | Pagamento | Ações
+- **Adicionar destaque visual** da entidade ativa: quando `filterEntity` = `all_personal` ou `all_business`, mostrar badge/banner abaixo dos filtros indicando "Visualizando: Pessoal" ou "Visualizando: Empresa"
+- **Filtro de conta contextual**: quando entidade selecionada é `all_personal` ou `all_business`, filtrar contas exibidas no select de conta para mostrar apenas contas da entidade correspondente
+- **Filtro de categoria contextual**: quando entidade selecionada é `all_personal` ou `all_business`, nenhuma alteração (categorias são globais)
 
-**Nenhum outro arquivo alterado.** Query do hook já traz `financial_entities(name, entity_type)`, `categories(name)`, `accounts(name)` — dados suficientes.
+**2. `src/pages/Cartoes.tsx`**
 
-### Regras respeitadas
+- **Renomear tab "Todos" para "Consolidado"** para consistência com Dashboard e Fluxo Mensal
+- **Adicionar destaque visual** da visão ativa: badge ou descrição abaixo do título indicando qual filtro está aplicado
+- **Tipo interno**: manter `FilterView = "all" | "personal" | "business"` (o valor "all" funciona como consolidado neste contexto, pois mostra todos os cartões)
 
-- Zero lógica nova — apenas ajuste de exibição e filtros
-- Dados vêm do banco via join existente
-- Status: planned / paid / cancelled (sem pending)
+**3. Visual de destaque (ambas telas)**
+
+Padrão: um texto pequeno abaixo do PageHeader ou nas tabs mostrando a visão ativa, como já existe no Dashboard (`description={Visão ${viewLabel} das suas finanças}`).
+
+### Arquivos alterados
 
 | Arquivo | O que muda |
 |---|---|
-| `src/pages/Lancamentos.tsx` | Colunas de data, nome da entidade, remover pending, filtro por tipo de entidade |
+| `src/pages/Lancamentos.tsx` | Destaque visual da entidade ativa, contas filtradas por tipo de entidade |
+| `src/pages/Cartoes.tsx` | Renomear "Todos" → "Consolidado", destaque visual da visão ativa |
+
+Sem alteração no banco. Sem lógica nova. Apenas ajustes de UI para consistência.
 
