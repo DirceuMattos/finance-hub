@@ -81,12 +81,13 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
         status: transaction.status,
         notes: transaction.notes || "",
+        is_card_movement: transaction.source_type === "card",
       });
     } else {
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-        status: "planned", notes: "",
+        status: "planned", notes: "", is_card_movement: false,
       });
     }
   }, [transaction, open]);
