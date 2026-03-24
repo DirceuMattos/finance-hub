@@ -61,7 +61,7 @@ export function useRecurrences() {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
       toast.success("Recorrência atualizada");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
