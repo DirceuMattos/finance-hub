@@ -82,11 +82,14 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent>
         <div className="p-4 pb-2">
-          {!collapsed && (
-            <h2 className="text-lg font-bold text-sidebar-primary-foreground tracking-tight">
-              FinControl
-            </h2>
-          )}
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-sidebar-primary-foreground shrink-0" />
+            {!collapsed && (
+              <h2 className="text-lg font-bold text-sidebar-primary-foreground tracking-tight">
+                Finance Hub
+              </h2>
+            )}
+          </div>
         </div>
         {navGroups.map((group) => (
           <SidebarGroup key={group.label}>
