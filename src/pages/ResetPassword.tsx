@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { DollarSign, Loader2 } from "lucide-react";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
