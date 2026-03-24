@@ -83,7 +83,7 @@ export default function Dashboard() {
   const {
     balance, balanceSplit, flow, forecast, cardSummary,
     expensesByCategory,
-    patrimony, patrimonyEvolution, investment,
+    patrimony, patrimonyEvolution, investment, riskData,
   } = useDashboardData(view, selectedMonth);
 
   const income = forecast.income_paid;
