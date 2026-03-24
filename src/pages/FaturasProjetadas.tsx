@@ -11,79 +11,102 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Info } from "lucide-react";
 import { useCards } from "@/hooks/useCards";
 import { useBillingProjection } from "@/hooks/useCardInstallments";
-import { useCardInvoiceProjections, CardInvoiceProjection } from "@/hooks/useCardInvoiceTransactions";
-import { CUTOFF_DATE } from "@/lib/cardInvoiceRules";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
 
-interface UnifiedProjection {
+interface BillingRow {
   key: string;
   card_name: string;
   billing_month: string;
   due_date: string | null;
   total_amount: number;
+  paid_amount: number;
+  planned_amount: number;
   count: number;
-  status: string;
-  source: "installments" | "invoices";
-  temporal: "historical" | "projected";
+  source: string;
 }
 
 export default function FaturasProjetadas() {
-  const { data: installmentProjections = [], isLoading: loadingInstallments } = useBillingProjection();
-  const { projections: invoiceProjections, isLoading: loadingInvoices } = useCardInvoiceProjections();
   const { data: cards = [] } = useCards();
   const [filterCard, setFilterCard] = useState("all");
-  const [filterTemporal, setFilterTemporal] = useState("all");
   const [search, setSearch] = useState("");
 
-  const unified = useMemo(() => {
-    const result: UnifiedProjection[] = [];
+  // Primary source: vw_card_billing_projection
+  const { data: viewData, isLoading: loadingView } = useQuery({
+    queryKey: ["faturas_card_billing_projection"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("vw_card_billing_projection")
+        .select("*")
+        .order("billing_month")
+        .order("card_name");
+      if (error) {
+        console.warn("vw_card_billing_projection not available:", error.message);
+        return null;
+      }
+      return data as {
+        card_name: string;
+        billing_month: string;
+        total_amount: number;
+        paid_amount: number;
+        planned_amount: number;
+        installments_count: number;
+        due_date: string | null;
+      }[];
+    },
+  });
 
-    // From card_installments (existing)
-    installmentProjections.forEach((p) => {
-      result.push({
-        key: `inst_${p.card_id}_${p.billing_month}`,
-        card_name: p.card_name,
-        billing_month: p.billing_month,
-        due_date: p.due_date,
-        total_amount: p.total_amount,
-        count: p.installments_count,
-        status: "planned",
-        source: "installments",
-        temporal: "projected",
-      });
-    });
+  // Fallback: useBillingProjection (card_installments)
+  const { data: installmentProjections = [], isLoading: loadingFallback } = useBillingProjection();
 
-    // From transactions (invoice data via center_cost)
-    invoiceProjections.forEach((p) => {
-      const lastDayOfMonth = `${p.billing_month}-28`;
-      const temporal = lastDayOfMonth <= CUTOFF_DATE ? "historical" : "projected";
-      result.push({
-        key: `inv_${p.card_name}_${p.billing_month}`,
-        card_name: p.card_name,
-        billing_month: p.billing_month,
-        due_date: p.due_date,
-        total_amount: p.total_amount,
-        count: p.invoices_count,
-        status: p.status,
-        source: "invoices",
-        temporal,
+  const rows = useMemo(() => {
+    const result: BillingRow[] = [];
+
+    if (viewData && viewData.length > 0) {
+      // Use view data as single source of truth
+      viewData.forEach((p) => {
+        result.push({
+          key: `view_${p.card_name}_${p.billing_month}`,
+          card_name: p.card_name,
+          billing_month: p.billing_month,
+          due_date: p.due_date ?? null,
+          total_amount: p.total_amount,
+          paid_amount: p.paid_amount ?? 0,
+          planned_amount: p.planned_amount ?? 0,
+          count: p.installments_count ?? 0,
+          source: "view",
+        });
       });
-    });
+    } else {
+      // Fallback to installment projections
+      installmentProjections.forEach((p) => {
+        result.push({
+          key: `inst_${p.card_id}_${p.billing_month}`,
+          card_name: p.card_name,
+          billing_month: p.billing_month,
+          due_date: p.due_date,
+          total_amount: p.total_amount,
+          paid_amount: 0,
+          planned_amount: p.total_amount,
+          count: p.installments_count,
+          source: "fallback",
+        });
+      });
+    }
 
     return result.sort((a, b) => a.billing_month.localeCompare(b.billing_month) || a.card_name.localeCompare(b.card_name));
-  }, [installmentProjections, invoiceProjections]);
+  }, [viewData, installmentProjections]);
 
   const filtered = useMemo(() => {
-    return unified.filter((p) => {
+    return rows.filter((p) => {
       if (filterCard !== "all") {
         const selectedCard = cards.find(c => c.id === filterCard);
         if (selectedCard && selectedCard.name !== p.card_name) return false;
       }
-      if (filterTemporal === "historical" && p.temporal !== "historical") return false;
-      if (filterTemporal === "projected" && p.temporal !== "projected") return false;
       if (search && !p.card_name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [unified, filterCard, filterTemporal, search, cards]);
+  }, [rows, filterCard, search, cards]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -97,11 +120,14 @@ export default function FaturasProjetadas() {
     }
   };
 
-  const statusBadge = (row: UnifiedProjection) => {
-    if (row.temporal === "historical") {
-      return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Realizado</Badge>;
+  const statusBadge = (row: BillingRow) => {
+    if (row.paid_amount > 0 && row.planned_amount === 0) {
+      return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Pago</Badge>;
     }
-    return <Badge variant="outline" className="border-[hsl(var(--warning,45_93%_47%))] text-[hsl(var(--warning,45_93%_47%))]">Previsto</Badge>;
+    if (row.planned_amount > 0 && row.paid_amount === 0) {
+      return <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">Previsto</Badge>;
+    }
+    return <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400">Parcial</Badge>;
   };
 
   const monthlyTotals = useMemo(() => {
@@ -112,17 +138,17 @@ export default function FaturasProjetadas() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
-  const columns: Column<UnifiedProjection>[] = [
+  const columns: Column<BillingRow>[] = [
     { key: "billing_month" as any, header: "Mês", render: (r) => <Badge variant="outline">{fmtMonth(r.billing_month)}</Badge> },
     { key: "card_name" as any, header: "Cartão" },
     { key: "total_amount" as any, header: "Total da Fatura", render: (r) => <span className="font-semibold">{fmt(r.total_amount)}</span> },
-    { key: "count" as any, header: "Itens", render: (r) => `${r.count} lançamento${r.count > 1 ? "s" : ""}` },
+    { key: "paid_amount" as any, header: "Pago", render: (r) => <span className="text-emerald-600 dark:text-emerald-400">{fmt(r.paid_amount)}</span> },
+    { key: "planned_amount" as any, header: "Previsto", render: (r) => <span className="text-amber-600 dark:text-amber-400">{fmt(r.planned_amount)}</span> },
     { key: "status" as any, header: "Status", render: (r) => statusBadge(r) },
-    { key: "source" as any, header: "Fonte", render: (r) => <Badge variant="secondary" className="text-[10px]">{r.source === "invoices" ? "Centro de Custo" : "Parcelas"}</Badge> },
     { key: "due_date" as any, header: "Vencimento", render: (r) => r.due_date ? format(new Date(r.due_date), "dd/MM/yyyy") : "—" },
   ];
 
-  const isLoading = loadingInstallments || loadingInvoices;
+  const isLoading = loadingView || (viewData === null && loadingFallback);
 
   return (
     <AppLayout>
@@ -134,14 +160,6 @@ export default function FaturasProjetadas() {
           <SelectContent>
             <SelectItem value="all">Todos cartões</SelectItem>
             {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterTemporal} onValueChange={setFilterTemporal}>
-          <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Período" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="historical">Realizados</SelectItem>
-            <SelectItem value="projected">Previstos</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
@@ -165,7 +183,7 @@ export default function FaturasProjetadas() {
 
       <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
         <Info className="h-3 w-3" />
-        Dados provenientes de lançamentos por centro de custo. Parcelas detalhadas dependem de registros em Compras no Cartão.
+        Dados provenientes da view vw_card_billing_projection. Fonte única de verdade no banco.
       </p>
     </AppLayout>
   );
