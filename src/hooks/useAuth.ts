@@ -36,8 +36,14 @@ export function useAuth() {
       (f) => f.factor_type === "totp" && f.status === "verified"
     );
     if (!hasVerifiedTotp) return false;
-    const aal = (session as any)?.aal ?? "aal1";
+    // Use official Supabase MFA API to check assurance level
+    const aal = session?.user?.aal ?? "aal1";
     return aal !== "aal2";
+  };
+
+  const checkMfaLevel = async (): Promise<boolean> => {
+    const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    return data?.currentLevel !== "aal2" && data?.nextLevel === "aal2";
   };
 
   return { session, user, loading, signOut, hasMfaPending };
