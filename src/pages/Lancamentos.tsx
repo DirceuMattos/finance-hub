@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle } from "lucide-react";
-import { isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
+import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
