@@ -81,21 +81,16 @@ export default function Dashboard() {
   const monthOptions = buildMonthOptions();
 
   const {
-    balance, balanceSplit, flow, forecast, cardSummary,
+    balance, balanceSplit, forecast,
     expensesByCategory,
     patrimony, patrimonyEvolution, investment, riskData,
   } = useDashboardData(view, selectedMonth);
-
-  const income = forecast.income_paid;
-  const expense = forecast.expense_paid;
-  const result = income - expense;
 
   const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
 
   const balanceSubLabel = view === "consolidated"
     ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
     : undefined;
-
 
   const patrimonyChartData = patrimonyEvolution.map(d => ({
     month: fmtMonth(d.reference_month),
@@ -154,7 +149,7 @@ export default function Dashboard() {
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-1 md:ml-auto text-sm">
               <div>
-                <span className="text-muted-foreground">Resultado previsto: </span>
+                <span className="text-muted-foreground">Saldo projetado: </span>
                 <span className={cn("font-semibold", riskData.forecastResult >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
                   {fmtCur(riskData.forecastResult)}
                 </span>
@@ -185,30 +180,30 @@ export default function Dashboard() {
           description="Contas ativas"
         />
         <StatCard
-          title="Receitas do Mês"
-          value={fmtCur(income)}
+          title="Receitas Pagas"
+          value={fmtCur(forecast.income_paid)}
           icon={TrendingUp}
           variant="positive"
-          description="Realizadas"
+          description="No mês"
         />
         <StatCard
-          title="Despesas do Mês"
-          value={fmtCur(expense)}
+          title="Despesas Pagas"
+          value={fmtCur(forecast.expense_paid)}
           icon={TrendingDown}
           variant="negative"
-          description="Realizadas"
+          description="No mês"
         />
         <StatCard
-          title="Resultado do Mês"
-          value={fmtCur(result)}
+          title="Saldo Projetado"
+          value={fmtCur(forecast.projected_balance)}
           icon={Scale}
-          variant={result >= 0 ? "positive" : "negative"}
-          description="Receitas − Despesas"
+          variant={forecast.projected_balance >= 0 ? "positive" : "negative"}
+          description="Projeção da view"
         />
       </div>
 
       {/* ===== LINHA 2 — Estrutural ===== */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <StatCard
           title="Patrimônio"
           value={fmtCur(patrimony.total)}
@@ -221,12 +216,24 @@ export default function Dashboard() {
           icon={PiggyBank}
           description="Último snapshot"
         />
+        <StatCard
+          title="Comprometimento Cartão"
+          value={fmtCur(forecast.projected_card_amount)}
+          icon={CreditCard}
+          description="Previsto no mês"
+        />
+        <StatCard
+          title="Potencial Contenção"
+          value={fmtCur(forecast.potential_containment)}
+          icon={Target}
+          description="Despesas conteníveis"
+        />
       </div>
 
       {/* ===== PREVISÃO DE FECHAMENTO ===== */}
       <Card className={cn(
         "mb-6 border-2",
-        forecast.forecast_result >= 0 ? "border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" : "border-red-500/30 bg-red-50/30 dark:bg-red-950/10"
+        forecast.projected_balance >= 0 ? "border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/10" : "border-red-500/30 bg-red-50/30 dark:bg-red-950/10"
       )}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -237,7 +244,7 @@ export default function Dashboard() {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
             <div>
-              <p className="text-xs text-muted-foreground">Receitas Realizadas</p>
+              <p className="text-xs text-muted-foreground">Receitas Pagas</p>
               <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{fmtCur(forecast.income_paid)}</p>
             </div>
             <div>
@@ -245,7 +252,7 @@ export default function Dashboard() {
               <p className="text-lg font-semibold text-emerald-600/70 dark:text-emerald-400/70">{fmtCur(forecast.income_planned)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Despesas Realizadas</p>
+              <p className="text-xs text-muted-foreground">Despesas Pagas</p>
               <p className="text-lg font-semibold text-red-600 dark:text-red-400">{fmtCur(forecast.expense_paid)}</p>
             </div>
             <div>
@@ -253,66 +260,17 @@ export default function Dashboard() {
               <p className="text-lg font-semibold text-red-600/70 dark:text-red-400/70">{fmtCur(forecast.expense_planned)}</p>
             </div>
             <div className="col-span-2 md:col-span-1">
-              <p className="text-xs text-muted-foreground">Resultado Previsto</p>
+              <p className="text-xs text-muted-foreground">Saldo Projetado</p>
               <p className={cn(
                 "text-2xl font-bold",
-                forecast.forecast_result >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                forecast.projected_balance >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
               )}>
-                {fmtCur(forecast.forecast_result)}
+                {fmtCur(forecast.projected_balance)}
               </p>
             </div>
           </div>
         </CardContent>
       </Card>
-
-      {/* ===== CARTÕES (mês selecionado) ===== */}
-      {cardSummary.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {cardSummary.map(card => {
-            const total = card.historicalTotal + card.projectedTotal;
-            const paidPct = total > 0 ? (card.historicalTotal / total) * 100 : 0;
-            return (
-              <Card key={card.card_name}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-primary" />
-                    {card.card_name}
-                    <span className="text-xs font-normal text-muted-foreground ml-auto">
-                      {card.entity_type === "personal" ? "Pessoal" : "Empresa"}
-                    </span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0 space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Pago</p>
-                      <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{fmtCur(card.historicalTotal)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Previsto</p>
-                      <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">{fmtCur(card.projectedTotal)}</p>
-                    </div>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden flex">
-                    <div
-                      className="h-full bg-emerald-500 transition-all"
-                      style={{ width: `${paidPct}%` }}
-                    />
-                    <div
-                      className="h-full bg-amber-500 transition-all"
-                      style={{ width: `${100 - paidPct}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-1 border-t border-border">
-                    <p className="text-xs font-medium text-muted-foreground">Total do Mês</p>
-                    <p className="text-xl font-bold text-foreground">{fmtCur(total)}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
 
       {/* ===== TOP DESPESAS POR CATEGORIA ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">

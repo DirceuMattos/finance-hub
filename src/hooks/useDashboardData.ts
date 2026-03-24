@@ -18,16 +18,6 @@ const cashflowViewMap: Record<ViewType, string> = {
   business: "vw_monthly_cashflow_business",
 };
 
-export interface CardBillingProjection {
-  card_name: string;
-  billing_month: string;
-  total_amount: number;
-  paid_amount: number;
-  planned_amount: number;
-  installments_count: number;
-  due_date: string | null;
-}
-
 export interface CategoryBreakdown {
   name: string;
   total: number;
@@ -38,9 +28,7 @@ export interface MonthForecast {
   income_planned: number;
   expense_paid: number;
   expense_planned: number;
-  total_income: number;
-  total_expense: number;
-  forecast_result: number;
+  projected_balance: number;
   projected_card_amount: number;
   potential_containment: number;
 }
@@ -114,24 +102,16 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
   const flow = monthlyFlow.data;
 
-  // Build forecast directly from view data (zero business logic in frontend)
+  // Forecast directly from view — zero recalculation
   const forecast: MonthForecast = {
     income_paid: flow?.income_paid ?? 0,
     income_planned: flow?.income_planned ?? 0,
     expense_paid: flow?.expense_paid ?? 0,
     expense_planned: flow?.expense_planned ?? 0,
-    total_income: (flow?.income_paid ?? 0) + (flow?.income_planned ?? 0),
-    total_expense: (flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0),
-    forecast_result: (flow?.projected_balance ?? 0) - (accountBalances.data?.filtered ?? 0),
+    projected_balance: flow?.projected_balance ?? 0,
     projected_card_amount: flow?.projected_card_amount ?? 0,
     potential_containment: flow?.potential_containment ?? 0,
   };
-
-  // Use projected_balance from view as the actual forecast result
-  // The view already computes: income - expense + balance adjustments
-  const forecastResult = ((flow?.income_paid ?? 0) + (flow?.income_planned ?? 0)) -
-    ((flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0));
-  forecast.forecast_result = forecastResult;
 
   // --- Risk: directly from view's traffic_light ---
   const trafficLight = flow?.traffic_light ?? "green";
@@ -157,34 +137,9 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     closingBalance: projectedBalance,
     reserveMin: minimumReserve,
     cardPlannedTotal,
-    forecastResult: forecastResult,
+    forecastResult: projectedBalance,
     message: riskMessageMap[trafficLight] ?? riskMessageMap.green,
   };
-
-  // --- Card billing projection from view ---
-  const cardBilling = useQuery({
-    queryKey: ["dashboard_card_billing_projection", start],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("vw_card_billing_projection")
-        .select("*")
-        .eq("billing_month", format(selectedMonth, "yyyy-MM"));
-      if (error) {
-        console.warn("vw_card_billing_projection not available:", error.message);
-        return [];
-      }
-      return (data || []) as CardBillingProjection[];
-    },
-  });
-
-  // Build cardSummary from billing projection view
-  const cardSummary = (cardBilling.data ?? []).map(p => ({
-    card_name: p.card_name,
-    entity_type: null as "personal" | "business" | null,
-    historicalTotal: p.paid_amount ?? 0,
-    projectedTotal: p.planned_amount ?? 0,
-    count: p.installments_count ?? 0,
-  }));
 
   // --- Expenses by category (no dedicated view — keep query) ---
   const expensesByCategory = useQuery({
@@ -318,7 +273,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     balanceSplit: { personal: balances.personal, business: balances.business, total: balances.total },
     flow: monthlyFlow.data,
     forecast,
-    cardSummary,
     expensesByCategory: expensesByCategory.data ?? [],
     patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null },
     patrimonyEvolution: patrimonyEvolution.data ?? [],
