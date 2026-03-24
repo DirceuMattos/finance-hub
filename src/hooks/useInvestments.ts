@@ -110,3 +110,42 @@ export function useInvestmentPortfolioSummary() {
     },
   });
 }
+
+export function useInvestmentCrud() {
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["investment_snapshots"] });
+    queryClient.invalidateQueries({ queryKey: ["vw_investment_return_by_class"] });
+    queryClient.invalidateQueries({ queryKey: ["vw_investment_portfolio_summary"] });
+  };
+
+  const create = useMutation({
+    mutationFn: async (snapshot: Partial<InvestmentSnapshot>) => {
+      const { error } = await (supabase as any).from("investment_snapshots").insert(snapshot);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Registro criado com sucesso"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...data }: Partial<InvestmentSnapshot> & { id: string }) => {
+      const { error } = await (supabase as any).from("investment_snapshots").update(data).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Registro atualizado"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("investment_snapshots").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Registro excluído"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return { create, update, remove };
+}
