@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard,
-  Landmark, PiggyBank, Scale, Target,
+  Landmark, PiggyBank, Scale, Target, ShieldCheck, ShieldAlert, ShieldX,
 } from "lucide-react";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
