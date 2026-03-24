@@ -40,7 +40,7 @@ export function useSystemParameters() {
       queryClient.invalidateQueries({ queryKey: ["system_parameters"] });
       toast.success("Parâmetro atualizado");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
