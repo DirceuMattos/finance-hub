@@ -257,30 +257,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ===== FLUXO MENSAL + TOP DESPESAS ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Fluxo Mensal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {chartData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">Sem dados de fluxo mensal.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtShort} className="fill-muted-foreground" />
-                  <Tooltip formatter={(v: number) => fmtCur(v)} />
-                  <Bar dataKey="Receitas" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Despesas" fill="hsl(var(--chart-5))" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
+      {/* ===== TOP DESPESAS POR CATEGORIA ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Top Despesas por Categoria</CardTitle>
