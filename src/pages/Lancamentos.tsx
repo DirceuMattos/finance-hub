@@ -65,22 +65,6 @@ export default function Lancamentos() {
   const [filterMonth, setFilterMonth] = useState(initialMonth);
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterAccount, setFilterAccount] = useState("all");
-
-  // Contas filtradas por tipo de entidade quando filtro ativo
-  const filteredAccounts = useMemo(() => {
-    if (filterEntity === "all_personal") {
-      const personalIds = new Set(personalEntities.map(e => e.id));
-      return accounts.filter(a => personalIds.has(a.financial_entity_id));
-    }
-    if (filterEntity === "all_business") {
-      const businessIds = new Set(businessEntities.map(e => e.id));
-      return accounts.filter(a => businessIds.has(a.financial_entity_id));
-    }
-    if (filterEntity !== "all") {
-      return accounts.filter(a => a.financial_entity_id === filterEntity);
-    }
-    return accounts;
-  }, [accounts, filterEntity, personalEntities, businessEntities]);
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeTab, setFilterTypeTab] = useState("all");
@@ -98,6 +82,23 @@ export default function Lancamentos() {
   }, [entities]);
 
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
+  const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
+
+  // Contas filtradas por tipo de entidade quando filtro ativo
+  const filteredAccounts = useMemo(() => {
+    if (filterEntity === "all_personal") {
+      const personalIds = new Set(personalEntities.map(e => e.id));
+      return accounts.filter(a => personalIds.has(a.financial_entity_id));
+    }
+    if (filterEntity === "all_business") {
+      const businessIds = new Set(businessEntities.map(e => e.id));
+      return accounts.filter(a => businessIds.has(a.financial_entity_id));
+    }
+    if (filterEntity !== "all") {
+      return accounts.filter(a => a.financial_entity_id === filterEntity);
+    }
+    return accounts;
+  }, [accounts, filterEntity, personalEntities, businessEntities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
