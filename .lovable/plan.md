@@ -1,43 +1,53 @@
 
 
-## Diagnóstico: Por que o módulo de Cartões não exibe dados
+## Plano: Usar `center_cost` para identificar faturas de cartão
 
-### Causa raiz identificada
+### Diagnóstico
 
-O hook `useCardInvoiceTransactions` filtra transações cujas categorias sejam exatamente:
-- `"Cartões de Crédito - Pessoal"`
-- `"Cartões de Crédito - Prof."`
+As transações no banco **não usam** as categorias "Cartões de Crédito - Pessoal" / "Cartões de Crédito - Prof." para identificar faturas de cartão. Em vez disso, mantêm sua categoria original (SUPERMERCADO, APLICATIVOS, etc.) e usam o campo `center_cost` para indicar a qual cartão pertencem:
 
-**Essas categorias não existem no banco de dados.** A lista de categorias cadastradas não contém nenhuma entrada com esses nomes. Portanto, o filtro retorna zero transações, e tanto as barras de progresso dos cartões quanto as faturas projetadas ficam vazias.
+- `center_cost = "Cartão de Crédito - Pessoal"` → BRA Pessoal
+- `center_cost = "Cartão de Crédito - Prof."` → Nu Infotkt (a confirmar valor exato)
 
-### O que é necessário no banco (não no frontend)
+### Alterações
 
-Para que o módulo funcione como projetado, são necessários **dois passos no banco externo**:
+**1. `src/lib/cardInvoiceRules.ts`**
 
-**Passo 1 — Criar as categorias faltantes:**
-```sql
-INSERT INTO categories (name, category_group, transaction_nature, is_containable, is_active)
-VALUES
-  ('Cartões de Crédito - Pessoal', 'Despesa essencial', 'expense', false, true),
-  ('Cartões de Crédito - Prof.', 'Despesa profissional', 'expense', false, true);
+Trocar critério de filtro de categoria para `center_cost`:
+
+```text
+CARD_INVOICE_CENTER_COSTS = [
+  "Cartão de Crédito - Pessoal",
+  "Cartão de Crédito - Prof.",
+]
+
+CENTER_COST_CARD_MAP = {
+  "Cartão de Crédito - Pessoal": "BRA Pessoal",
+  "Cartão de Crédito - Prof.": "Nu Infotkt",
+}
 ```
 
-**Passo 2 — Vincular transações existentes a essas categorias:**
+**2. `src/hooks/useCardInvoiceTransactions.ts`**
 
-Se já existem lançamentos de fatura de cartão no banco mas com outra categoria (ou se precisam ser criados), eles devem ter `category_id` apontando para as novas categorias acima.
+- Alterar query para incluir `center_cost` no select
+- Filtrar por `center_cost` em vez de `categories.name`
+- Mapear usando `CENTER_COST_CARD_MAP` em vez de `CARD_MAP`
 
-Exemplo: se existem lançamentos de pagamento de fatura do BRA Pessoal que hoje estão na categoria "DESP. BANCÁRIAS" ou outra, seria preciso atualizar o `category_id` deles para a categoria "Cartões de Crédito - Pessoal".
+**3. `src/pages/Lancamentos.tsx`**
 
-### Resumo
+- Atualizar a identificação de "fatura de cartão" para usar `center_cost` (se houver badge ou filtro baseado em categoria)
 
-| Item | Estado |
+### Verificação necessária
+
+Antes de implementar, preciso confirmar o valor exato de `center_cost` para o cartão profissional. Dos dados vistos, só apareceu "Cartão de Crédito - Pessoal". Preciso buscar se há transações com center_cost referente ao cartão profissional.
+
+### Arquivos alterados
+
+| Arquivo | Alteração |
 |---|---|
-| Frontend (hook, tela Cartões, Faturas) | Pronto e funcional |
-| Categorias no banco | **Faltam** — "Cartões de Crédito - Pessoal" e "Cartões de Crédito - Prof." não existem |
-| Transações vinculadas | **Nenhuma** transação usa essas categorias |
-| Ação necessária | Criar categorias no banco externo e vincular transações |
+| `src/lib/cardInvoiceRules.ts` | Novo mapeamento por `center_cost` |
+| `src/hooks/useCardInvoiceTransactions.ts` | Filtrar por `center_cost` em vez de categoria |
+| `src/pages/Lancamentos.tsx` | Ajustar identificação de fatura (se aplicável) |
 
-### Alternativa
-
-Se você preferir **não criar essas categorias** e em vez disso usar um critério diferente para identificar faturas de cartão (por exemplo, pela `account_id` ou `financial_entity_id` vinculada ao cartão), posso ajustar o mapeamento no frontend. Nesse caso, preciso saber qual critério usar para identificar uma transação como "fatura de cartão".
+Sem alteração no banco. Sem novas tabelas.
 
