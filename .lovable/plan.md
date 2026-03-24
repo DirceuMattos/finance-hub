@@ -1,79 +1,36 @@
 
 
-## Plano: Refinamento do Dashboard para Decisão Financeira Mensal
+## Plano: Corrigir 3 problemas no Dashboard
 
-### Problema atual
+### Problemas identificados
 
-1. **Cartões somam ALL-TIME** — a query de `cardSummary` busca todas as transactions sem filtro de mês, acumulando totais históricos completos
-2. **Layout chapado** — 6 cards na mesma linha sem hierarquia visual
-3. **Sem previsão de fechamento** — o indicador mais importante (resultado previsto do mês) não existe
-4. **Sem cores semânticas** — verde/vermelho não são usados para positivo/negativo
+1. **Gráfico de Fluxo Mensal inalterado** — O plano anterior pedia para substituir o gráfico de fluxo mensal pelo bloco de "Previsão de Fechamento", mas ambos coexistem. O gráfico de barras continua idêntico ao original.
+
+2. **Totalizações ausentes em Patrimônio e Investimentos** — Os breakdowns horizontais mostram itens, mas não há valor total visível nos cards de "Composição do Patrimônio" e "Investimentos por Classe". Falta um total no topo de cada seção.
+
+3. **Despesas "realizadas" em meses futuros** — Ao selecionar abril/2026, aparecem valores em "Despesas Realizadas". A causa: o `monthlyFlow` query usa a view `vw_monthly_cashflow_*`. Quando a view retorna dados para abril com `expense_paid > 0` (possivelmente por transações recorrentes já marcadas como "paid" em meses futuros), o Dashboard exibe sem questionar. Além disso, o fallback direto em `transactions` também não valida se o mês é futuro. 
+
+   **Solução**: Para meses futuros (após o mês corrente), forçar `income_paid = 0` e `expense_paid = 0`, movendo tudo para `planned`. Isso é uma regra de UX — a view pode ter esses dados, mas no Dashboard não faz sentido exibir "realizado" para um mês que ainda não chegou.
 
 ### Alterações
 
-**1. `src/hooks/useDashboardData.ts`**
+**1. `src/pages/Dashboard.tsx`**
 
-- **Corrigir cardSummary**: filtrar por `competence_date` dentro do mês selecionado (usar `start`/`end`). Dentro do mês, separar "pago" (status=paid) vs "previsto" (status=planned) em vez do cutoff fixo
-- **Adicionar previsão de fechamento**: novo campo `forecast` que calcula:
-  - `income_paid + income_planned` (receitas realizadas + previstas)
-  - `expense_paid + expense_planned` (despesas realizadas + previstas)
-  - `forecast_result = total_income - total_expense`
-  - Fonte: view `vw_monthly_cashflow_*` que já tem `income_planned`, `income_paid`, `expense_planned`, `expense_paid`
-- Retornar `flow` completo (com planned + paid separados) em vez de apenas paid
+- **Remover o gráfico de Fluxo Mensal** (BarChart de receitas vs despesas) — já substituído pelo bloco de Previsão de Fechamento
+- **Mover "Top Despesas por Categoria"** para ocupar largura total ou metade da tela
+- **Adicionar total no topo** dos cards "Composição do Patrimônio" e "Investimentos por Classe" — exibir `patrimony.total` e `investment.total` como valor destacado antes do breakdown
 
-**2. `src/pages/Dashboard.tsx`**
+**2. `src/hooks/useDashboardData.ts`**
 
-Layout reorganizado:
-
-```text
-[Filtros: Consolidado | Pessoal | Empresa] [Mês]
-
-LINHA 1 — Operacional (4 cards):
-[Saldo Atual] [Receitas do Mês] [Despesas do Mês] [Resultado do Mês]
-
-LINHA 2 — Estrutural (2 cards):
-[Patrimônio Total] [Total Investido]
-
-BLOCO DESTAQUE — Previsão de Fechamento:
-Card grande com:
-  - Receitas (realizadas + previstas)
-  - Despesas (realizadas + previstas)
-  - Resultado previsto (verde se positivo, vermelho se negativo)
-
-CARTÕES (filtrados pelo mês):
-  - Pago no mês / Previsto no mês / Qtd lançamentos
-
-TOP DESPESAS POR CATEGORIA
-
-PATRIMÔNIO + INVESTIMENTOS (compacto, gráficos de linha + breakdown)
-```
-
-- **Cores semânticas**: valor positivo em `text-emerald-600`, negativo em `text-red-600`
-- **StatCard**: adicionar prop `variant` (positive/negative/neutral) para colorir o valor
-- **Resultado do mês** e **Previsão** com destaque visual (borda colorida ou background sutil)
-
-**3. `src/components/shared/StatCard.tsx`**
-
-- Adicionar prop `variant?: "positive" | "negative" | "neutral"` que aplica cor ao valor:
-  - positive → `text-emerald-600`
-  - negative → `text-red-600`
-  - neutral → `text-foreground` (default)
-
-### Queries alteradas
-
-| Query | Antes | Depois |
-|---|---|---|
-| `cardSummary` | Todas as transactions all-time | Filtrado por `competence_date` do mês selecionado |
-| `monthlyFlow` | Retorna apenas paid | Retorna `income_paid`, `income_planned`, `expense_paid`, `expense_planned` |
-| Previsão | Não existia | `(income_paid + income_planned) - (expense_paid + expense_planned)` |
+- **Sanitizar dados de meses futuros**: se `selectedMonth > mês atual`, tratar `income_paid` e `expense_paid` da view como `planned` (somar aos respectivos planned, zerar paid). Isso garante que abril não mostra "Receitas Realizadas" nem "Despesas Realizadas".
+- Lógica: comparar `start` com `format(startOfMonth(new Date()), "yyyy-MM-dd")` — se start > hoje, aplicar a correção.
 
 ### Arquivos alterados
 
 | Arquivo | O que muda |
 |---|---|
-| `src/hooks/useDashboardData.ts` | Filtro mensal nos cartões, previsão de fechamento, flow completo |
-| `src/pages/Dashboard.tsx` | Layout 2 linhas, bloco previsão, cores semânticas |
-| `src/components/shared/StatCard.tsx` | Prop `variant` para cores |
+| `src/pages/Dashboard.tsx` | Remover BarChart de fluxo, adicionar totais em patrimônio/investimentos |
+| `src/hooks/useDashboardData.ts` | Sanitizar paid→planned para meses futuros |
 
-Sem alteração no banco. Sem novas tabelas.
+Sem alteração no banco.
 
