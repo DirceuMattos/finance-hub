@@ -80,3 +80,41 @@ export function usePatrimonyEvolution() {
     },
   });
 }
+
+export function usePatrimonyCrud() {
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
+    queryClient.invalidateQueries({ queryKey: ["vw_patrimony_evolution"] });
+  };
+
+  const create = useMutation({
+    mutationFn: async (snapshot: Partial<PatrimonySnapshot>) => {
+      const { error } = await (supabase as any).from("patrimony_snapshots").insert(snapshot);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Registro criado com sucesso"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const update = useMutation({
+    mutationFn: async ({ id, ...data }: Partial<PatrimonySnapshot> & { id: string }) => {
+      const { error } = await (supabase as any).from("patrimony_snapshots").update(data).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Registro atualizado"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("patrimony_snapshots").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { invalidate(); toast.success("Registro excluído"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  return { create, update, remove };
+}
