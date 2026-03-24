@@ -42,7 +42,7 @@ export function useTransactions() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast.success("Lançamento atualizado");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
