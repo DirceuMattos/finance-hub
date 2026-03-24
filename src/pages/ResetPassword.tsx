@@ -51,7 +51,7 @@ export default function ResetPassword() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getUserErrorMessage(error));
       return;
     }
 

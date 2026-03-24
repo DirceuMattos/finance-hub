@@ -38,7 +38,7 @@ export default function Signup() {
     setLoading(false);
 
     if (error) {
-      toast.error(error.message);
+      toast.error(getUserErrorMessage(error));
       return;
     }
 

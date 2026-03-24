@@ -46,5 +46,5 @@ export function useAuth() {
     return data?.currentLevel !== "aal2" && data?.nextLevel === "aal2";
   };
 
-  return { session, user, loading, signOut, hasMfaPending };
+  return { session, user, loading, signOut, hasMfaPending, checkMfaLevel };
 }
