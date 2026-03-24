@@ -81,7 +81,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
         status: transaction.status,
         notes: transaction.notes || "",
-        is_card_movement: transaction.source_type === "card",
+        center_cost: (transaction as any).center_cost || "",
       });
     } else {
       form.reset({
