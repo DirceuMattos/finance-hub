@@ -1,47 +1,44 @@
 
 
-## Plano: Ativar CRUD completo e gráfico no módulo Patrimônio
+## Plano: Ativar CRUD e gráfico no módulo Investimentos
 
 ### Estado atual
 
-A página `Patrimonio.tsx` já tem listagem read-only com tabs Pessoal/Empresa/Consolidado, stat cards e tabela. O hook `usePatrimony.ts` tem queries de leitura (`usePatrimonySnapshots`, `usePatrimonyEvolution`, `useAssetCategories`). Falta CRUD e gráfico de evolução.
+A página `Investimentos.tsx` já tem listagem read-only com tabs Pessoal/Empresa/Consolidado, stat cards, alocação por classe e tabela detalhada. O hook `useInvestments.ts` tem queries de leitura para `investment_snapshots`, `vw_investment_return_by_class` e `vw_investment_portfolio_summary`. Falta CRUD e gráfico de evolução.
 
 ### Alterações
 
 | Arquivo | Ação |
 |---|---|
-| `src/hooks/usePatrimony.ts` | Adicionar mutations `create`, `update`, `remove` para `patrimony_snapshots` |
-| `src/components/patrimonio/PatrimonyForm.tsx` | **Criar** — formulário em drawer para criar/editar snapshot |
-| `src/pages/Patrimonio.tsx` | Adicionar botão "Novo", ações editar/excluir na tabela, gráfico de evolução, mensagem de histórico insuficiente |
+| `src/hooks/useInvestments.ts` | Adicionar mutations `create`, `update`, `remove` para `investment_snapshots` + hook `useInvestmentCrud` |
+| `src/components/investimentos/InvestmentForm.tsx` | **Criar** — formulário drawer para criar/editar snapshot (padrão PatrimonyForm) |
+| `src/pages/Investimentos.tsx` | Adicionar botão "Novo registro", ações editar/excluir na tabela, gráfico de evolução (LineChart), mensagem histórico insuficiente |
 
 ### Detalhes
 
-**1. `usePatrimony.ts` — adicionar CRUD**
-- `createSnapshot`: insert em `patrimony_snapshots` com campos `reference_month`, `item_name`, `asset_category_id`, `financial_entity_id`, `opening_value`, `closing_value`, `notes`
-- `updateSnapshot`: update por `id`
-- `removeSnapshot`: delete por `id`
-- Invalidar queryKey `patrimony_snapshots` e `vw_patrimony_evolution` no success
-- Padrão idêntico ao `useFinancialEntities` (mutations com toast)
+**1. `useInvestments.ts` — CRUD**
+- `useInvestmentCrud()` retorna `{ create, update, remove }` — mesmo padrão de `usePatrimonyCrud`
+- Insert/update/delete em `investment_snapshots` com campos: `reference_month`, `investment_class_id`, `financial_entity_id`, `opening_value`, `closing_value`
+- Invalidar queries: `investment_snapshots`, `vw_investment_return_by_class`, `vw_investment_portfolio_summary`
+- Toast de sucesso/erro
 
-**2. `PatrimonyForm.tsx` — formulário em drawer**
-- Usa `FormDrawer` existente
-- Campos: Mês referência (input month), Item (text), Categoria (select de `useAssetCategories`), Entidade (select de `useFinancialEntities`), Valor abertura (number), Valor fechamento (number), Notas (textarea)
-- Modo criação e edição (preenche form com dados do snapshot selecionado)
-- Validação com Zod: item_name required, closing_value required, reference_month required
+**2. `InvestmentForm.tsx`**
+- `FormDrawer` com campos: Mês referência (input month), Classe (select de `useInvestmentClasses`), Entidade (select de `useFinancialEntities`), Valor abertura (number), Valor fechamento (number)
+- Modo criação e edição
+- Validação Zod: `investment_class_id`, `financial_entity_id`, `reference_month`, `closing_value` required
 
-**3. `Patrimonio.tsx` — CRUD + gráfico**
-- Botão "Novo registro" no `PageHeader` abre drawer
-- Colunas de ação na tabela: editar (Pencil) e excluir (Trash2)
-- Excluir usa `DeleteDialog` existente
-- Gráfico de evolução: `LineChart` do Recharts usando `vw_patrimony_evolution`
-  - Eixo X: `reference_month` formatado
-  - Linhas: `total_assets`, `total_liabilities`, `net_patrimony`
-  - Respeita filtro de entidade (pessoal/empresa/consolidado com agregação)
-  - Se `< 2 meses` de dados: exibir "Histórico insuficiente para análise"
-- Gráfico posicionado entre stat cards e tabela
+**3. `Investimentos.tsx` — CRUD + gráfico**
+- Botão "Novo registro" no `PageHeader`
+- Coluna de ações na tabela: editar (Pencil) e excluir (Trash2) — usar `DeleteDialog`
+- Trocar fonte de dados da tabela de `vw_investment_return_by_class` para `investment_snapshots` (para ter `id` no CRUD), mantendo `vw_investment_return_by_class` para os stat cards e alocação
+- Gráfico de evolução usando `vw_investment_portfolio_summary`:
+  - LineChart (Recharts) com `total_portfolio_value` e `total_estimated_return` por mês
+  - Respeita filtro de entidade (agregação no consolidado)
+  - Se < 2 meses: "Histórico insuficiente para análise"
+- Gráfico posicionado entre stat cards e alocação
 
-### O que NAO sera feito
-- Zero alteração no banco/schema
-- Zero recálculo — evolução vem de `vw_patrimony_evolution`
+### O que NÃO será feito
+- Zero alteração no banco
+- Zero lógica de cálculo no frontend — retorno estimado vem de `vw_investment_return_by_class`
 - Nenhuma tabela nova
 
