@@ -51,7 +51,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-      status: "planned", notes: "", is_card_movement: false,
+      status: "planned", notes: "", center_cost: "",
     },
   });
 
