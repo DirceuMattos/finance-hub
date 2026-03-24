@@ -1,41 +1,38 @@
 
 
-## Plano: Separação Pessoal / Empresa / Consolidado em todas as telas
+## Plano: Flag de Cartão de Crédito em Lançamentos
 
-### Estado atual
+### Abordagem
 
-| Tela | Separação por entidade | Status |
-|---|---|---|
-| **Dashboard** | ✅ Tabs Consolidado/Pessoal/Empresarial + views corretas | OK |
-| **Fluxo Mensal** | ✅ Tabs Consolidado/Pessoal/Empresarial + views corretas | OK |
-| **Lançamentos** | ⚠️ Filtro de entidade existe, mas não há visual de destaque da visão ativa | Ajustar |
-| **Cartões** | ⚠️ Usa "Todos/Pessoal/Empresarial" mas com valor "all" em vez de "consolidated" — inconsistente | Ajustar |
-| **TransactionForm** | ✅ Auto-fill entidade ao selecionar conta | OK |
+O campo `source_type` já existe na tabela `transactions` (tipo `string | null`). Será usado para marcar lançamentos como movimentação de cartão de crédito, gravando o valor `"card"` quando ativado ou `null` quando não.
 
-### Alterações necessárias
+Sem alteração no banco. Sem lógica nova. Apenas uso de um campo existente.
 
-**1. `src/pages/Lancamentos.tsx`**
+### Alterações
 
-- **Adicionar destaque visual** da entidade ativa: quando `filterEntity` = `all_personal` ou `all_business`, mostrar badge/banner abaixo dos filtros indicando "Visualizando: Pessoal" ou "Visualizando: Empresa"
-- **Filtro de conta contextual**: quando entidade selecionada é `all_personal` ou `all_business`, filtrar contas exibidas no select de conta para mostrar apenas contas da entidade correspondente
-- **Filtro de categoria contextual**: quando entidade selecionada é `all_personal` ou `all_business`, nenhuma alteração (categorias são globais)
+**1. `src/components/lancamentos/TransactionForm.tsx`**
 
-**2. `src/pages/Cartoes.tsx`**
+- Adicionar campo `source_type` ao schema Zod (string opcional, nullable)
+- Adicionar **Checkbox/Switch** no formulário com label "Movimentação de Cartão de Crédito"
+- No `handleSubmit`, gravar `source_type: "card"` quando ativado, `null` quando não
+- No `useEffect` de edição, preencher o checkbox com base em `transaction.source_type === "card"`
+- O valor persiste no banco, aplicando-se automaticamente a lançamentos futuros quando editados
 
-- **Renomear tab "Todos" para "Consolidado"** para consistência com Dashboard e Fluxo Mensal
-- **Adicionar destaque visual** da visão ativa: badge ou descrição abaixo do título indicando qual filtro está aplicado
-- **Tipo interno**: manter `FilterView = "all" | "personal" | "business"` (o valor "all" funciona como consolidado neste contexto, pois mostra todos os cartões)
+**2. `src/pages/Lancamentos.tsx`**
 
-**3. Visual de destaque (ambas telas)**
+- Na coluna "Descrição", usar `r.source_type === "card"` como critério principal para exibir o badge de cartão (substituindo a lógica atual baseada em `center_cost` e `category_name`)
+- No filtro "Fatura", usar `r.source_type === "card"` como critério de filtragem
+- Manter compatibilidade: lançamentos antigos sem `source_type` mas com `center_cost`/`category` de cartão continuam sendo reconhecidos (fallback)
 
-Padrão: um texto pequeno abaixo do PageHeader ou nas tabs mostrando a visão ativa, como já existe no Dashboard (`description={Visão ${viewLabel} das suas finanças}`).
+### Resultado
 
-### Arquivos alterados
+- Formulário com switch "Cartão de Crédito" que grava `source_type = "card"` no banco
+- Tabela exibe badge de cartão baseado no campo `source_type`
+- Filtro funciona com o campo `source_type`
+- Valor persiste entre sessões (está no banco)
 
 | Arquivo | O que muda |
 |---|---|
-| `src/pages/Lancamentos.tsx` | Destaque visual da entidade ativa, contas filtradas por tipo de entidade |
-| `src/pages/Cartoes.tsx` | Renomear "Todos" → "Consolidado", destaque visual da visão ativa |
-
-Sem alteração no banco. Sem lógica nova. Apenas ajustes de UI para consistência.
+| `src/components/lancamentos/TransactionForm.tsx` | Adicionar switch para `source_type` |
+| `src/pages/Lancamentos.tsx` | Usar `source_type` para badge e filtro de cartão |
 
