@@ -10,7 +10,7 @@ import {
   Landmark, PiggyBank, Scale, Target,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line,
 } from "recharts";
 import { format, subMonths, addMonths, startOfMonth } from "date-fns";
