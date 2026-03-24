@@ -1,38 +1,51 @@
 
 
-## Plano: Flag de Cartão de Crédito em Lançamentos
+## Plano: Corrigir marcação de cartão de crédito em Lançamentos
 
-### Abordagem
+### Problema real
 
-O campo `source_type` já existe na tabela `transactions` (tipo `string | null`). Será usado para marcar lançamentos como movimentação de cartão de crédito, gravando o valor `"card"` quando ativado ou `null` quando não.
+1. **`source_type: "card"` não pode ser gravado** — o banco tem uma constraint (`transactions_source_type_check`) que não aceita o valor `"card"`
+2. **A detecção de cartão já funciona** via campo `center_cost` — é assim que o badge "Fatura" aparece em Lançamentos e que o módulo de Cartões agrega dados
+3. **O formulário tenta gravar `source_type: "card"`**, que falha com erro, e o lançamento não é salvo
 
-Sem alteração no banco. Sem lógica nova. Apenas uso de um campo existente.
+### Solução
+
+Substituir o checkbox `is_card_movement` por um **select de `center_cost`** que permite ao usuário indicar a qual cartão o lançamento pertence. Esse é o campo que já alimenta o módulo de Cartões — usar ele diretamente resolve os dois problemas: marca o lançamento como cartão E faz aparecer no módulo de Cartões.
 
 ### Alterações
 
 **1. `src/components/lancamentos/TransactionForm.tsx`**
 
-- Adicionar campo `source_type` ao schema Zod (string opcional, nullable)
-- Adicionar **Checkbox/Switch** no formulário com label "Movimentação de Cartão de Crédito"
-- No `handleSubmit`, gravar `source_type: "card"` quando ativado, `null` quando não
-- No `useEffect` de edição, preencher o checkbox com base em `transaction.source_type === "card"`
-- O valor persiste no banco, aplicando-se automaticamente a lançamentos futuros quando editados
+- **Remover** campo `is_card_movement` (boolean) e `source_type` do submit
+- **Adicionar** campo select "Cartão de Crédito" com opções:
+  - Nenhum (valor vazio → `center_cost: null`)
+  - BRA Pessoal → `center_cost: "Cartões de Crédito - Pessoal"`
+  - Nu Infotkt → `center_cost: "Cartões de Crédito - Prof."`
+- Adicionar `center_cost` ao schema Zod (string opcional, nullable)
+- No `useEffect` de edição, preencher o select com base em `transaction.center_cost`
+- No `handleSubmit`, gravar `center_cost` com o valor selecionado
 
 **2. `src/pages/Lancamentos.tsx`**
 
-- Na coluna "Descrição", usar `r.source_type === "card"` como critério principal para exibir o badge de cartão (substituindo a lógica atual baseada em `center_cost` e `category_name`)
-- No filtro "Fatura", usar `r.source_type === "card"` como critério de filtragem
-- Manter compatibilidade: lançamentos antigos sem `source_type` mas com `center_cost`/`category` de cartão continuam sendo reconhecidos (fallback)
+- **Remover** `source_type === "card"` da detecção de cartão (nunca funcionou por causa da constraint)
+- Manter detecção via `center_cost` e categoria (que já funciona)
+- Badge "Fatura" continua aparecendo como antes
+
+**3. `src/hooks/useTransactions.ts`**
+
+- Sem alteração — o `select("*", ...)` já traz `center_cost`
 
 ### Resultado
 
-- Formulário com switch "Cartão de Crédito" que grava `source_type = "card"` no banco
-- Tabela exibe badge de cartão baseado no campo `source_type`
-- Filtro funciona com o campo `source_type`
-- Valor persiste entre sessões (está no banco)
+- Ao criar/editar lançamento, o usuário seleciona o cartão associado
+- O `center_cost` é gravado no banco (campo já existente, sem constraint bloqueante)
+- O módulo de Cartões (`useCardInvoiceTransactions`) já detecta lançamentos por `center_cost` → dados aparecem automaticamente
+- Badge "Fatura" no Lançamentos continua funcionando via `center_cost`
 
 | Arquivo | O que muda |
 |---|---|
-| `src/components/lancamentos/TransactionForm.tsx` | Adicionar switch para `source_type` |
-| `src/pages/Lancamentos.tsx` | Usar `source_type` para badge e filtro de cartão |
+| `src/components/lancamentos/TransactionForm.tsx` | Trocar checkbox por select de cartão usando `center_cost` |
+| `src/pages/Lancamentos.tsx` | Remover referência a `source_type === "card"` |
+
+Zero alteração no banco. Usa campo existente que já alimenta o módulo de Cartões.
 
