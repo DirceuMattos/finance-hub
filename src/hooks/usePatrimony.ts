@@ -105,7 +105,7 @@ export function usePatrimonyCrud() {
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro atualizado"); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
