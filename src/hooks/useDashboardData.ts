@@ -331,7 +331,68 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
+  // --- System parameters (reserves) ---
+  const systemParams = useQuery({
+    queryKey: ["dashboard_system_params"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("system_parameters")
+        .select("parameter_key, parameter_value")
+        .in("parameter_key", ["minimum_reserve_personal", "minimum_reserve_business"]);
+      if (error) throw error;
+      const map: Record<string, number> = {};
+      for (const p of (data || []) as { parameter_key: string; parameter_value: string }[]) {
+        map[p.parameter_key] = parseFloat(p.parameter_value) || 0;
+      }
+      return map;
+    },
+  });
+
   const balances = accountBalances.data ?? { total: 0, personal: 0, business: 0, filtered: 0 };
+  const params = systemParams.data ?? {};
+
+  // --- Risk calculation ---
+  const reservePersonal = params["minimum_reserve_personal"] ?? 0;
+  const reserveBusiness = params["minimum_reserve_business"] ?? 0;
+  const reserveMin = view === "personal" ? reservePersonal : view === "business" ? reserveBusiness : reservePersonal + reserveBusiness;
+
+  const closingBalance = balances.filtered + forecast.forecast_result;
+  const cardPlannedTotal = (cardSummary.data ?? []).reduce((s, c) => s + c.projectedTotal, 0);
+
+  let riskLevel: "controlled" | "attention" | "critical" = "controlled";
+  let riskMessage = "Mês controlado. Saldo de fechamento acima da reserva.";
+
+  const totalIncome = forecast.total_income;
+  const totalExpense = forecast.total_expense;
+
+  if (forecast.forecast_result < 0 || (reserveMin > 0 && closingBalance < reserveMin)) {
+    riskLevel = "critical";
+    riskMessage = forecast.forecast_result < 0
+      ? "Risco de fechamento negativo. Revise despesas previstas."
+      : "Saldo de fechamento abaixo da reserva mínima.";
+  } else if (
+    (totalIncome > 0 && forecast.forecast_result < totalIncome * 0.05) ||
+    (reserveMin > 0 && closingBalance < reserveMin * 1.1) ||
+    (totalExpense > 0 && cardPlannedTotal > totalExpense * 0.3)
+  ) {
+    riskLevel = "attention";
+    if (totalExpense > 0 && cardPlannedTotal > totalExpense * 0.3) {
+      riskMessage = "Atenção ao comprometimento do cartão no mês.";
+    } else if (reserveMin > 0 && closingBalance < reserveMin * 1.1) {
+      riskMessage = "Saldo de fechamento próximo da reserva mínima.";
+    } else {
+      riskMessage = "Resultado previsto baixo. Acompanhe de perto.";
+    }
+  }
+
+  const riskData = {
+    level: riskLevel,
+    closingBalance,
+    reserveMin,
+    cardPlannedTotal,
+    forecastResult: forecast.forecast_result,
+    message: riskMessage,
+  };
 
   return {
     balance: balances.filtered,
@@ -343,6 +404,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null },
     patrimonyEvolution: patrimonyEvolution.data ?? [],
     investment: investmentData.data ?? { total: 0, byClass: [] },
+    riskData,
     isLoading: accountBalances.isLoading || monthlyFlow.isLoading,
     fmt: fmtCur,
   };

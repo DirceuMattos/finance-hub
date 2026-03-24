@@ -7,7 +7,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard,
-  Landmark, PiggyBank, Scale, Target,
+  Landmark, PiggyBank, Scale, Target, ShieldCheck, ShieldAlert, ShieldX,
 } from "lucide-react";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -83,7 +83,7 @@ export default function Dashboard() {
   const {
     balance, balanceSplit, flow, forecast, cardSummary,
     expensesByCategory,
-    patrimony, patrimonyEvolution, investment,
+    patrimony, patrimonyEvolution, investment, riskData,
   } = useDashboardData(view, selectedMonth);
 
   const income = forecast.income_paid;
@@ -126,6 +126,54 @@ export default function Dashboard() {
           </SelectContent>
         </Select>
       </div>
+
+      {/* ===== RISCO FINANCEIRO DO MÊS ===== */}
+      <Card className={cn(
+        "mb-6 border-2",
+        riskData.level === "controlled" && "border-emerald-500/40 bg-emerald-50/40 dark:bg-emerald-950/15",
+        riskData.level === "attention" && "border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/15",
+        riskData.level === "critical" && "border-red-500/40 bg-red-50/40 dark:bg-red-950/15",
+      )}>
+        <CardContent className="p-5">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="flex items-center gap-3">
+              {riskData.level === "controlled" && <ShieldCheck className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />}
+              {riskData.level === "attention" && <ShieldAlert className="h-8 w-8 text-amber-600 dark:text-amber-400" />}
+              {riskData.level === "critical" && <ShieldX className="h-8 w-8 text-red-600 dark:text-red-400" />}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Risco Financeiro do Mês</p>
+                <p className={cn(
+                  "text-xl font-bold",
+                  riskData.level === "controlled" && "text-emerald-600 dark:text-emerald-400",
+                  riskData.level === "attention" && "text-amber-600 dark:text-amber-400",
+                  riskData.level === "critical" && "text-red-600 dark:text-red-400",
+                )}>
+                  {riskData.level === "controlled" ? "Controlado" : riskData.level === "attention" ? "Atenção" : "Crítico"}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 md:ml-auto text-sm">
+              <div>
+                <span className="text-muted-foreground">Resultado previsto: </span>
+                <span className={cn("font-semibold", riskData.forecastResult >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400")}>
+                  {fmtCur(riskData.forecastResult)}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Cartão previsto: </span>
+                <span className="font-semibold text-foreground">{fmtCur(riskData.cardPlannedTotal)}</span>
+              </div>
+              {riskData.reserveMin > 0 && (
+                <div>
+                  <span className="text-muted-foreground">Reserva mín.: </span>
+                  <span className="font-semibold text-foreground">{fmtCur(riskData.reserveMin)}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2 italic">{riskData.message}</p>
+        </CardContent>
+      </Card>
 
       {/* ===== LINHA 1 — Operacional ===== */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
