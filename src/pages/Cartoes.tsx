@@ -5,11 +5,11 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
-import { useCardInvoicesByCard } from "@/hooks/useCardInvoiceTransactions";
+import { useCardInvoicesByCard, useCardInvoiceSummaryByCard } from "@/hooks/useCardInvoiceTransactions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CreditCard } from "lucide-react";
+import { CreditCard, Info, TrendingUp, TrendingDown, Hash } from "lucide-react";
 
 type FilterView = "all" | "personal" | "business";
 
@@ -17,6 +17,7 @@ export default function Cartoes() {
   const { data: cards = [], isLoading } = useCards();
   const { data: entities = [] } = useFinancialEntities();
   const { byCard } = useCardInvoicesByCard();
+  const { summaries } = useCardInvoiceSummaryByCard();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<FilterView>("all");
 
@@ -25,6 +26,12 @@ export default function Cartoes() {
     entities.forEach(e => map.set(e.id, e.entity_type));
     return map;
   }, [entities]);
+
+  const summaryMap = useMemo(() => {
+    const map = new Map<string, typeof summaries[0]>();
+    summaries.forEach(s => map.set(s.card_name, s));
+    return map;
+  }, [summaries]);
 
   const filtered = cards.filter((c) => {
     if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -67,6 +74,7 @@ export default function Cartoes() {
             const usedAmount = byCard.get(card.name) || 0;
             const usagePct = card.credit_limit > 0 ? Math.min((usedAmount / card.credit_limit) * 100, 100) : 0;
             const managerialUsagePct = managerialLimit > 0 ? Math.min((usedAmount / managerialLimit) * 100, 100) : 0;
+            const summary = summaryMap.get(card.name);
 
             return (
               <Card key={card.id} className="relative overflow-hidden">
@@ -106,15 +114,45 @@ export default function Cartoes() {
                       <p className="font-semibold">{card.due_day}</p>
                     </div>
                   </div>
+
+                  {/* Resumo de lançamentos de fatura */}
+                  {summary && (
+                    <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        <Info className="h-3 w-3" /> Lançamentos de Fatura
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 text-xs">
+                        <div className="flex items-center gap-1">
+                          <TrendingDown className="h-3 w-3 text-[hsl(var(--success))]" />
+                          <div>
+                            <p className="text-muted-foreground">Realizado</p>
+                            <p className="font-semibold">{fmt(summary.historicalTotal)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="h-3 w-3 text-[hsl(var(--warning,45_93%_47%))]" />
+                          <div>
+                            <p className="text-muted-foreground">Previsto</p>
+                            <p className="font-semibold">{fmt(summary.projectedTotal)}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Hash className="h-3 w-3 text-muted-foreground" />
+                          <div>
+                            <p className="text-muted-foreground">Lançamentos</p>
+                            <p className="font-semibold">{summary.count}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Uso do Limite</span>
+                      <span className="text-muted-foreground">Uso do Limite (previsto)</span>
                       <span className="font-medium">{fmt(usedAmount)} / {fmt(card.credit_limit)}</span>
                     </div>
                     <Progress value={usagePct} className="h-2" />
-                    <p className="text-[11px] text-muted-foreground mt-1.5 italic">
-                      Baseado em faturas previstas (status planned) registradas em Lançamentos.
-                    </p>
                   </div>
                   {card.managerial_limit && card.managerial_limit < card.credit_limit && (
                     <div>
@@ -127,6 +165,10 @@ export default function Cartoes() {
                   )}
                   <p className="text-xs text-muted-foreground">
                     Entidade: {card.financial_entities?.name || "—"}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground italic flex items-center gap-1">
+                    <Info className="h-3 w-3" />
+                    Dados calculados a partir de lançamentos identificados por centro de custo.
                   </p>
                 </CardContent>
               </Card>

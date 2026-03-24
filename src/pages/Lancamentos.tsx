@@ -96,6 +96,8 @@ export default function Lancamentos() {
       const isCCInvoice = isCardInvoiceByCenterCost((t as any).center_cost) || isCardInvoice(t.categories?.name);
       if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
       if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
+      if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "BRA Pessoal")) return false;
+      if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "Nu Infotkt")) return false;
       if (filterMonth !== "all") {
         const monthStart = filterMonth + "-01";
         const [y, m] = filterMonth.split("-").map(Number);
@@ -120,11 +122,14 @@ export default function Lancamentos() {
         if (isCCInvoice) {
           const cardLabel = getCardNameFromCenterCost((r as any).center_cost) || getCardInvoiceLabel(r.categories?.name || "");
           return (
-            <div className="flex items-center gap-1.5">
-              <span>{r.description}</span>
-              <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
-                <CreditCard className="h-3 w-3" />{cardLabel || "Fatura"}
-              </Badge>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <span>Pagamento de Fatura — {cardLabel || "Cartão"}</span>
+                <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
+                  <CreditCard className="h-3 w-3" />Fatura
+                </Badge>
+              </div>
+              <span className="text-xs text-muted-foreground">{r.description}</span>
             </div>
           );
         }
@@ -203,7 +208,9 @@ export default function Lancamentos() {
           <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Fatura" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="card_invoice">Faturas de Cartão</SelectItem>
+            <SelectItem value="card_invoice">Todas Faturas</SelectItem>
+            <SelectItem value="bra_pessoal">BRA Pessoal</SelectItem>
+            <SelectItem value="nu_infotkt">Nu Infotkt</SelectItem>
             <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
           </SelectContent>
         </Select>
