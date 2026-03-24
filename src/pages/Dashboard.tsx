@@ -10,7 +10,7 @@ import {
   Landmark, PiggyBank, Scale, Target,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line,
 } from "recharts";
 import { format, subMonths, addMonths, startOfMonth } from "date-fns";
@@ -82,12 +82,12 @@ export default function Dashboard() {
 
   const {
     balance, balanceSplit, flow, forecast, cardSummary,
-    expensesByCategory, cashflowChart,
+    expensesByCategory,
     patrimony, patrimonyEvolution, investment,
   } = useDashboardData(view, selectedMonth);
 
-  const income = flow?.income_paid ?? 0;
-  const expense = flow?.expense_paid ?? 0;
+  const income = forecast.income_paid;
+  const expense = forecast.expense_paid;
   const result = income - expense;
 
   const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
@@ -96,11 +96,6 @@ export default function Dashboard() {
     ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
     : undefined;
 
-  const chartData = cashflowChart.map(d => ({
-    month: fmtMonth(d.reference_month),
-    Receitas: d.income_paid,
-    Despesas: d.expense_paid,
-  }));
 
   const patrimonyChartData = patrimonyEvolution.map(d => ({
     month: fmtMonth(d.reference_month),
@@ -257,30 +252,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ===== FLUXO MENSAL + TOP DESPESAS ===== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Fluxo Mensal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {chartData.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-12">Sem dados de fluxo mensal.</p>
-            ) : (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtShort} className="fill-muted-foreground" />
-                  <Tooltip formatter={(v: number) => fmtCur(v)} />
-                  <Bar dataKey="Receitas" fill="hsl(var(--chart-2))" radius={[3, 3, 0, 0]} />
-                  <Bar dataKey="Despesas" fill="hsl(var(--chart-5))" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
+      {/* ===== TOP DESPESAS POR CATEGORIA ===== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Top Despesas por Categoria</CardTitle>
@@ -317,6 +290,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Composição do Patrimônio</CardTitle>
+            <p className="text-lg font-bold text-foreground">{fmtCur(patrimony.total)}</p>
           </CardHeader>
           <CardContent>
             <HorizontalBreakdown items={patrimony.byCategory} label="patrimônio" />
@@ -328,6 +302,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Investimentos por Classe</CardTitle>
+            <p className="text-lg font-bold text-foreground">{fmtCur(investment.total)}</p>
           </CardHeader>
           <CardContent>
             <HorizontalBreakdown items={investment.byClass} label="investimentos" />
