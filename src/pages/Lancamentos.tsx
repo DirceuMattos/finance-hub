@@ -88,7 +88,13 @@ export default function Lancamentos() {
   const filtered = useMemo(() => {
     return data.filter((t) => {
       if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
-      if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
+      if (filterEntity === "all_personal") {
+        const et = (t.financial_entities as any)?.entity_type;
+        if (et !== "personal") return false;
+      } else if (filterEntity === "all_business") {
+        const et = (t.financial_entities as any)?.entity_type;
+        if (et !== "business") return false;
+      } else if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
       if (filterAccount !== "all" && t.account_id !== filterAccount) return false;
       if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
