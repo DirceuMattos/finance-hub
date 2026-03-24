@@ -237,6 +237,8 @@ export default function Lancamentos() {
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Entidade" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todas entidades</SelectItem>
+            <SelectItem value="all_personal">Todas Pessoais</SelectItem>
+            <SelectItem value="all_business">Todas Empresariais</SelectItem>
             {personalEntities.length > 0 && (
               <>
                 <SelectItem value="__personal_header" disabled className="text-xs font-semibold text-muted-foreground">— Pessoais —</SelectItem>
