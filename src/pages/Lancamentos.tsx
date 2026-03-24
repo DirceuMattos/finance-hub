@@ -208,7 +208,9 @@ export default function Lancamentos() {
           <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Fatura" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="card_invoice">Faturas de Cartão</SelectItem>
+            <SelectItem value="card_invoice">Todas Faturas</SelectItem>
+            <SelectItem value="bra_pessoal">BRA Pessoal</SelectItem>
+            <SelectItem value="nu_infotkt">Nu Infotkt</SelectItem>
             <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
           </SelectContent>
         </Select>

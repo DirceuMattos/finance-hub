@@ -7,7 +7,7 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Info } from "lucide-react";
 import { useCardPurchases } from "@/hooks/useCardPurchases";
 import { useCards } from "@/hooks/useCards";
 import { useCategories } from "@/hooks/useCategories";
@@ -123,7 +123,12 @@ export default function ComprasCartao() {
         </Select>
       </FilterBar>
 
-      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma compra parcelada registrada. Utilize o botão 'Nova' para cadastrar compras no cartão. As parcelas serão geradas automaticamente." />
+      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma compra parcelada registrada. Utilize o botão 'Nova' para cadastrar compras no cartão." />
+
+      <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
+        <Info className="h-3 w-3" />
+        Os dados atuais de cartão disponíveis no sistema vêm de lançamentos em Lançamentos (identificados por centro de custo). Compras parceladas detalhadas dependem de registros específicos nesta tela.
+      </p>
 
       <CardPurchaseForm
         open={formOpen}
