@@ -35,6 +35,7 @@ const navGroups = [
     label: "Visão Geral",
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Alertas", url: "/alertas", icon: Bell },
     ],
   },
   {
