@@ -73,6 +73,8 @@ export interface Transaction {
   due_date: string | null;
   payment_date: string | null;
   status: string;
+  installment_number: number | null;
+  installment_total: number | null;
   payment_method: string | null;
   source_type: string | null;
   source_id: string | null;
