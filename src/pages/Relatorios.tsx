@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Download, FileSpreadsheet } from "lucide-react";
-import AppLayout from "@/components/layout/AppLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import {
   Accordion,
