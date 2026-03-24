@@ -98,17 +98,16 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.setError("amount", { message: "Valor inválido" });
       return;
     }
-    const { is_card_movement, ...rest } = data;
     const payload: any = {
-      ...rest,
+      ...data,
       category_id: data.category_id || null,
       account_id: data.account_id || null,
       notes: data.notes || null,
+      center_cost: data.center_cost || null,
       amount: parsedAmount,
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
       payment_date: data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
-      source_type: is_card_movement ? "card" : null,
     };
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
   };
