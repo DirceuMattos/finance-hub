@@ -10,8 +10,6 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
@@ -29,7 +27,7 @@ const schema = z.object({
   payment_date: z.date().optional().nullable(),
   status: z.string().min(1, "Status é obrigatório"),
   notes: z.string().max(500).optional().nullable(),
-  is_card_movement: z.boolean().optional(),
+  center_cost: z.string().optional().nullable(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -51,7 +49,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-      status: "planned", notes: "", is_card_movement: false,
+      status: "planned", notes: "", center_cost: "",
     },
   });
 
@@ -81,13 +79,13 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
         status: transaction.status,
         notes: transaction.notes || "",
-        is_card_movement: transaction.source_type === "card",
+        center_cost: (transaction as any).center_cost || "",
       });
     } else {
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-        status: "planned", notes: "", is_card_movement: false,
+        status: "planned", notes: "", center_cost: "",
       });
     }
   }, [transaction, open]);
@@ -98,17 +96,16 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.setError("amount", { message: "Valor inválido" });
       return;
     }
-    const { is_card_movement, ...rest } = data;
     const payload: any = {
-      ...rest,
+      ...data,
       category_id: data.category_id || null,
       account_id: data.account_id || null,
       notes: data.notes || null,
+      center_cost: data.center_cost || null,
       amount: parsedAmount,
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
       payment_date: data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
-      source_type: is_card_movement ? "card" : null,
     };
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
   };
@@ -237,15 +234,18 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <DateField name="payment_date" label="Pagamento" />
           </div>
 
-          <FormField control={form.control} name="is_card_movement" render={({ field }) => (
-            <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-md border p-3">
-              <FormControl>
-                <Checkbox checked={field.value || false} onCheckedChange={field.onChange} />
-              </FormControl>
-              <div className="flex flex-col gap-0.5">
-                <Label className="text-sm font-medium cursor-pointer">Movimentação de Cartão de Crédito</Label>
-                <span className="text-xs text-muted-foreground">Marcar se este lançamento é pagamento de fatura de cartão</span>
-              </div>
+          <FormField control={form.control} name="center_cost" render={({ field }) => (
+            <FormItem><FormLabel>Cartão de Crédito</FormLabel><FormControl>
+              <Select onValueChange={field.onChange} value={field.value || ""}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum</SelectItem>
+                  <SelectItem value="Cartões de Crédito - Pessoal">BRA Pessoal</SelectItem>
+                  <SelectItem value="Cartões de Crédito - Prof.">Nu Infotkt</SelectItem>
+                </SelectContent>
+              </Select>
+            </FormControl>
+            <span className="text-xs text-muted-foreground">Selecione se este lançamento é pagamento de fatura de cartão</span>
             </FormItem>
           )} />
 
