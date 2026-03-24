@@ -35,6 +35,7 @@ export function DataTable<T extends object>({
   emptyMessage = "Nenhum registro encontrado.",
   defaultSortKey,
   defaultSortDir = "asc",
+  className,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(defaultSortDir);
