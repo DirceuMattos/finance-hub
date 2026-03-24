@@ -12,6 +12,7 @@ import {
   LogOut,
   DollarSign,
   Bell,
+  FileDown,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -59,6 +60,12 @@ const navGroups = [
     items: [
       { title: "Patrimônio", url: "/patrimonio", icon: Landmark },
       { title: "Investimentos", url: "/investimentos", icon: PieChart },
+    ],
+  },
+  {
+    label: "Relatórios",
+    items: [
+      { title: "Relatórios", url: "/relatorios", icon: FileDown },
     ],
   },
   {

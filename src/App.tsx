@@ -14,6 +14,7 @@ import Configuracoes from "./pages/Configuracoes";
 import Patrimonio from "./pages/Patrimonio";
 import Investimentos from "./pages/Investimentos";
 import Alertas from "./pages/Alertas";
+import Relatorios from "./pages/Relatorios";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -36,6 +37,7 @@ const App = () => (
           <Route path="/investimentos" element={<Investimentos />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
           <Route path="/alertas" element={<Alertas />} />
+          <Route path="/relatorios" element={<Relatorios />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
