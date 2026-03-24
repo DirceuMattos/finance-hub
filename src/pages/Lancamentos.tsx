@@ -99,7 +99,6 @@ export default function Lancamentos() {
     }
     return accounts;
   }, [accounts, filterEntity, personalEntities, businessEntities]);
-  const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
   const filtered = useMemo(() => {
