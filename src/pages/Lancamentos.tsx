@@ -221,6 +221,17 @@ export default function Lancamentos() {
         </TabsList>
       </Tabs>
 
+      {filterEntity !== "all" && (
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm text-muted-foreground">Visualizando:</span>
+          {filterEntity === "all_personal" && <Badge variant="outline" className="border-primary text-primary">Pessoal</Badge>}
+          {filterEntity === "all_business" && <Badge variant="outline" className="border-accent-foreground text-accent-foreground">Empresa</Badge>}
+          {filterEntity !== "all_personal" && filterEntity !== "all_business" && (
+            <Badge variant="outline">{entities.find(e => e.id === filterEntity)?.name}</Badge>
+          )}
+        </div>
+      )}
+
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento...">
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
