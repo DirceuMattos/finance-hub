@@ -96,6 +96,8 @@ export default function Lancamentos() {
       const isCCInvoice = isCardInvoiceByCenterCost((t as any).center_cost) || isCardInvoice(t.categories?.name);
       if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
       if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
+      if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "BRA Pessoal")) return false;
+      if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "Nu Infotkt")) return false;
       if (filterMonth !== "all") {
         const monthStart = filterMonth + "-01";
         const [y, m] = filterMonth.split("-").map(Number);
