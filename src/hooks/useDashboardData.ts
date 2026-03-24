@@ -131,16 +131,30 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- Forecast ---
+  // --- Forecast (sanitize future months: paid→planned) ---
   const flow = monthlyFlow.data;
+  const currentMonthStart = format(startOfMonth(new Date()), "yyyy-MM-dd");
+  const isFutureMonth = start > currentMonthStart;
+
+  const sanitizedFlow = {
+    income_paid: isFutureMonth ? 0 : (flow?.income_paid ?? 0),
+    income_planned: isFutureMonth
+      ? (flow?.income_paid ?? 0) + (flow?.income_planned ?? 0)
+      : (flow?.income_planned ?? 0),
+    expense_paid: isFutureMonth ? 0 : (flow?.expense_paid ?? 0),
+    expense_planned: isFutureMonth
+      ? (flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0)
+      : (flow?.expense_planned ?? 0),
+  };
+
   const forecast: MonthForecast = {
-    income_paid: flow?.income_paid ?? 0,
-    income_planned: flow?.income_planned ?? 0,
-    expense_paid: flow?.expense_paid ?? 0,
-    expense_planned: flow?.expense_planned ?? 0,
-    total_income: (flow?.income_paid ?? 0) + (flow?.income_planned ?? 0),
-    total_expense: (flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0),
-    forecast_result: ((flow?.income_paid ?? 0) + (flow?.income_planned ?? 0)) - ((flow?.expense_paid ?? 0) + (flow?.expense_planned ?? 0)),
+    income_paid: sanitizedFlow.income_paid,
+    income_planned: sanitizedFlow.income_planned,
+    expense_paid: sanitizedFlow.expense_paid,
+    expense_planned: sanitizedFlow.expense_planned,
+    total_income: sanitizedFlow.income_paid + sanitizedFlow.income_planned,
+    total_expense: sanitizedFlow.expense_paid + sanitizedFlow.expense_planned,
+    forecast_result: (sanitizedFlow.income_paid + sanitizedFlow.income_planned) - (sanitizedFlow.expense_paid + sanitizedFlow.expense_planned),
   };
 
   // --- Card summary via center_cost (FILTERED BY MONTH) ---
