@@ -116,13 +116,14 @@ export default function Lancamentos() {
     {
       key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
       render: (r) => {
-        const catName = r.categories?.name;
-        if (isCardInvoice(catName)) {
+        const isCCInvoice = isCardInvoiceByCenterCost((r as any).center_cost) || isCardInvoice(r.categories?.name);
+        if (isCCInvoice) {
+          const cardLabel = getCardNameFromCenterCost((r as any).center_cost) || getCardInvoiceLabel(r.categories?.name || "");
           return (
             <div className="flex items-center gap-1.5">
               <span>{r.description}</span>
               <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
-                <CreditCard className="h-3 w-3" />Fatura
+                <CreditCard className="h-3 w-3" />{cardLabel || "Fatura"}
               </Badge>
             </div>
           );
