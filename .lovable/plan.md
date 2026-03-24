@@ -1,83 +1,79 @@
 
 
-## Plano: Dashboard Executivo com Dados Reais
+## Plano: Refinamento do Dashboard para Decisão Financeira Mensal
 
-### Visão geral
+### Problema atual
 
-Evoluir o Dashboard existente para um painel executivo completo com 5 seções: Resumo Executivo, Cartões, Fluxo Mensal, Patrimônio e Investimentos. Usar exclusivamente dados já existentes no banco.
+1. **Cartões somam ALL-TIME** — a query de `cardSummary` busca todas as transactions sem filtro de mês, acumulando totais históricos completos
+2. **Layout chapado** — 6 cards na mesma linha sem hierarquia visual
+3. **Sem previsão de fechamento** — o indicador mais importante (resultado previsto do mês) não existe
+4. **Sem cores semânticas** — verde/vermelho não são usados para positivo/negativo
 
-### Arquitetura de dados
+### Alterações
 
-| Seção | Fonte de dados | Queries |
-|---|---|---|
-| Resumo Executivo | `accounts`, `transactions`, `patrimony_snapshots`, `investment_snapshots` | Saldos, fluxo mensal, último snapshot |
-| Cartões | `transactions` (center_cost) | Filtro por `CARD_INVOICE_CENTER_COSTS` |
-| Fluxo Mensal | Views `vw_monthly_cashflow_*` | Já existente, manter |
-| Patrimônio | `patrimony_snapshots`, `vw_patrimony_evolution` | Último mês + evolução |
-| Investimentos | `investment_snapshots`, `investment_classes` | Último mês, agrupado por classe |
+**1. `src/hooks/useDashboardData.ts`**
 
-### Alterações por arquivo
+- **Corrigir cardSummary**: filtrar por `competence_date` dentro do mês selecionado (usar `start`/`end`). Dentro do mês, separar "pago" (status=paid) vs "previsto" (status=planned) em vez do cutoff fixo
+- **Adicionar previsão de fechamento**: novo campo `forecast` que calcula:
+  - `income_paid + income_planned` (receitas realizadas + previstas)
+  - `expense_paid + expense_planned` (despesas realizadas + previstas)
+  - `forecast_result = total_income - total_expense`
+  - Fonte: view `vw_monthly_cashflow_*` que já tem `income_planned`, `income_paid`, `expense_planned`, `expense_paid`
+- Retornar `flow` completo (com planned + paid separados) em vez de apenas paid
 
-**1. `src/hooks/useDashboardData.ts` — Expandir**
+**2. `src/pages/Dashboard.tsx`**
 
-Adicionar novas queries ao hook existente:
-
-- `accountBalancesSplit`: retornar saldo pessoal E empresarial separados (além do consolidado)
-- `patrimonyTotal`: último mês de `patrimony_snapshots` → soma `closing_value` (filtrado por view)
-- `investmentTotal`: último mês de `investment_snapshots` → soma `closing_value` (filtrado por view)
-- `patrimonyByCategory`: breakdown do último mês por `asset_categories.name`
-- `investmentByClass`: breakdown do último mês por `investment_classes.name`
-- `patrimonyEvolution`: dados de `vw_patrimony_evolution` para gráfico de linha
-- `cardSummary`: reusar lógica de `useCardInvoiceSummaryByCard` inline (totais histórico/futuro por cartão, usando `center_cost`)
-
-Retornar tudo no objeto de retorno do hook.
-
-**2. `src/pages/Dashboard.tsx` — Redesenhar layout**
-
-Layout em seções verticais:
+Layout reorganizado:
 
 ```text
 [Filtros: Consolidado | Pessoal | Empresa] [Mês]
 
-[Saldo Atual] [Receitas] [Despesas] [Saldo Mês] [Patrimônio] [Investido]
-  (com sub-labels pessoal/empresa no saldo)
+LINHA 1 — Operacional (4 cards):
+[Saldo Atual] [Receitas do Mês] [Despesas do Mês] [Resultado do Mês]
 
-[Cartões - BRA Pessoal]     [Cartões - Nu Infotkt]
-  Histórico: R$ X             Histórico: R$ X
-  Previsto: R$ X              Previsto: R$ X
-  Lançamentos: N              Lançamentos: N
+LINHA 2 — Estrutural (2 cards):
+[Patrimônio Total] [Total Investido]
 
-[Fluxo Mensal - BarChart]   [Top Despesas por Categoria]
+BLOCO DESTAQUE — Previsão de Fechamento:
+Card grande com:
+  - Receitas (realizadas + previstas)
+  - Despesas (realizadas + previstas)
+  - Resultado previsto (verde se positivo, vermelho se negativo)
 
-[Patrimônio - LineChart]    [Composição Patrimônio - barras horizontais]
+CARTÕES (filtrados pelo mês):
+  - Pago no mês / Previsto no mês / Qtd lançamentos
 
-[Investimentos por Classe - barras horizontais ou donut simplificado]
+TOP DESPESAS POR CATEGORIA
+
+PATRIMÔNIO + INVESTIMENTOS (compacto, gráficos de linha + breakdown)
 ```
 
-- Cores: verde para receitas/entradas, vermelho para despesas/saídas
-- Formato monetário pt-BR
-- Manter filtro de entidade (tabs) e mês (select)
-- Seções de patrimônio e investimentos mostram "Sem dados" se snapshots estiverem vazios
+- **Cores semânticas**: valor positivo em `text-emerald-600`, negativo em `text-red-600`
+- **StatCard**: adicionar prop `variant` (positive/negative/neutral) para colorir o valor
+- **Resultado do mês** e **Previsão** com destaque visual (borda colorida ou background sutil)
 
-**3. `src/components/shared/StatCard.tsx` — Adicionar suporte a sub-label**
+**3. `src/components/shared/StatCard.tsx`**
 
-Adicionar prop opcional `subLabel` para mostrar detalhamento (ex: "Pessoal: R$ X | Empresa: R$ Y") abaixo do valor principal.
+- Adicionar prop `variant?: "positive" | "negative" | "neutral"` que aplica cor ao valor:
+  - positive → `text-emerald-600`
+  - negative → `text-red-600`
+  - neutral → `text-foreground` (default)
 
-### Regras de negócio aplicadas
+### Queries alteradas
 
-- **Cartões via center_cost**: Usar `CARD_INVOICE_CENTER_COSTS` (singular e plural) do `cardInvoiceRules.ts`
-- **Temporal**: `<= 2026-02-25` = histórico, `>= 2026-02-26` = futuro (somente UX, sem alterar status do banco)
-- **Patrimônio**: Pegar o `reference_month` mais recente disponível em `patrimony_snapshots`
-- **Investimentos**: Pegar o `reference_month` mais recente em `investment_snapshots`
-- **Filtro por entidade**: Usar `financial_entity_id` em todas as queries quando view != consolidated
+| Query | Antes | Depois |
+|---|---|---|
+| `cardSummary` | Todas as transactions all-time | Filtrado por `competence_date` do mês selecionado |
+| `monthlyFlow` | Retorna apenas paid | Retorna `income_paid`, `income_planned`, `expense_paid`, `expense_planned` |
+| Previsão | Não existia | `(income_paid + income_planned) - (expense_paid + expense_planned)` |
 
 ### Arquivos alterados
 
 | Arquivo | O que muda |
 |---|---|
-| `src/hooks/useDashboardData.ts` | Adicionar queries de patrimônio, investimentos, cartões, saldos split |
-| `src/pages/Dashboard.tsx` | Layout executivo com 5 seções, gráficos de patrimônio e investimentos |
-| `src/components/shared/StatCard.tsx` | Prop `subLabel` opcional |
+| `src/hooks/useDashboardData.ts` | Filtro mensal nos cartões, previsão de fechamento, flow completo |
+| `src/pages/Dashboard.tsx` | Layout 2 linhas, bloco previsão, cores semânticas |
+| `src/components/shared/StatCard.tsx` | Prop `variant` para cores |
 
-Sem alteração no banco. Sem novas tabelas. Sem dados fictícios.
+Sem alteração no banco. Sem novas tabelas.
 
