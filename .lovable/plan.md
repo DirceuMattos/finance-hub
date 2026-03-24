@@ -1,53 +1,54 @@
 
 
-## Plano: Usar `center_cost` para identificar faturas de cartão
+## Plano: Integração completa do módulo de Cartões via `center_cost`
 
 ### Diagnóstico
 
-As transações no banco **não usam** as categorias "Cartões de Crédito - Pessoal" / "Cartões de Crédito - Prof." para identificar faturas de cartão. Em vez disso, mantêm sua categoria original (SUPERMERCADO, APLICATIVOS, etc.) e usam o campo `center_cost` para indicar a qual cartão pertencem:
+O código atual já filtra por `center_cost` no hook `useCardInvoiceTransactions`, mas há dois problemas:
 
-- `center_cost = "Cartão de Crédito - Pessoal"` → BRA Pessoal
-- `center_cost = "Cartão de Crédito - Prof."` → Nu Infotkt (a confirmar valor exato)
+1. **Valores de `center_cost` inconsistentes** — O código usa `"Cartão de Crédito - Prof."` (singular) mas os dados reais no banco usam `"Cartões de Crédito - Prof."` (plural). Precisa suportar ambas as variantes.
+2. **Dados subutilizados** — As telas de Cartões e Faturas Projetadas consomem os dados mas não exibem resumos ricos (histórico vs. futuro, contagens).
 
-### Alterações
+### Alterações por arquivo
 
 **1. `src/lib/cardInvoiceRules.ts`**
-
-Trocar critério de filtro de categoria para `center_cost`:
-
-```text
-CARD_INVOICE_CENTER_COSTS = [
-  "Cartão de Crédito - Pessoal",
-  "Cartão de Crédito - Prof.",
-]
-
-CENTER_COST_CARD_MAP = {
-  "Cartão de Crédito - Pessoal": "BRA Pessoal",
-  "Cartão de Crédito - Prof.": "Nu Infotkt",
-}
-```
+- Incluir ambos os formatos (singular e plural) nos arrays de `center_cost` para cobrir variações nos dados
+- Adicionar mapeamento `CENTER_COST_ENTITY_MAP` (center_cost → "personal"/"business")
+- Adicionar `CUTOFF_DATE` para regra temporal de leitura UX
 
 **2. `src/hooks/useCardInvoiceTransactions.ts`**
+- Expor dados separados: total histórico (paid), total futuro (planned), contagem por cartão
+- Nova função `useCardInvoiceSummaryByCard()` retornando `{ paidTotal, plannedTotal, count }` por cartão
+- Aplicar regra temporal UX: `competence_date <= 2026-02-25` = histórico, `>= 2026-02-26` = futuro (sem sobrescrever status do banco)
 
-- Alterar query para incluir `center_cost` no select
-- Filtrar por `center_cost` em vez de `categories.name`
-- Mapear usando `CENTER_COST_CARD_MAP` em vez de `CARD_MAP`
+**3. `src/pages/Cartoes.tsx`**
+- Adicionar seção resumo por cartão: total histórico, total futuro previsto, contagem de lançamentos
+- Manter barras de progresso existentes (uso do limite)
+- Nota contextual: "Dados calculados a partir de lançamentos identificados por centro de custo"
 
-**3. `src/pages/Lancamentos.tsx`**
+**4. `src/pages/FaturasProjetadas.tsx`**
+- Exibir leitura auxiliar de pagamentos históricos/futuros de cartão vindos de `transactions.center_cost`
+- Nota contextual: "Dados provenientes de lançamentos por centro de custo. Parcelas detalhadas dependem de carga em Compras no Cartão"
+- Sem inventar parcelas
 
-- Atualizar a identificação de "fatura de cartão" para usar `center_cost` (se houver badge ou filtro baseado em categoria)
+**5. `src/pages/ComprasCartao.tsx`**
+- Adicionar nota contextual informando que dados atuais de cartão vêm de `transactions.center_cost` e que compras parceladas detalhadas dependem de carga em `card_purchases`
 
-### Verificação necessária
-
-Antes de implementar, preciso confirmar o valor exato de `center_cost` para o cartão profissional. Dos dados vistos, só apareceu "Cartão de Crédito - Pessoal". Preciso buscar se há transações com center_cost referente ao cartão profissional.
+**6. `src/pages/Lancamentos.tsx`**
+- Descrição de card invoice: "Pagamento de Fatura — BRA Pessoal" / "Pagamento de Fatura — Nu Infotkt"
+- Adicionar filtros por cartão específico (BRA Pessoal / Nu Infotkt) no dropdown de fatura de cartão
+- Manter registros como transactions, sem conversão
 
 ### Arquivos alterados
 
-| Arquivo | Alteração |
+| Arquivo | O que muda |
 |---|---|
-| `src/lib/cardInvoiceRules.ts` | Novo mapeamento por `center_cost` |
-| `src/hooks/useCardInvoiceTransactions.ts` | Filtrar por `center_cost` em vez de categoria |
-| `src/pages/Lancamentos.tsx` | Ajustar identificação de fatura (se aplicável) |
+| `src/lib/cardInvoiceRules.ts` | Suportar variantes singular/plural, entity map, cutoff |
+| `src/hooks/useCardInvoiceTransactions.ts` | Resumo por cartão (histórico/futuro/contagem) |
+| `src/pages/Cartoes.tsx` | Totais histórico/futuro, contagem, nota contextual |
+| `src/pages/FaturasProjetadas.tsx` | Leitura auxiliar de transactions, nota contextual |
+| `src/pages/ComprasCartao.tsx` | Nota contextual sobre fonte dos dados |
+| `src/pages/Lancamentos.tsx` | Rótulo "Pagamento de Fatura", filtro por cartão |
 
-Sem alteração no banco. Sem novas tabelas.
+Sem alteração no banco. Sem novas tabelas. Sem duplicação de dados.
 
