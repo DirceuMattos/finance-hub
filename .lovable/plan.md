@@ -1,69 +1,47 @@
 
 
-## Plano: Módulo de Relatórios com Exportação
+## Plano: Ativar CRUD completo e gráfico no módulo Patrimônio
 
-### Arquivos a criar/modificar
+### Estado atual
+
+A página `Patrimonio.tsx` já tem listagem read-only com tabs Pessoal/Empresa/Consolidado, stat cards e tabela. O hook `usePatrimony.ts` tem queries de leitura (`usePatrimonySnapshots`, `usePatrimonyEvolution`, `useAssetCategories`). Falta CRUD e gráfico de evolução.
+
+### Alterações
 
 | Arquivo | Ação |
 |---|---|
-| `src/pages/Relatorios.tsx` | **Criar** — página com 5 seções de exportação, filtros e botões de download |
-| `src/lib/exportUtils.ts` | **Criar** — utilitário genérico de exportação CSV/XLSX |
-| `src/App.tsx` | **Modificar** — adicionar rota `/relatorios` |
-| `src/components/layout/AppSidebar.tsx` | **Modificar** — adicionar link "Relatórios" no sidebar |
+| `src/hooks/usePatrimony.ts` | Adicionar mutations `create`, `update`, `remove` para `patrimony_snapshots` |
+| `src/components/patrimonio/PatrimonyForm.tsx` | **Criar** — formulário em drawer para criar/editar snapshot |
+| `src/pages/Patrimonio.tsx` | Adicionar botão "Novo", ações editar/excluir na tabela, gráfico de evolução, mensagem de histórico insuficiente |
 
-### Dependência
+### Detalhes
 
-Instalar `xlsx` (SheetJS) para exportação XLSX.
+**1. `usePatrimony.ts` — adicionar CRUD**
+- `createSnapshot`: insert em `patrimony_snapshots` com campos `reference_month`, `item_name`, `asset_category_id`, `financial_entity_id`, `opening_value`, `closing_value`, `notes`
+- `updateSnapshot`: update por `id`
+- `removeSnapshot`: delete por `id`
+- Invalidar queryKey `patrimony_snapshots` e `vw_patrimony_evolution` no success
+- Padrão idêntico ao `useFinancialEntities` (mutations com toast)
 
-### Estrutura da página `/relatorios`
+**2. `PatrimonyForm.tsx` — formulário em drawer**
+- Usa `FormDrawer` existente
+- Campos: Mês referência (input month), Item (text), Categoria (select de `useAssetCategories`), Entidade (select de `useFinancialEntities`), Valor abertura (number), Valor fechamento (number), Notas (textarea)
+- Modo criação e edição (preenche form com dados do snapshot selecionado)
+- Validação com Zod: item_name required, closing_value required, reference_month required
 
-5 seções em Accordion ou Tabs, cada uma com filtros específicos e botão "Exportar CSV" / "Exportar XLSX":
+**3. `Patrimonio.tsx` — CRUD + gráfico**
+- Botão "Novo registro" no `PageHeader` abre drawer
+- Colunas de ação na tabela: editar (Pencil) e excluir (Trash2)
+- Excluir usa `DeleteDialog` existente
+- Gráfico de evolução: `LineChart` do Recharts usando `vw_patrimony_evolution`
+  - Eixo X: `reference_month` formatado
+  - Linhas: `total_assets`, `total_liabilities`, `net_patrimony`
+  - Respeita filtro de entidade (pessoal/empresa/consolidado com agregação)
+  - Se `< 2 meses` de dados: exibir "Histórico insuficiente para análise"
+- Gráfico posicionado entre stat cards e tabela
 
-**1. Lançamentos**
-- Filtros: mês/ano (select), conta (select from `useAccounts`), status (select), entidade (select from `useFinancialEntities`), categoria (select from `useCategories`)
-- Query: `useTransactions` — filtragem no frontend (dados já carregados com joins)
-- Colunas exportadas: Vencimento, Mês do Evento, Descrição, Tipo, Categoria (nome), Entidade (nome), Conta (nome), Valor, Status, Data Pagamento
-
-**2. Recorrências**
-- Sem filtros (tabela `recurrences` do banco externo — dados limitados por enquanto)
-- Query direta: `supabase.from("recurrences").select("*")`
-- Exportar todas as colunas disponíveis com nomes legíveis
-
-**3. Cartões**
-- Filtros: mês/ano, cartão (select from `useCards`)
-- Query: `useCardPurchases` — filtrar por `purchase_date` e `card_id`
-- Colunas: Data Compra, Descrição, Cartão (nome), Categoria (nome), Entidade (nome), Valor Total, Parcelas, Valor Parcela, Status
-
-**4. Investimentos**
-- Sem filtros complexos (exporta snapshot mais recente ou todos)
-- Query: `useInvestmentSnapshots`
-- Colunas: Mês Referência, Classe (nome), Entidade (nome), Valor Abertura, Valor Fechamento
-
-**5. Patrimônio**
-- Sem filtros complexos
-- Query: `usePatrimonySnapshots`
-- Colunas: Mês Referência, Item, Categoria (nome), Tipo Ativo, Entidade (nome), Valor Abertura, Valor Fechamento
-
-### `exportUtils.ts`
-
-Função genérica:
-```
-exportToFile(data: Record<string, any>[], columns: {key, header}[], filename: string, format: "csv" | "xlsx")
-```
-- CSV: gera string com headers + linhas, download via Blob
-- XLSX: usa biblioteca `xlsx` (SheetJS) para criar workbook com headers e dados formatados
-
-### Fluxo do usuário
-
-1. Acessa `/relatorios`
-2. Seleciona seção (ex: Lançamentos)
-3. Aplica filtros desejados
-4. Clica "Exportar XLSX" ou "Exportar CSV"
-5. Download automático do arquivo com dados filtrados, usando nomes (não IDs)
-
-### O que NÃO será feito
-- Zero recálculo de lógica no frontend
-- Nenhum dado simulado
-- Nenhuma alteração de schema
-- Nenhum backend novo
+### O que NAO sera feito
+- Zero alteração no banco/schema
+- Zero recálculo — evolução vem de `vw_patrimony_evolution`
+- Nenhuma tabela nova
 
