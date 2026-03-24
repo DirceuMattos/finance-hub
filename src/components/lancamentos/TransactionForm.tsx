@@ -237,6 +237,18 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <DateField name="payment_date" label="Pagamento" />
           </div>
 
+          <FormField control={form.control} name="is_card_movement" render={({ field }) => (
+            <FormItem className="flex flex-row items-center gap-3 space-y-0 rounded-md border p-3">
+              <FormControl>
+                <Checkbox checked={field.value || false} onCheckedChange={field.onChange} />
+              </FormControl>
+              <div className="flex flex-col gap-0.5">
+                <Label className="text-sm font-medium cursor-pointer">Movimentação de Cartão de Crédito</Label>
+                <span className="text-xs text-muted-foreground">Marcar se este lançamento é pagamento de fatura de cartão</span>
+              </div>
+            </FormItem>
+          )} />
+
           <FormField control={form.control} name="notes" render={({ field }) => (
             <FormItem><FormLabel>Observações</FormLabel><FormControl><Textarea rows={3} {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
