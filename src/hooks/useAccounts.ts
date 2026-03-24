@@ -42,7 +42,7 @@ export function useAccounts() {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       toast.success("Conta atualizada");
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const remove = useMutation({
