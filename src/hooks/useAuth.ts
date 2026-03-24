@@ -36,7 +36,7 @@ export function useAuth() {
       (f) => f.factor_type === "totp" && f.status === "verified"
     );
     if (!hasVerifiedTotp) return false;
-    const aal = session.user?.aal ?? "aal1";
+    const aal = (session as any)?.aal ?? "aal1";
     return aal !== "aal2";
   };
 
