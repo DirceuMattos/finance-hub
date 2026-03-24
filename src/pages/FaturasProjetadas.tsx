@@ -26,6 +26,7 @@ export default function FaturasProjetadas() {
   const { projections, isLoading } = useCardInvoiceProjections();
   const [filterCard, setFilterCard] = useState("all");
   const [search, setSearch] = useState("");
+  const [includePast, setIncludePast] = useState(false);
 
   const currentMonth = format(new Date(), "yyyy-MM");
 
@@ -37,7 +38,7 @@ export default function FaturasProjetadas() {
 
   const rows = useMemo(() => {
     return projections
-      .filter((p) => p.billing_month >= currentMonth)
+      .filter((p) => includePast || p.billing_month >= currentMonth)
       .map((p): BillingRow => ({
         key: `${p.card_name}_${p.billing_month}`,
         card_name: p.card_name,
@@ -48,7 +49,7 @@ export default function FaturasProjetadas() {
         planned_amount: p.status === "planned" ? p.total_amount : 0,
         count: p.invoices_count,
       }));
-  }, [projections, currentMonth]);
+  }, [projections, currentMonth, includePast]);
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {

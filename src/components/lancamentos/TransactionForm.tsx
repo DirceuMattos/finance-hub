@@ -1,9 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FormDrawer } from "@/components/shared/FormDrawer";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { useCategories } from "@/hooks/useCategories";
 import type { Transaction, FinancialEntity, Account, Category } from "@/types/database";
 
 const schema = z.object({
@@ -28,6 +29,8 @@ const schema = z.object({
   status: z.string().min(1, "Status é obrigatório"),
   notes: z.string().max(500).optional().nullable(),
   center_cost: z.string().optional().nullable(),
+  installment_number: z.coerce.number().min(1).optional().nullable(),
+  installment_total: z.coerce.number().min(1).optional().nullable(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -44,18 +47,22 @@ interface Props {
 }
 
 export function TransactionForm({ open, onOpenChange, transaction, entities, accounts, categories, onSubmit, loading }: Props) {
+  const { create: createCategory } = useCategories();
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
       status: "planned", notes: "", center_cost: "",
+      installment_number: 1, installment_total: 1,
     },
   });
 
   const watchAccountId = form.watch("account_id");
 
-  // Auto-fill entity when account is selected
   useEffect(() => {
     if (watchAccountId && watchAccountId !== "none" && watchAccountId !== "") {
       const account = accounts.find(a => a.id === watchAccountId);
@@ -80,14 +87,19 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         status: transaction.status,
         notes: transaction.notes || "",
         center_cost: (transaction as any).center_cost || "",
+        installment_number: transaction.installment_number ?? 1,
+        installment_total: transaction.installment_total ?? 1,
       });
     } else {
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
         status: "planned", notes: "", center_cost: "",
+        installment_number: 1, installment_total: 1,
       });
     }
+    setCreatingCategory(false);
+    setNewCategoryName("");
   }, [transaction, open]);
 
   const handleSubmit = (data: FormData) => {
@@ -106,8 +118,20 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
       payment_date: data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
+      installment_number: data.installment_number || 1,
+      installment_total: data.installment_total || 1,
     };
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
+  };
+
+  const handleCreateCategory = () => {
+    if (!newCategoryName.trim()) return;
+    createCategory.mutate({ name: newCategoryName.trim(), is_active: true } as any, {
+      onSuccess: () => {
+        setCreatingCategory(false);
+        setNewCategoryName("");
+      },
+    });
   };
 
   const personalEntities = entities.filter(e => e.is_active && e.entity_type === "personal");
@@ -170,16 +194,38 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             )} />
           </div>
 
+          {/* Categoria com criação inline */}
           <FormField control={form.control} name="category_id" render={({ field }) => (
-            <FormItem><FormLabel>Categoria</FormLabel><FormControl>
-              <Select onValueChange={field.onChange} value={field.value || ""}>
-                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhuma</SelectItem>
-                  {categories.filter(c => c.is_active).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FormControl><FormMessage /></FormItem>
+            <FormItem>
+              <FormLabel>Categoria</FormLabel>
+              <FormControl>
+                <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Nenhuma</SelectItem>
+                    {categories.filter(c => c.is_active).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              {!creatingCategory ? (
+                <Button type="button" variant="ghost" size="sm" className="h-7 text-xs text-primary gap-1 px-1" onClick={() => setCreatingCategory(true)}>
+                  <PlusCircle className="h-3 w-3" /> Nova categoria
+                </Button>
+              ) : (
+                <div className="flex gap-2 mt-1">
+                  <Input
+                    placeholder="Nome da categoria"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="h-8 text-xs"
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreateCategory(); } }}
+                  />
+                  <Button type="button" size="sm" className="h-8 text-xs" onClick={handleCreateCategory} disabled={createCategory.isPending}>Criar</Button>
+                  <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setCreatingCategory(false); setNewCategoryName(""); }}>✕</Button>
+                </div>
+              )}
+              <FormMessage />
+            </FormItem>
           )} />
 
           <FormField control={form.control} name="account_id" render={({ field }) => (
@@ -219,6 +265,16 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
           <FormField control={form.control} name="amount" render={({ field }) => (
             <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="text" inputMode="decimal" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
+
+          {/* Parcela */}
+          <div className="grid grid-cols-2 gap-3">
+            <FormField control={form.control} name="installment_number" render={({ field }) => (
+              <FormItem><FormLabel>Parcela Nº</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
+            )} />
+            <FormField control={form.control} name="installment_total" render={({ field }) => (
+              <FormItem><FormLabel>Total Parcelas</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
+            )} />
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <FormField control={form.control} name="competence_date" render={({ field }) => (

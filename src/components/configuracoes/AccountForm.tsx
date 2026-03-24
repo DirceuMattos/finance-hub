@@ -97,7 +97,15 @@ export function AccountForm({ open, onOpenChange, account, entities, onSubmit, l
               <FormItem><FormLabel>Saldo Inicial</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
             )} />
             <FormField control={form.control} name="current_balance" render={({ field }) => (
-              <FormItem><FormLabel>Saldo Atual</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem>
+                <FormLabel className="flex items-center gap-1">
+                  Saldo Atual
+                  <span className="text-[10px] text-muted-foreground font-normal" title="Idealmente derivado de saldo inicial + lançamentos realizados">(calculado)</span>
+                </FormLabel>
+                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <span className="text-[10px] text-muted-foreground">Saldo derivado do saldo inicial + lançamentos. Ajuste manualmente se necessário.</span>
+                <FormMessage />
+              </FormItem>
             )} />
           </div>
           <FormField control={form.control} name="currency" render={({ field }) => (
