@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase as extSupabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+
+const FUNCTIONS_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
 
 interface AppUser {
   id: string;
@@ -9,16 +11,33 @@ interface AppUser {
   last_sign_in_at: string | null;
 }
 
+async function getExtToken() {
+  const { data } = await extSupabase.auth.getSession();
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("Sessão expirada. Faça login novamente.");
+  return token;
+}
+
+async function invokeManageUsers(method: string, body?: any) {
+  const token = await getExtToken();
+  const res = await fetch(`${FUNCTIONS_BASE}/manage-users`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data?.error || "Erro na requisição");
+  return data;
+}
+
 export function useUsers() {
   return useQuery<AppUser[]>({
     queryKey: ["app-users"],
-    queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("manage-users", {
-        method: "GET",
-      });
-      if (error) throw error;
-      return data as AppUser[];
-    },
+    queryFn: () => invokeManageUsers("GET"),
   });
 }
 
