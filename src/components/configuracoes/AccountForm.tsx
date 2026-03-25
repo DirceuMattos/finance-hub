@@ -23,6 +23,15 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
+const balanceInputPattern = /^-?\d*(\.\d{0,2})?$/;
+
+const normalizeBalanceInput = (value: string) => value.replace(",", ".");
+
+const isAllowedBalanceInput = (value: string) => {
+  const normalized = normalizeBalanceInput(value);
+  return ["", "-", ".", "-."] .includes(normalized) || balanceInputPattern.test(normalized);
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -94,7 +103,21 @@ export function AccountForm({ open, onOpenChange, account, entities, onSubmit, l
           )} />
           <div className="grid grid-cols-2 gap-3">
             <FormField control={form.control} name="opening_balance" render={({ field }) => (
-              <FormItem><FormLabel>Saldo Inicial</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem>
+                <FormLabel>Saldo Inicial</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={field.value?.toString() ?? ""}
+                    onChange={(e) => {
+                      if (!isAllowedBalanceInput(e.target.value)) return;
+                      field.onChange(normalizeBalanceInput(e.target.value));
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
             )} />
             <FormField control={form.control} name="current_balance" render={({ field }) => (
               <FormItem>
@@ -102,7 +125,17 @@ export function AccountForm({ open, onOpenChange, account, entities, onSubmit, l
                   Saldo Atual
                   <span className="text-[10px] text-muted-foreground font-normal" title="Idealmente derivado de saldo inicial + lançamentos realizados">(calculado)</span>
                 </FormLabel>
-                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormControl>
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    value={field.value?.toString() ?? ""}
+                    onChange={(e) => {
+                      if (!isAllowedBalanceInput(e.target.value)) return;
+                      field.onChange(normalizeBalanceInput(e.target.value));
+                    }}
+                  />
+                </FormControl>
                 <span className="text-[10px] text-muted-foreground">Saldo derivado do saldo inicial + lançamentos. Ajuste manualmente se necessário.</span>
                 <FormMessage />
               </FormItem>
