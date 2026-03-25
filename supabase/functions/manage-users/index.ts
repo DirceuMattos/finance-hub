@@ -46,15 +46,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Build admin client for external Supabase
-    const extServiceKey = Deno.env.get("EXT_SUPABASE_SERVICE_ROLE_KEY");
-    if (!extServiceKey) {
-      return new Response(
-        JSON.stringify({ error: "Chave de serviço externa não configurada" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    // Build admin client for external Supabase (reuse extServiceKey)
     const extAdmin = createClient(EXT_URL, extServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
