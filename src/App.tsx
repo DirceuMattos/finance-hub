@@ -16,10 +16,7 @@ import Patrimonio from "./pages/Patrimonio";
 import Investimentos from "./pages/Investimentos";
 import Relatorios from "./pages/Relatorios";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
 import ResetPassword from "./pages/ResetPassword";
-import MfaSetup from "./pages/MfaSetup";
-import MfaVerify from "./pages/MfaVerify";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -33,10 +30,7 @@ const App = () => (
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/mfa-verify" element={<MfaVerify />} />
-          <Route path="/mfa-setup" element={<MfaSetup />} />
 
           {/* Protected routes */}
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
