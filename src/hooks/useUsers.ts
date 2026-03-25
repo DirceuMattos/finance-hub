@@ -45,11 +45,7 @@ export function useCreateUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const { data, error } = await supabase.functions.invoke("manage-users", {
-        body: { action: "create", email, password },
-      });
-      if (error) throw error;
-      return data;
+      return invokeManageUsers("POST", { action: "create", email, password });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["app-users"] });
