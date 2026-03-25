@@ -30,7 +30,7 @@ export function AccountsTab() {
     { key: "bank_name", header: "Banco", render: (r) => r.bank_name || "—" },
     { key: "account_type", header: "Tipo", render: (r) => typeLabels[r.account_type] || r.account_type },
     { key: "financial_entity", header: "Entidade", render: (r) => r.financial_entities?.name || "—" },
-    { key: "current_balance", header: "Saldo Atual", render: (r) => fmt(r.current_balance) },
+    { key: "current_balance", header: "Saldo Atual", render: (r) => <span className={r.current_balance < 0 ? "text-destructive font-medium" : ""}>{fmt(r.current_balance)}</span> },
     { key: "is_active", header: "Status", render: (r) => r.is_active ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge> },
     {
       key: "actions", header: "Ações", render: (r) => (
