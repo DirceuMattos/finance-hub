@@ -139,8 +139,6 @@ export function UsersTab() {
             setDeleteTarget(null);
           }
         }}
-        title="Remover usuário"
-        description={`Deseja realmente remover o usuário ${deleteTarget?.email}? Esta ação não pode ser desfeita.`}
       />
     </div>
   );
