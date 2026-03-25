@@ -61,11 +61,7 @@ export function useDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (userId: string) => {
-      const { data, error } = await supabase.functions.invoke("manage-users", {
-        body: { action: "delete", userId },
-      });
-      if (error) throw error;
-      return data;
+      return invokeManageUsers("POST", { action: "delete", userId });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["app-users"] });
