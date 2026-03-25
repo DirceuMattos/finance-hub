@@ -144,7 +144,7 @@ export default function Patrimonio() {
     {
       key: "opening_value", header: "Abertura", sortable: true,
       sortValue: (r) => r.opening_value,
-      render: (r) => <span className="font-mono">{fmt(r.opening_value)}</span>,
+      render: (r) => <span className={`font-mono ${r.opening_value < 0 ? "text-destructive font-medium" : ""}`}>{fmt(r.opening_value)}</span>,
     },
     {
       key: "closing_value", header: "Fechamento", sortable: true,
@@ -201,9 +201,9 @@ export default function Patrimonio() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Ativos" value={fmt(totals.assets)} icon={TrendingUp} />
-        <StatCard title="Passivos" value={fmt(totals.liabilities)} icon={TrendingDown} />
-        <StatCard title="Patrimônio Líquido" value={fmt(totals.net)} icon={Landmark} />
+        <StatCard title="Ativos" value={fmt(totals.assets)} icon={TrendingUp} variant={totals.assets < 0 ? "negative" : "neutral"} />
+        <StatCard title="Passivos" value={fmt(totals.liabilities)} icon={TrendingDown} variant={totals.liabilities < 0 ? "negative" : "neutral"} />
+        <StatCard title="Patrimônio Líquido" value={fmt(totals.net)} icon={Landmark} variant={totals.net < 0 ? "negative" : "neutral"} />
       </div>
 
       {/* Evolution Chart */}

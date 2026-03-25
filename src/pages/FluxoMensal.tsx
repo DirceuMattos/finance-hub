@@ -89,7 +89,7 @@ export default function FluxoMensal() {
     },
     {
       key: "projected_card_amount", header: "Cartão Projetado",
-      render: (r) => <span>{fmt(r.projected_card_amount ?? 0)}</span>,
+      render: (r) => <span className={(r.projected_card_amount ?? 0) < 0 ? "text-destructive font-medium" : ""}>{fmt(r.projected_card_amount ?? 0)}</span>,
     },
     {
       key: "projected_balance", header: "Saldo Projetado",

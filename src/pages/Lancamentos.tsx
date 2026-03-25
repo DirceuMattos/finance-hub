@@ -182,7 +182,7 @@ export default function Lancamentos() {
       },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
-    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : "text-foreground"}>{fmt(r.amount)}</span> },
+    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : "text-foreground"}>{fmt(r.amount)}</span> },
     { key: "status", header: "Status", sortable: true, sortValue: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
     { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => (r as any).payment_date || "", render: (r) => fmtDate((r as any).payment_date) },
     {

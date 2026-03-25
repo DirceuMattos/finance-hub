@@ -169,14 +169,14 @@ export default function Investimentos() {
       header: "Abertura",
       sortable: true,
       sortValue: (r) => r.opening_value,
-      render: (r) => <span className="font-mono">{fmt(r.opening_value)}</span>,
+      render: (r) => <span className={`font-mono ${r.opening_value < 0 ? "text-destructive font-medium" : ""}`}>{fmt(r.opening_value)}</span>,
     },
     {
       key: "closing_value",
       header: "Fechamento",
       sortable: true,
       sortValue: (r) => r.closing_value,
-      render: (r) => <span className="font-mono font-medium">{fmt(r.closing_value)}</span>,
+      render: (r) => <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
     },
     {
       key: "variation",
@@ -246,8 +246,8 @@ export default function Investimentos() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Carteira Total" value={fmt(totals.total_portfolio_value)} icon={PieChart} />
-        <StatCard title="Retorno Estimado" value={fmt(totals.total_estimated_return)} icon={TrendingUp} />
+        <StatCard title="Carteira Total" value={fmt(totals.total_portfolio_value)} icon={PieChart} variant={totals.total_portfolio_value < 0 ? "negative" : "neutral"} />
+        <StatCard title="Retorno Estimado" value={fmt(totals.total_estimated_return)} icon={TrendingUp} variant={totals.total_estimated_return < 0 ? "negative" : "neutral"} />
         <StatCard title="Aportes" value={fmt(totals.total_contributions)} icon={Wallet} />
         <StatCard title="Resgates" value={fmt(totals.total_redemptions)} icon={BarChart3} />
       </div>
