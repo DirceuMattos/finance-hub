@@ -14,7 +14,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Authenticate caller via Lovable Cloud JWT
+    // Authenticate caller — accept any valid Bearer token
+    // The token comes from the external Supabase project where users log in
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -23,15 +24,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    const localSupabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Validate the token against the external Supabase
+    const extServiceKey = Deno.env.get("EXT_SUPABASE_SERVICE_ROLE_KEY");
+    if (!extServiceKey) {
+      return new Response(
+        JSON.stringify({ error: "Chave de serviço externa não configurada" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const extUserClient = createClient(EXT_URL, extServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await localSupabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: userError } = await extUserClient.auth.getUser(token);
+    if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
