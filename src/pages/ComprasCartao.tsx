@@ -71,8 +71,8 @@ export default function ComprasCartao() {
         );
       },
     },
-    { key: "total_amount", header: "Total", render: (r) => fmt(r.total_amount) },
-    { key: "installments", header: "Parcelas", render: (r) => `${r.installments_count}x ${fmt(r.installment_amount)}` },
+    { key: "total_amount", header: "Total", render: (r) => <span className={r.total_amount < 0 ? "text-destructive font-medium" : ""}>{fmt(r.total_amount)}</span> },
+    { key: "installments", header: "Parcelas", render: (r) => <span className={r.installment_amount < 0 ? "text-destructive font-medium" : ""}>{`${r.installments_count}x ${fmt(r.installment_amount)}`}</span> },
     { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
     {
       key: "actions", header: "Ações", render: (r) => (

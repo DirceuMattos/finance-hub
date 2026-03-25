@@ -178,6 +178,7 @@ export default function Dashboard() {
           icon={DollarSign}
           subLabel={balanceSubLabel}
           description="Contas ativas"
+          variant={balance < 0 ? "negative" : "neutral"}
         />
         <StatCard
           title="Receitas Pagas"
