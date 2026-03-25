@@ -169,14 +169,14 @@ export default function Investimentos() {
       header: "Abertura",
       sortable: true,
       sortValue: (r) => r.opening_value,
-      render: (r) => <span className="font-mono">{fmt(r.opening_value)}</span>,
+      render: (r) => <span className={`font-mono ${r.opening_value < 0 ? "text-destructive font-medium" : ""}`}>{fmt(r.opening_value)}</span>,
     },
     {
       key: "closing_value",
       header: "Fechamento",
       sortable: true,
       sortValue: (r) => r.closing_value,
-      render: (r) => <span className="font-mono font-medium">{fmt(r.closing_value)}</span>,
+      render: (r) => <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
     },
     {
       key: "variation",
