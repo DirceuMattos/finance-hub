@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ export default function Login() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
 
     if (error) {
@@ -27,17 +27,7 @@ export default function Login() {
       return;
     }
 
-    // Check if user has verified TOTP factor
-    const factors = data.user?.factors ?? [];
-    const hasVerifiedTotp = factors.some(
-      (f) => f.factor_type === "totp" && f.status === "verified"
-    );
-
-    if (hasVerifiedTotp) {
-      navigate("/mfa-verify");
-    } else {
-      navigate("/");
-    }
+    navigate("/");
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -109,7 +99,7 @@ export default function Login() {
             </Button>
           </form>
 
-          <div className="mt-4 text-center text-sm space-y-2">
+          <div className="mt-4 text-center text-sm">
             <button
               type="button"
               onClick={() => setResetMode(!resetMode)}
@@ -117,14 +107,6 @@ export default function Login() {
             >
               {resetMode ? "Voltar ao login" : "Esqueceu a senha?"}
             </button>
-            {!resetMode && (
-              <p className="text-muted-foreground">
-                Não tem conta?{" "}
-                <Link to="/signup" className="text-primary hover:underline">
-                  Criar conta
-                </Link>
-              </p>
-            )}
           </div>
         </CardContent>
       </Card>

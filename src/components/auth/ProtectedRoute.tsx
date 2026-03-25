@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading, hasMfaPending } = useAuth();
+  const { session, loading } = useAuth();
 
   if (loading) {
     return (
@@ -15,10 +15,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!session) {
     return <Navigate to="/login" replace />;
-  }
-
-  if (hasMfaPending()) {
-    return <Navigate to="/mfa-verify" replace />;
   }
 
   return <>{children}</>;
