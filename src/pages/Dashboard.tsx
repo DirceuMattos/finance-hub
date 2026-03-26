@@ -246,19 +246,19 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
             <div>
               <p className="text-xs text-muted-foreground">Receitas Pagas</p>
-              <p className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{fmtCur(forecast.income_paid)}</p>
+              <p className={cn("text-lg font-semibold", forecast.income_paid < 0 ? "text-destructive" : "text-emerald-600 dark:text-emerald-400")}>{fmtCur(forecast.income_paid)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Receitas Previstas</p>
-              <p className="text-lg font-semibold text-emerald-600/70 dark:text-emerald-400/70">{fmtCur(forecast.income_planned)}</p>
+              <p className={cn("text-lg font-semibold", forecast.income_planned < 0 ? "text-destructive" : "text-emerald-600/70 dark:text-emerald-400/70")}>{fmtCur(forecast.income_planned)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Despesas Pagas</p>
-              <p className="text-lg font-semibold text-red-600 dark:text-red-400">{fmtCur(forecast.expense_paid)}</p>
+              <p className={cn("text-lg font-semibold", forecast.expense_paid < 0 ? "text-destructive" : "text-red-600 dark:text-red-400")}>{fmtCur(forecast.expense_paid)}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Despesas Previstas</p>
-              <p className="text-lg font-semibold text-red-600/70 dark:text-red-400/70">{fmtCur(forecast.expense_planned)}</p>
+              <p className={cn("text-lg font-semibold", forecast.expense_planned < 0 ? "text-destructive" : "text-red-600/70 dark:text-red-400/70")}>{fmtCur(forecast.expense_planned)}</p>
             </div>
             <div className="col-span-2 md:col-span-1">
               <p className="text-xs text-muted-foreground">Saldo Projetado</p>
