@@ -5,10 +5,15 @@ import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard,
   Landmark, PiggyBank, Scale, Target, ShieldCheck, ShieldAlert, ShieldX,
+  Sparkles, Loader2, RefreshCw,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line,
