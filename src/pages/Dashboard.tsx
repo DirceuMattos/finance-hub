@@ -82,6 +82,8 @@ function HorizontalBreakdown({ items, label }: { items: { name: string; total: n
 export default function Dashboard() {
   const [view, setView] = useState<ViewType>("consolidated");
   const [selectedMonthStr, setSelectedMonthStr] = useState(() => format(new Date(), "yyyy-MM"));
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const selectedMonth = new Date(selectedMonthStr + "-01");
   const monthOptions = buildMonthOptions();
 
