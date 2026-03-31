@@ -1,51 +1,55 @@
 
 
-## Plano: Padronizar exibição de valores negativos em todo o sistema
+## Plano: Análise de IA na Previsão de Fechamento
 
-### Regra universal
-Todo campo monetário que puder ser negativo deve exibir `text-destructive font-medium` quando `< 0`.
+### Visão geral
 
-### Arquivos e alterações
+Adicionar um bloco de análise gerada por IA dentro do card "Previsão de Fechamento do Mês", com um botão "Gerar Análise". A IA receberá os dados financeiros do mês atual e retornará um parecer sobre o panorama de fechamento + cuidados preditivos para o próximo mês.
 
-**1. `src/pages/Investimentos.tsx`**
-- Coluna `opening_value` (linha 172): adicionar classe condicional para negativos
-- Coluna `closing_value` (linha 179): adicionar classe condicional para negativos
-- StatCards (linhas 249-252): adicionar `variant` condicional (`negative` quando `< 0`) em Retorno Estimado e Carteira Total
+A `LOVABLE_API_KEY` já está configurada — será usado o Lovable AI (modelo `google/gemini-3-flash-preview`).
 
-**2. `src/pages/Patrimonio.tsx`**
-- Coluna `opening_value` (linha 147): adicionar classe condicional para negativos (closing_value já está correto)
-- StatCards de Ativos/Passivos/Líquido: adicionar `variant` condicional para patrimônio líquido negativo
+### Arquivos a criar
 
-**3. `src/pages/Lancamentos.tsx`**
-- Coluna `amount` (linha 185): manter verde para receita, adicionar `text-destructive` para valores negativos em despesas
+| Arquivo | Descrição |
+|---|---|
+| `supabase/functions/ai-financial-analysis/index.ts` | Edge function que recebe os dados financeiros, monta o prompt e chama o Lovable AI Gateway |
 
-**4. `src/pages/Recorrencias.tsx`**
-- Coluna `amount` (linha 49): adicionar `text-destructive` quando valor for negativo
+### Arquivos a alterar
 
-**5. `src/pages/ComprasCartao.tsx`**
-- Coluna `total_amount` (linha 74): adicionar classe condicional para negativos
-- Coluna `installments` (linha 75): adicionar classe condicional para `installment_amount` negativo
+| Arquivo | Descrição |
+|---|---|
+| `src/pages/Dashboard.tsx` | Adicionar botão "Gerar Análise IA" e área de exibição do resultado dentro do card de Previsão de Fechamento |
 
-**6. `src/pages/FaturasProjetadas.tsx`**
-- Coluna `total_amount` (linha 98): adicionar classe condicional para negativos
+### Edge Function `ai-financial-analysis`
 
-**7. `src/pages/FluxoMensal.tsx`**
-- Coluna `projected_card_amount` (linha 92): adicionar classe condicional (saldo líquido já está correto)
+- Recebe via POST: `forecast` (income_paid, income_planned, expense_paid, expense_planned, projected_balance, projected_card_amount, potential_containment), `riskLevel`, `balance`, `patrimonyTotal`, `investmentTotal`
+- Valida input com Zod
+- Monta prompt em português com system message de consultor financeiro
+- Chama `https://ai.gateway.lovable.dev/v1/chat/completions` (sem streaming, resposta completa)
+- Retorna `{ analysis: string }` com o texto em markdown
 
-**8. `src/components/shared/StatCard.tsx`**
-- Já suporta `variant="negative"` com cor vermelha — nenhuma alteração necessária no componente
+**Prompt (system):**
+> "Você é um consultor financeiro pessoal. Analise os dados do mês e forneça: 1) Um parecer de 2-3 frases sobre o panorama de fechamento; 2) 2-3 cuidados/recomendações breves para o próximo mês. Seja direto, objetivo e use linguagem acessível."
 
-**9. `src/pages/Dashboard.tsx`**
-- StatCard "Saldo Atual" (linha 175-181): adicionar `variant` condicional quando saldo negativo
+### Dashboard — UI
 
-### Padrão de código
-```tsx
-// Tabelas
-<span className={value < 0 ? "text-destructive font-medium" : ""}>{fmt(value)}</span>
+- Botão com ícone de Sparkles: "Gerar Análise IA" posicionado abaixo dos valores no card de Previsão de Fechamento
+- Estado: idle → loading (spinner) → exibindo resultado
+- Resultado renderizado com `react-markdown` em um bloco com fundo sutil
+- Botão "Atualizar" para regenerar
+- Análise não é persistida — gerada sob demanda
 
-// StatCards
-<StatCard ... variant={value < 0 ? "negative" : "neutral"} />
+### Fluxo
+
+```text
+Usuário clica "Gerar Análise IA"
+  → POST /functions/v1/ai-financial-analysis { dados do mês }
+  → Edge function monta prompt → chama Lovable AI Gateway
+  → Retorna análise em texto
+  → Dashboard renderiza markdown no card
 ```
 
-~15 pontos de alteração em 8 arquivos. Nenhuma lógica de negócio modificada.
+### Dependências
+
+- Instalar `react-markdown` no frontend para renderização
 
