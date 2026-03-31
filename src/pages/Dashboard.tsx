@@ -5,10 +5,15 @@ import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import {
   DollarSign, TrendingUp, TrendingDown, CreditCard,
   Landmark, PiggyBank, Scale, Target, ShieldCheck, ShieldAlert, ShieldX,
+  Sparkles, Loader2, RefreshCw,
 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   LineChart, Line,
@@ -77,6 +82,8 @@ function HorizontalBreakdown({ items, label }: { items: { name: string; total: n
 export default function Dashboard() {
   const [view, setView] = useState<ViewType>("consolidated");
   const [selectedMonthStr, setSelectedMonthStr] = useState(() => format(new Date(), "yyyy-MM"));
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const selectedMonth = new Date(selectedMonthStr + "-01");
   const monthOptions = buildMonthOptions();
 
@@ -96,6 +103,41 @@ export default function Dashboard() {
     month: fmtMonth(d.reference_month),
     Patrimônio: d.net_patrimony,
   }));
+
+  const handleGenerateAnalysis = async () => {
+    setAiLoading(true);
+    setAiAnalysis(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-financial-analysis", {
+        body: {
+          forecast: {
+            income_paid: forecast.income_paid,
+            income_planned: forecast.income_planned,
+            expense_paid: forecast.expense_paid,
+            expense_planned: forecast.expense_planned,
+            projected_balance: forecast.projected_balance,
+            projected_card_amount: forecast.projected_card_amount,
+            potential_containment: forecast.potential_containment,
+          },
+          riskLevel: riskData.level,
+          balance,
+          patrimonyTotal: patrimony.total,
+          investmentTotal: investment.total,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) {
+        toast.error(data.error);
+      } else {
+        setAiAnalysis(data.analysis);
+      }
+    } catch (e: any) {
+      console.error("AI analysis error:", e);
+      toast.error("Erro ao gerar análise. Tente novamente.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -269,6 +311,49 @@ export default function Dashboard() {
                 {fmtCur(forecast.projected_balance)}
               </p>
             </div>
+          </div>
+
+          {/* AI Analysis */}
+          <div className="mt-4 pt-4 border-t border-border">
+            {!aiAnalysis && !aiLoading && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateAnalysis}
+                className="gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Gerar Análise IA
+              </Button>
+            )}
+            {aiLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Gerando análise...
+              </div>
+            )}
+            {aiAnalysis && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Análise IA
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGenerateAnalysis}
+                    className="h-7 gap-1.5 text-xs"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Atualizar
+                  </Button>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-4 prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
