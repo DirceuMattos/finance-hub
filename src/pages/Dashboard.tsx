@@ -312,6 +312,49 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
+
+          {/* AI Analysis */}
+          <div className="mt-4 pt-4 border-t border-border">
+            {!aiAnalysis && !aiLoading && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleGenerateAnalysis}
+                className="gap-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                Gerar Análise IA
+              </Button>
+            )}
+            {aiLoading && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Gerando análise...
+              </div>
+            )}
+            {aiAnalysis && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Análise IA
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleGenerateAnalysis}
+                    className="h-7 gap-1.5 text-xs"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    Atualizar
+                  </Button>
+                </div>
+                <div className="rounded-lg bg-muted/50 p-4 prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown>{aiAnalysis}</ReactMarkdown>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 
