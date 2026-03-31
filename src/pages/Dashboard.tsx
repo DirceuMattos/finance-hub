@@ -104,6 +104,41 @@ export default function Dashboard() {
     Patrimônio: d.net_patrimony,
   }));
 
+  const handleGenerateAnalysis = async () => {
+    setAiLoading(true);
+    setAiAnalysis(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("ai-financial-analysis", {
+        body: {
+          forecast: {
+            income_paid: forecast.income_paid,
+            income_planned: forecast.income_planned,
+            expense_paid: forecast.expense_paid,
+            expense_planned: forecast.expense_planned,
+            projected_balance: forecast.projected_balance,
+            projected_card_amount: forecast.projected_card_amount,
+            potential_containment: forecast.potential_containment,
+          },
+          riskLevel: riskData.level,
+          balance,
+          patrimonyTotal: patrimony.total,
+          investmentTotal: investment.total,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) {
+        toast.error(data.error);
+      } else {
+        setAiAnalysis(data.analysis);
+      }
+    } catch (e: any) {
+      console.error("AI analysis error:", e);
+      toast.error("Erro ao gerar análise. Tente novamente.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   return (
     <AppLayout>
       <PageHeader title="Dashboard" description={`Visão ${viewLabel.toLowerCase()} das suas finanças`} />
