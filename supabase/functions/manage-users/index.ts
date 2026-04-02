@@ -46,6 +46,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Enforce admin-only access via app_metadata
+    const isAdmin = userData.user.app_metadata?.is_admin === true;
+    if (!isAdmin) {
+      return new Response(JSON.stringify({ error: "Acesso negado" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Build admin client for external Supabase (reuse extServiceKey)
     const extAdmin = createClient(EXT_URL, extServiceKey, {
       auth: { autoRefreshToken: false, persistSession: false },
