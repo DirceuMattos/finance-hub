@@ -27,7 +27,7 @@ export function getUserErrorMessage(error: unknown): string {
   }
 
   // Database constraint errors (fallback string matching)
-  if (message.includes("foreign key") || message.includes("violates")) {
+  if (message.includes("foreign key") || message.includes("violates foreign key")) {
     return "Não é possível realizar esta ação: existem registros vinculados.";
   }
   if (message.includes("unique") || message.includes("duplicate key")) {
@@ -35,6 +35,9 @@ export function getUserErrorMessage(error: unknown): string {
   }
   if (message.includes("not-null") || message.includes("null value")) {
     return "Campos obrigatórios não foram preenchidos.";
+  }
+  if (message.includes("row-level security") || code === "42501") {
+    return "Você não tem permissão para realizar esta operação no banco atual. Verifique se está logado no ambiente correto.";
   }
 
   // Auth errors — generic to avoid confirming email existence
