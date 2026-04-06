@@ -10,7 +10,7 @@ import { SystemParameterForm } from "./SystemParameterForm";
 import { DeleteDialog } from "./DeleteDialog";
 import type { SystemParameter } from "@/types/database";
 
-const typeLabels: Record<string, string> = { string: "Texto", number: "Número", boolean: "Booleano", json: "JSON" };
+const typeLabels: Record<string, string> = { text: "Texto", string: "Texto", number: "Número", boolean: "Booleano", json: "JSON" };
 
 const PARAMETER_LABELS: Record<string, { name: string; description: string }> = {
   reference_month: { name: "Mês de Referência", description: "Mês base para cálculos do sistema" },

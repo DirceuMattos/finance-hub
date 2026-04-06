@@ -25,6 +25,12 @@ export function getUserErrorMessage(error: unknown): string {
   if (code === "23502") {
     return "Campos obrigatórios não foram preenchidos.";
   }
+  if (code === "23514") {
+    if (message.includes("system_parameters_value_type_check")) {
+      return "Tipo de parâmetro inválido. Use Texto, Número, Booleano ou JSON.";
+    }
+    return "Os dados informados não atendem às regras de validação.";
+  }
 
   // Database constraint errors (fallback string matching)
   if (message.includes("foreign key") || message.includes("violates foreign key")) {
@@ -35,6 +41,12 @@ export function getUserErrorMessage(error: unknown): string {
   }
   if (message.includes("not-null") || message.includes("null value")) {
     return "Campos obrigatórios não foram preenchidos.";
+  }
+  if (message.includes("check constraint")) {
+    if (message.includes("system_parameters_value_type_check")) {
+      return "Tipo de parâmetro inválido. Use Texto, Número, Booleano ou JSON.";
+    }
+    return "Os dados informados não atendem às regras de validação.";
   }
   if (message.includes("row-level security") || code === "42501") {
     return "Você não tem permissão para realizar esta operação no banco atual. Verifique se está logado no ambiente correto.";

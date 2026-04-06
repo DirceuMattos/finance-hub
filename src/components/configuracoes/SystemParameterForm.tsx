@@ -9,10 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { SystemParameter } from "@/types/database";
 
+const VALUE_TYPES = ["text", "number", "boolean", "json"] as const;
+
 const schema = z.object({
   parameter_key: z.string().min(1, "Chave é obrigatória").max(100),
   parameter_value: z.string().min(1, "Valor é obrigatório"),
-  value_type: z.string().min(1, "Tipo é obrigatório"),
+  value_type: z.enum(VALUE_TYPES, { message: "Tipo é obrigatório" }),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -25,10 +27,16 @@ interface Props {
   loading?: boolean;
 }
 
+function normalizeValueType(value?: string | null): FormData["value_type"] {
+  if (value === "string") return "text";
+  if (value === "number" || value === "boolean" || value === "json" || value === "text") return value;
+  return "text";
+}
+
 export function SystemParameterForm({ open, onOpenChange, parameter, onSubmit, loading }: Props) {
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { parameter_key: "", parameter_value: "", value_type: "string" },
+    defaultValues: { parameter_key: "", parameter_value: "", value_type: "text" },
   });
 
   useEffect(() => {
@@ -36,15 +44,15 @@ export function SystemParameterForm({ open, onOpenChange, parameter, onSubmit, l
       form.reset({
         parameter_key: parameter.parameter_key,
         parameter_value: parameter.parameter_value,
-        value_type: parameter.value_type,
+        value_type: normalizeValueType(parameter.value_type),
       });
     } else {
-      form.reset({ parameter_key: "", parameter_value: "", value_type: "string" });
+      form.reset({ parameter_key: "", parameter_value: "", value_type: "text" });
     }
   }, [parameter, open]);
 
   const handleSubmit = (data: FormData) => {
-    onSubmit(parameter ? { id: parameter.id, ...data } : data);
+    onSubmit(parameter ? { id: parameter.id, ...data, value_type: normalizeValueType(data.value_type) } : { ...data, value_type: normalizeValueType(data.value_type) });
   };
 
   return (
@@ -62,7 +70,7 @@ export function SystemParameterForm({ open, onOpenChange, parameter, onSubmit, l
               <Select onValueChange={field.onChange} value={field.value}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="string">Texto</SelectItem>
+                  <SelectItem value="text">Texto</SelectItem>
                   <SelectItem value="number">Número</SelectItem>
                   <SelectItem value="boolean">Booleano</SelectItem>
                   <SelectItem value="json">JSON</SelectItem>
