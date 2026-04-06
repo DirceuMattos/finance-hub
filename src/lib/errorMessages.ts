@@ -3,15 +3,30 @@
  * Raw details are logged to console for debugging only.
  */
 export function getUserErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  const code = (error as any)?.code;
-  const details = (error as any)?.details;
-  const hint = (error as any)?.hint;
+  const raw = error as any;
+  const code = raw?.code;
+  const message = typeof raw?.message === 'string' ? raw.message : JSON.stringify(raw?.message ?? error);
+  const details = raw?.details;
+  const hint = raw?.hint;
 
   // Log full details for debugging (never shown to user)
   console.error("[App Error]", { message, code, details, hint, raw: error });
 
-  // Database constraint errors
+  // PostgreSQL error codes
+  if (code === "42501") {
+    return "Sem permissão para realizar esta operação. Verifique suas credenciais.";
+  }
+  if (code === "23503") {
+    return "Não é possível realizar esta ação: existem registros vinculados.";
+  }
+  if (code === "23505") {
+    return "Já existe um registro com esses dados.";
+  }
+  if (code === "23502") {
+    return "Campos obrigatórios não foram preenchidos.";
+  }
+
+  // Database constraint errors (fallback string matching)
   if (message.includes("foreign key") || message.includes("violates")) {
     return "Não é possível realizar esta ação: existem registros vinculados.";
   }
