@@ -128,12 +128,12 @@ export default function Cartoes() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-muted-foreground text-xs">Limite</p>
-                      <p className="font-semibold">{fmt(card.credit_limit)}</p>
-                    </div>
-                    <div>
                       <p className="text-muted-foreground text-xs">Teto Gerencial</p>
                       <p className="font-semibold">{fmt(managerialLimit)}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Usado no Mês</p>
+                      <p className="font-semibold">{fmt(usedAmount)}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground text-xs">Fecha Dia</p>
@@ -145,53 +145,14 @@ export default function Cartoes() {
                     </div>
                   </div>
 
-                  {summary && (
-                    <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
-                      <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
-                        <Info className="h-3 w-3" /> Lançamentos de Fatura
-                      </p>
-                      <div className="grid grid-cols-3 gap-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <TrendingDown className="h-3 w-3 text-[hsl(var(--success))]" />
-                          <div>
-                            <p className="text-muted-foreground">Realizado</p>
-                            <p className="font-semibold">{fmt(summary.historicalTotal)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <TrendingUp className="h-3 w-3 text-[hsl(var(--warning,45_93%_47%))]" />
-                          <div>
-                            <p className="text-muted-foreground">Previsto</p>
-                            <p className="font-semibold">{fmt(summary.projectedTotal)}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Hash className="h-3 w-3 text-muted-foreground" />
-                          <div>
-                            <p className="text-muted-foreground">Lançamentos</p>
-                            <p className="font-semibold">{summary.count}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Uso do Limite (previsto)</span>
-                      <span className="font-medium">{fmt(usedAmount)} / {fmt(card.credit_limit)}</span>
+                      <span className="text-muted-foreground">Uso do Teto Gerencial</span>
+                      <span className="font-medium">{fmt(usedAmount)} / {fmt(managerialLimit)}</span>
                     </div>
-                    <Progress value={usagePct} className="h-2" />
+                    <Progress value={managerialUsagePct} className="h-2" />
                   </div>
-                  {card.managerial_limit && card.managerial_limit < card.credit_limit && (
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-muted-foreground">Uso do Teto Gerencial</span>
-                        <span className="font-medium">{fmt(usedAmount)} / {fmt(card.managerial_limit)}</span>
-                      </div>
-                      <Progress value={managerialUsagePct} className="h-2" />
-                    </div>
-                  )}
+                  <p className="text-[11px] text-muted-foreground">Limite real do cartão: {fmt(card.credit_limit)}</p>
                   <p className="text-xs text-muted-foreground">
                     Entidade: {card.financial_entities?.name || "—"}
                   </p>
