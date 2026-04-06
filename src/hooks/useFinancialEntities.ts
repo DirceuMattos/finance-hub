@@ -33,8 +33,9 @@ export function useFinancialEntities() {
 
   const update = useMutation({
     mutationFn: async ({ id, ...data }: Partial<FinancialEntity> & { id: string }) => {
-      const { error } = await (supabase as any).from("financial_entities").update(data).eq("id", id);
+      const { data: updated, error } = await (supabase as any).from("financial_entities").update(data).eq("id", id).select();
       if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["financial_entities"] });
