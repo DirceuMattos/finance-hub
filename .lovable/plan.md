@@ -1,22 +1,44 @@
 
 
-## Plano: Exibir Teto Gerencial e Uso no Mês Vigente nos Cards de Cartões
+## Plano: Criar a tabela `system_parameters` no banco de dados
 
-### O que muda
+### Problema
+A tabela `system_parameters` não existe no banco de dados externo. O frontend tenta operações CRUD nela, resultando em erro.
 
-Na tela de Cartões (`src/pages/Cartoes.tsx`), cada card de cartão passará a:
-
-1. **Mostrar "Teto Gerencial" como campo principal** no lugar de "Limite" — o valor exibido será `managerial_limit` (se definido) ou `credit_limit` como fallback
-2. **Exibir o uso no mês vigente** — valor já utilizado no mês atual baseado nos dados de `byCard`
-3. **Barra de progresso principal baseada no teto gerencial** — a barra principal passa a comparar uso vs teto gerencial, não mais vs limite de crédito
-4. O limite de crédito real fica como informação secundária menor
+### Solução
+Criar a tabela via migração SQL e configurar as políticas RLS para usuários autenticados.
 
 ### Alterações técnicas
 
-**Arquivo: `src/pages/Cartoes.tsx`**
+**1. Migração SQL — criar tabela e RLS**
 
-- Grid de informações (linhas 129-146): trocar "Limite" por "Teto Gerencial" como primeiro campo, e substituir o segundo campo por "Usado no Mês" mostrando `usedAmount`
-- Barra de progresso principal (linhas 179-184): mudar para comparar `usedAmount` vs `managerialLimit`
-- Remover a barra de progresso condicional separada do teto gerencial (linhas 186-194) — agora a principal já usa o teto
-- Adicionar linha discreta mostrando o limite real do cartão como info secundária
+```sql
+CREATE TABLE IF NOT EXISTS public.system_parameters (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  parameter_key TEXT NOT NULL UNIQUE,
+  parameter_value TEXT NOT NULL,
+  value_type TEXT NOT NULL DEFAULT 'string',
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.system_parameters ENABLE ROW LEVEL SECURITY;
+
+-- Políticas para usuários autenticados
+CREATE POLICY "auth_select_system_parameters" ON public.system_parameters
+  FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "auth_insert_system_parameters" ON public.system_parameters
+  FOR INSERT TO authenticated WITH CHECK (true);
+
+CREATE POLICY "auth_update_system_parameters" ON public.system_parameters
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+CREATE POLICY "auth_delete_system_parameters" ON public.system_parameters
+  FOR DELETE TO authenticated USING (true);
+```
+
+**2. Nenhuma alteração no frontend** — o código já está pronto para esta tabela.
+
+Após a criação, será possível inserir os 9 parâmetros listados anteriormente.
 
