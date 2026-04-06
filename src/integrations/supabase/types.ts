@@ -14,7 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      system_parameters: {
+        Row: {
+          created_at: string | null
+          id: string
+          parameter_key: string
+          parameter_value: string
+          updated_at: string | null
+          value_type: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          parameter_key: string
+          parameter_value: string
+          updated_at?: string | null
+          value_type?: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          parameter_key?: string
+          parameter_value?: string
+          updated_at?: string | null
+          value_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
