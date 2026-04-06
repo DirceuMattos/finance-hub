@@ -4,9 +4,12 @@
  */
 export function getUserErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+  const details = (error as any)?.details;
+  const hint = (error as any)?.hint;
 
   // Log full details for debugging (never shown to user)
-  console.error("[App Error]", message);
+  console.error("[App Error]", { message, code, details, hint, raw: error });
 
   // Database constraint errors
   if (message.includes("foreign key") || message.includes("violates")) {
