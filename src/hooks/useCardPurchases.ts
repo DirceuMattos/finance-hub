@@ -37,8 +37,9 @@ export function useCardPurchases() {
   const update = useMutation({
     mutationFn: async ({ id, ...data }: Partial<CardPurchase> & { id: string }) => {
       const { cards, categories, financial_entities, ...rest } = data as any;
-      const { error } = await (supabase as any).from("card_purchases").update(rest).eq("id", id);
+      const { data: updated, error } = await (supabase as any).from("card_purchases").update(rest).eq("id", id).select();
       if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
