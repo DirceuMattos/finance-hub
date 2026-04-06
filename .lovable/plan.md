@@ -1,55 +1,22 @@
 
 
-## Plano: Análise de IA na Previsão de Fechamento
+## Plano: Exibir Teto Gerencial e Uso no Mês Vigente nos Cards de Cartões
 
-### Visão geral
+### O que muda
 
-Adicionar um bloco de análise gerada por IA dentro do card "Previsão de Fechamento do Mês", com um botão "Gerar Análise". A IA receberá os dados financeiros do mês atual e retornará um parecer sobre o panorama de fechamento + cuidados preditivos para o próximo mês.
+Na tela de Cartões (`src/pages/Cartoes.tsx`), cada card de cartão passará a:
 
-A `LOVABLE_API_KEY` já está configurada — será usado o Lovable AI (modelo `google/gemini-3-flash-preview`).
+1. **Mostrar "Teto Gerencial" como campo principal** no lugar de "Limite" — o valor exibido será `managerial_limit` (se definido) ou `credit_limit` como fallback
+2. **Exibir o uso no mês vigente** — valor já utilizado no mês atual baseado nos dados de `byCard`
+3. **Barra de progresso principal baseada no teto gerencial** — a barra principal passa a comparar uso vs teto gerencial, não mais vs limite de crédito
+4. O limite de crédito real fica como informação secundária menor
 
-### Arquivos a criar
+### Alterações técnicas
 
-| Arquivo | Descrição |
-|---|---|
-| `supabase/functions/ai-financial-analysis/index.ts` | Edge function que recebe os dados financeiros, monta o prompt e chama o Lovable AI Gateway |
+**Arquivo: `src/pages/Cartoes.tsx`**
 
-### Arquivos a alterar
-
-| Arquivo | Descrição |
-|---|---|
-| `src/pages/Dashboard.tsx` | Adicionar botão "Gerar Análise IA" e área de exibição do resultado dentro do card de Previsão de Fechamento |
-
-### Edge Function `ai-financial-analysis`
-
-- Recebe via POST: `forecast` (income_paid, income_planned, expense_paid, expense_planned, projected_balance, projected_card_amount, potential_containment), `riskLevel`, `balance`, `patrimonyTotal`, `investmentTotal`
-- Valida input com Zod
-- Monta prompt em português com system message de consultor financeiro
-- Chama `https://ai.gateway.lovable.dev/v1/chat/completions` (sem streaming, resposta completa)
-- Retorna `{ analysis: string }` com o texto em markdown
-
-**Prompt (system):**
-> "Você é um consultor financeiro pessoal. Analise os dados do mês e forneça: 1) Um parecer de 2-3 frases sobre o panorama de fechamento; 2) 2-3 cuidados/recomendações breves para o próximo mês. Seja direto, objetivo e use linguagem acessível."
-
-### Dashboard — UI
-
-- Botão com ícone de Sparkles: "Gerar Análise IA" posicionado abaixo dos valores no card de Previsão de Fechamento
-- Estado: idle → loading (spinner) → exibindo resultado
-- Resultado renderizado com `react-markdown` em um bloco com fundo sutil
-- Botão "Atualizar" para regenerar
-- Análise não é persistida — gerada sob demanda
-
-### Fluxo
-
-```text
-Usuário clica "Gerar Análise IA"
-  → POST /functions/v1/ai-financial-analysis { dados do mês }
-  → Edge function monta prompt → chama Lovable AI Gateway
-  → Retorna análise em texto
-  → Dashboard renderiza markdown no card
-```
-
-### Dependências
-
-- Instalar `react-markdown` no frontend para renderização
+- Grid de informações (linhas 129-146): trocar "Limite" por "Teto Gerencial" como primeiro campo, e substituir o segundo campo por "Usado no Mês" mostrando `usedAmount`
+- Barra de progresso principal (linhas 179-184): mudar para comparar `usedAmount` vs `managerialLimit`
+- Remover a barra de progresso condicional separada do teto gerencial (linhas 186-194) — agora a principal já usa o teto
+- Adicionar linha discreta mostrando o limite real do cartão como info secundária
 
