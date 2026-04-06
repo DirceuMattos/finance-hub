@@ -54,8 +54,9 @@ export function useRecurrences() {
   const update = useMutation({
     mutationFn: async ({ id, ...data }: Partial<Recurrence> & { id: string }) => {
       const { categories, financial_entities, accounts, ...rest } = data as any;
-      const { error } = await (supabase as any).from("recurrences").update(rest).eq("id", id);
+      const { data: updated, error } = await (supabase as any).from("recurrences").update(rest).eq("id", id).select();
       if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
