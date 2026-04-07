@@ -251,6 +251,20 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
   const validRows = rows.filter(r => r.errors.length === 0);
   const errorRows = rows.filter(r => r.errors.length > 0);
 
+  const copyErrorsToClipboard = () => {
+    if (errorRows.length === 0) return;
+    const header = `Linha;Erros;Linha Original do CSV`;
+    const lines = errorRows.map(r =>
+      `${r.lineNumber};"${r.errors.join(" | ")}";"${r.rawLine.replace(/"/g, '""')}"`
+    );
+    const text = [header, ...lines].join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success(`${errorRows.length} registro(s) com erro copiados para a área de transferência`);
+    }).catch(() => {
+      toast.error("Não foi possível copiar. Verifique as permissões do navegador.");
+    });
+  };
+
   const handleImport = async () => {
     if (validRows.length === 0) return;
     setImporting(true);
