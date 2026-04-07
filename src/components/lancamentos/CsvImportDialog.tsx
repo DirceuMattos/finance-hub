@@ -46,7 +46,7 @@ function parseBrDate(raw: string): string | null {
 
 function parseBrNumber(raw: string): number | null {
   if (!raw) return null;
-  const cleaned = raw.trim().replace(/\./g, "").replace(",", ".");
+  const cleaned = raw.trim().replace(/^R\$\s*/i, "").replace(/\./g, "").replace(",", ".");
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
 }
@@ -121,14 +121,14 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
       // Fetch reference data
       const [accRes, catRes, entRes] = await Promise.all([
         (supabase as any).from("accounts").select("id, name"),
-        (supabase as any).from("categories").select("id, name"),
+        (supabase as any).from("categories").select("id, name, transaction_nature"),
         (supabase as any).from("financial_entities").select("id, name"),
       ]);
 
       const accMap = new Map<string, string>();
       (accRes.data || []).forEach((a: any) => accMap.set(a.name.toLowerCase().trim(), a.id));
-      const catMap = new Map<string, string>();
-      (catRes.data || []).forEach((c: any) => catMap.set(c.name.toLowerCase().trim(), c.id));
+      const catMap = new Map<string, { id: string; nature: string | null }>();
+      (catRes.data || []).forEach((c: any) => catMap.set(c.name.toLowerCase().trim(), { id: c.id, nature: c.transaction_nature || null }));
       const entMap = new Map<string, string>();
       (entRes.data || []).forEach((e: any) => entMap.set(e.name.toLowerCase().trim(), e.id));
 
@@ -164,9 +164,28 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         if (!competence && rawCompetence) errors.push(`Data competência inválida: "${rawCompetence}"`);
 
         const rawTxType = colIdx["transaction_type"] >= 0 ? (cols[colIdx["transaction_type"]] || "").toLowerCase().trim() : "";
-        const txType = rawTxType;
-        if (!["income", "expense", "transfer"].includes(txType)) {
-          errors.push(`Tipo inválido: "${rawTxType || "(vazio)"}". Use: income, expense ou transfer`);
+
+        // Derive transaction_type: category nature > CSV fallback mapping
+        const categoryName = colIdx["Categoria"] >= 0 ? (cols[colIdx["Categoria"]] || "").trim() : "";
+        const catEntry = categoryName ? catMap.get(categoryName.toLowerCase()) || null : null;
+        const categoryId = catEntry ? catEntry.id : null;
+        if (categoryName && !catEntry) errors.push(`Categoria não encontrada: "${categoryName}"`);
+
+        const txTypeFallbackMap: Record<string, string> = {
+          desp: "expense", despesa: "expense", despesas: "expense",
+          rec: "income", receita: "income", receitas: "income", rend: "income",
+          transf: "transfer", transferencia: "transfer", transferência: "transfer",
+          income: "income", expense: "expense", transfer: "transfer",
+        };
+        let txType = "";
+        if (catEntry?.nature) {
+          txType = catEntry.nature;
+        } else if (txTypeFallbackMap[rawTxType]) {
+          txType = txTypeFallbackMap[rawTxType];
+        } else if (rawTxType) {
+          errors.push(`Tipo inválido: "${rawTxType}". Use: income, expense ou transfer`);
+        } else {
+          txType = "expense"; // default
         }
 
         const desc = colIdx["Description"] >= 0 ? cols[colIdx["Description"]] || "" : "";
@@ -188,9 +207,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         const accountId = accountName ? accMap.get(accountName.toLowerCase()) || null : null;
         if (accountName && !accountId) errors.push(`Conta não encontrada: "${accountName}"`);
 
-        const categoryName = colIdx["Categoria"] >= 0 ? (cols[colIdx["Categoria"]] || "").trim() : "";
-        const categoryId = categoryName ? catMap.get(categoryName.toLowerCase()) || null : null;
-        if (categoryName && !categoryId) errors.push(`Categoria não encontrada: "${categoryName}"`);
+        // categoryName/categoryId already resolved above
 
         const entityName = colIdx["Entidade Financeira"] >= 0 ? (cols[colIdx["Entidade Financeira"]] || "").trim() : "";
         const entityId = entityName ? entMap.get(entityName.toLowerCase()) || null : null;
