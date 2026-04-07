@@ -45,6 +45,7 @@ export default function Recorrencias() {
 
   const columns: Column<Recurrence>[] = [
     { key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase() },
+    { key: "payee", header: "Favorecido", sortable: true, sortValue: (r) => r.payee || "", render: (r) => r.payee || "—" },
     { key: "type", header: "Tipo", render: (r) => r.type === "income" ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Receita</Badge> : <Badge variant="destructive">Despesa</Badge> },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : ""}>{fmt(r.amount)}</span> },
     { key: "frequency", header: "Frequência", render: (r) => r.frequency === "monthly" ? "Mensal" : r.frequency === "yearly" ? "Anual" : r.frequency },

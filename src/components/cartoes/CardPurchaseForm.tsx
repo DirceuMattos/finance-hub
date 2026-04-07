@@ -23,6 +23,7 @@ const schema = z.object({
   total_amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero"),
   installments_count: z.coerce.number().min(1, "Mínimo 1 parcela").max(72),
   purchase_date: z.date({ required_error: "Data é obrigatória" }),
+  payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
 
@@ -44,7 +45,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
     resolver: zodResolver(schema),
     defaultValues: {
       description: "", card_id: "", category_id: "", financial_entity_id: "",
-      total_amount: 0, installments_count: 1, purchase_date: new Date(), notes: "",
+      total_amount: 0, installments_count: 1, purchase_date: new Date(), payee: "", notes: "",
     },
   });
 
@@ -70,12 +71,13 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
         total_amount: purchase.total_amount,
         installments_count: purchase.installments_count,
         purchase_date: new Date(purchase.purchase_date),
+        payee: purchase.payee || "",
         notes: purchase.notes || "",
       });
     } else {
       form.reset({
         description: "", card_id: "", category_id: "", financial_entity_id: "",
-        total_amount: 0, installments_count: 1, purchase_date: new Date(), notes: "",
+        total_amount: 0, installments_count: 1, purchase_date: new Date(), payee: "", notes: "",
       });
     }
   }, [purchase, open]);
@@ -91,6 +93,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
     const payload: any = {
       ...data,
       category_id: data.category_id || null,
+      payee: data.payee || null,
       notes: data.notes || null,
       purchase_date: format(data.purchase_date, "yyyy-MM-dd"),
       installment_amount: data.total_amount / data.installments_count,
@@ -104,6 +107,10 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           <FormField control={form.control} name="description" render={({ field }) => (
             <FormItem><FormLabel>Descrição *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+
+          <FormField control={form.control} name="payee" render={({ field }) => (
+            <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
 
           <FormField control={form.control} name="card_id" render={({ field }) => (

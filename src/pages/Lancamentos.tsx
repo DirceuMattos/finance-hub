@@ -172,6 +172,7 @@ export default function Lancamentos() {
       },
     },
     { key: "transaction_type", header: "Tipo", sortable: true, sortValue: (r) => r.transaction_type, render: (r) => <TypeBadge type={r.transaction_type} /> },
+    { key: "payee", header: "Favorecido", sortable: true, sortValue: (r) => (r as any).payee || "", render: (r) => (r as any).payee || "—" },
     { key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "", render: (r) => r.categories?.name || "—" },
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",

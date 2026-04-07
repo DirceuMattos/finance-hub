@@ -28,6 +28,7 @@ const schema = z.object({
   start_date: z.date().optional().nullable(),
   end_date: z.date().optional().nullable(),
   is_active: z.boolean(),
+  payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
 
@@ -50,7 +51,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
     defaultValues: {
       description: "", amount: "", frequency: "monthly", type: "expense",
       category_id: "", financial_entity_id: "", account_id: "",
-      start_date: null, end_date: null, is_active: true, notes: "",
+      start_date: null, end_date: null, is_active: true, payee: "", notes: "",
     },
   });
 
@@ -67,13 +68,14 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         start_date: recurrence.start_date ? new Date(recurrence.start_date) : null,
         end_date: recurrence.end_date ? new Date(recurrence.end_date) : null,
         is_active: recurrence.is_active,
+        payee: recurrence.payee || "",
         notes: recurrence.notes || "",
       });
     } else {
       form.reset({
         description: "", amount: "", frequency: "monthly", type: "expense",
         category_id: "", financial_entity_id: "", account_id: "",
-        start_date: null, end_date: null, is_active: true, notes: "",
+        start_date: null, end_date: null, is_active: true, payee: "", notes: "",
       });
     }
   }, [recurrence, open]);
@@ -95,6 +97,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       start_date: data.start_date ? format(data.start_date, "yyyy-MM-dd") : null,
       end_date: data.end_date ? format(data.end_date, "yyyy-MM-dd") : null,
       is_active: data.is_active,
+      payee: data.payee || null,
       notes: data.notes || null,
     };
     onSubmit(recurrence ? { id: recurrence.id, ...payload } : payload);
@@ -131,6 +134,10 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
           <FormField control={form.control} name="description" render={({ field }) => (
             <FormItem><FormLabel>Descrição *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+          )} />
+
+          <FormField control={form.control} name="payee" render={({ field }) => (
+            <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
 
           <div className="grid grid-cols-2 gap-3">

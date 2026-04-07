@@ -78,6 +78,7 @@ export interface Transaction {
   payment_method: string | null;
   source_type: string | null;
   source_id: string | null;
+  payee: string | null;
   tags: string[] | null;
   created_at: string;
   updated_at: string;
@@ -99,6 +100,7 @@ export interface CardPurchase {
   installments_count: number;
   installment_amount: number;
   status: string;
+  payee: string | null;
   created_at: string;
   updated_at: string;
   cards?: { name: string };
