@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Upload, AlertTriangle, CheckCircle } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
@@ -50,15 +51,57 @@ function parseBrNumber(raw: string): number | null {
   return isNaN(n) ? null : n;
 }
 
+/** RFC 4180 compliant CSV line parser — handles quoted fields with commas and escaped quotes */
+function parseCsvLine(line: string): string[] {
+  const fields: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let i = 0;
+
+  while (i < line.length) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') {
+          current += '"';
+          i += 2;
+        } else {
+          inQuotes = false;
+          i++;
+        }
+      } else {
+        current += ch;
+        i++;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+        i++;
+      } else if (ch === ',') {
+        fields.push(current.trim());
+        current = "";
+        i++;
+      } else {
+        current += ch;
+        i++;
+      }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
 export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDialogProps) {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [debugHeaders, setDebugHeaders] = useState<string[]>([]);
 
   const reset = () => {
     setRows([]);
     setFileName("");
+    setDebugHeaders([]);
   };
 
   const handleFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,7 +115,8 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) { toast.error("CSV vazio ou sem dados."); setLoading(false); return; }
 
-      const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
+      const headers = parseCsvLine(lines[0]);
+      setDebugHeaders(headers);
 
       // Fetch reference data
       const [accRes, catRes, entRes] = await Promise.all([
@@ -82,51 +126,75 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
       ]);
 
       const accMap = new Map<string, string>();
-      (accRes.data || []).forEach((a: any) => accMap.set(a.name.toLowerCase(), a.id));
+      (accRes.data || []).forEach((a: any) => accMap.set(a.name.toLowerCase().trim(), a.id));
       const catMap = new Map<string, string>();
-      (catRes.data || []).forEach((c: any) => catMap.set(c.name.toLowerCase(), c.id));
+      (catRes.data || []).forEach((c: any) => catMap.set(c.name.toLowerCase().trim(), c.id));
       const entMap = new Map<string, string>();
-      (entRes.data || []).forEach((e: any) => entMap.set(e.name.toLowerCase(), e.id));
+      (entRes.data || []).forEach((e: any) => entMap.set(e.name.toLowerCase().trim(), e.id));
+
+      const expectedCols = [
+        "competence_date", "transaction_type", "description", "payee",
+        "valor", "vencimento", "observação", "conta", "categoria", "entidade financeira"
+      ];
 
       const colIdx: Record<string, number> = {};
       const colNames = ["competence_date", "transaction_type", "Description", "payee", "Valor", "Vencimento", "Observação", "Conta", "Categoria", "Entidade Financeira"];
+      const missingCols: string[] = [];
       colNames.forEach(cn => {
-        const idx = headers.findIndex(h => h.toLowerCase() === cn.toLowerCase());
+        const idx = headers.findIndex(h => h.toLowerCase().trim() === cn.toLowerCase());
         colIdx[cn] = idx;
+        if (idx === -1 && expectedCols.includes(cn.toLowerCase())) {
+          missingCols.push(cn);
+        }
       });
+
+      if (missingCols.length > 0) {
+        toast.warning(`Colunas não encontradas no CSV: ${missingCols.join(", ")}. Verifique os cabeçalhos.`);
+      }
 
       const today = new Date().toISOString().slice(0, 10);
 
       const parsed: ParsedRow[] = [];
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+        const cols = parseCsvLine(lines[i]);
         const errors: string[] = [];
 
-        const competence = parseBrDate(cols[colIdx["competence_date"]] || "");
-        const txType = (cols[colIdx["transaction_type"]] || "").toLowerCase();
-        if (!["income", "expense", "transfer"].includes(txType)) errors.push("Tipo inválido");
+        const rawCompetence = colIdx["competence_date"] >= 0 ? cols[colIdx["competence_date"]] || "" : "";
+        const competence = parseBrDate(rawCompetence);
+        if (!competence && rawCompetence) errors.push(`Data competência inválida: "${rawCompetence}"`);
 
-        const desc = cols[colIdx["Description"]] || "";
+        const rawTxType = colIdx["transaction_type"] >= 0 ? (cols[colIdx["transaction_type"]] || "").toLowerCase().trim() : "";
+        const txType = rawTxType;
+        if (!["income", "expense", "transfer"].includes(txType)) {
+          errors.push(`Tipo inválido: "${rawTxType || "(vazio)"}". Use: income, expense ou transfer`);
+        }
+
+        const desc = colIdx["Description"] >= 0 ? cols[colIdx["Description"]] || "" : "";
         if (!desc) errors.push("Descrição vazia");
 
-        const payee = cols[colIdx["payee"]] || "";
-        const amount = parseBrNumber(cols[colIdx["Valor"]] || "");
-        if (amount === null) errors.push("Valor inválido");
+        const payee = colIdx["payee"] >= 0 ? cols[colIdx["payee"]] || "" : "";
 
-        const dueDate = parseBrDate(cols[colIdx["Vencimento"]] || "");
-        const notes = cols[colIdx["Observação"]] || "";
+        const rawAmount = colIdx["Valor"] >= 0 ? cols[colIdx["Valor"]] || "" : "";
+        const amount = parseBrNumber(rawAmount);
+        if (amount === null) errors.push(`Valor inválido: "${rawAmount || "(vazio)"}"`);
 
-        const accountName = cols[colIdx["Conta"]] || "";
-        const accountId = accMap.get(accountName.toLowerCase()) || null;
-        if (accountName && !accountId) errors.push(`Conta "${accountName}" não encontrada`);
+        const rawDueDate = colIdx["Vencimento"] >= 0 ? cols[colIdx["Vencimento"]] || "" : "";
+        const dueDate = parseBrDate(rawDueDate);
+        if (!dueDate && rawDueDate) errors.push(`Vencimento inválido: "${rawDueDate}"`);
 
-        const categoryName = cols[colIdx["Categoria"]] || "";
-        const categoryId = catMap.get(categoryName.toLowerCase()) || null;
-        if (categoryName && !categoryId) errors.push(`Categoria "${categoryName}" não encontrada`);
+        const notes = colIdx["Observação"] >= 0 ? cols[colIdx["Observação"]] || "" : "";
 
-        const entityName = cols[colIdx["Entidade Financeira"]] || "";
-        const entityId = entMap.get(entityName.toLowerCase()) || null;
-        if (entityName && !entityId) errors.push(`Entidade "${entityName}" não encontrada`);
+        const accountName = colIdx["Conta"] >= 0 ? (cols[colIdx["Conta"]] || "").trim() : "";
+        const accountId = accountName ? accMap.get(accountName.toLowerCase()) || null : null;
+        if (accountName && !accountId) errors.push(`Conta não encontrada: "${accountName}"`);
+
+        const categoryName = colIdx["Categoria"] >= 0 ? (cols[colIdx["Categoria"]] || "").trim() : "";
+        const categoryId = categoryName ? catMap.get(categoryName.toLowerCase()) || null : null;
+        if (categoryName && !categoryId) errors.push(`Categoria não encontrada: "${categoryName}"`);
+
+        const entityName = colIdx["Entidade Financeira"] >= 0 ? (cols[colIdx["Entidade Financeira"]] || "").trim() : "";
+        const entityId = entityName ? entMap.get(entityName.toLowerCase()) || null : null;
+        if (entityName && !entityId) errors.push(`Entidade não encontrada: "${entityName}"`);
 
         const status = dueDate && dueDate <= today ? "paid" : "planned";
         const paymentDate = status === "paid" ? dueDate : null;
@@ -204,7 +272,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) reset(); onOpenChange(o); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
+      <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Importar Lançamentos via CSV</DialogTitle>
         </DialogHeader>
@@ -213,12 +281,15 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
           <div className="flex flex-col items-center gap-4 py-8">
             <Upload className="h-10 w-10 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Selecione um arquivo CSV UTF-8 delimitado por vírgulas</p>
+            <p className="text-xs text-muted-foreground">
+              Colunas esperadas: competence_date, transaction_type, Description, payee, Valor, Vencimento, Observação, Conta, Categoria, Entidade Financeira
+            </p>
             <Input type="file" accept=".csv" onChange={handleFile} disabled={loading} className="max-w-xs" />
             {loading && <p className="text-sm text-muted-foreground">Processando...</p>}
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 text-sm">
+            <div className="flex items-center gap-3 text-sm flex-wrap">
               <span className="font-medium">{fileName}</span>
               <Badge variant="outline" className="gap-1">
                 <CheckCircle className="h-3 w-3 text-[hsl(var(--success))]" />{validRows.length} válidos
@@ -228,50 +299,70 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
                   <AlertTriangle className="h-3 w-3" />{errorRows.length} com erro
                 </Badge>
               )}
+              <span className="text-xs text-muted-foreground">
+                Colunas detectadas: {debugHeaders.join(" | ")}
+              </span>
             </div>
 
-            <ScrollArea className="flex-1 border rounded-md">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">Competência</TableHead>
-                    <TableHead className="text-xs">Tipo</TableHead>
-                    <TableHead className="text-xs">Descrição</TableHead>
-                    <TableHead className="text-xs">Favorecido</TableHead>
-                    <TableHead className="text-xs">Valor</TableHead>
-                    <TableHead className="text-xs">Vencimento</TableHead>
-                    <TableHead className="text-xs">Conta</TableHead>
-                    <TableHead className="text-xs">Categoria</TableHead>
-                    <TableHead className="text-xs">Entidade</TableHead>
-                    <TableHead className="text-xs">Erros</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((r, i) => (
-                    <TableRow key={i} className={r.errors.length > 0 ? "bg-destructive/5" : ""}>
-                      <TableCell>
-                        {r.errors.length > 0
-                          ? <AlertTriangle className="h-4 w-4 text-destructive" />
-                          : <CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" />}
-                      </TableCell>
-                      <TableCell className="text-xs">{r.competence_date || "—"}</TableCell>
-                      <TableCell className="text-xs">{r.transaction_type}</TableCell>
-                      <TableCell className="text-xs max-w-[150px] truncate">{r.description}</TableCell>
-                      <TableCell className="text-xs">{r.payee || "—"}</TableCell>
-                      <TableCell className="text-xs">{fmt(r.amount)}</TableCell>
-                      <TableCell className="text-xs">{r.due_date || "—"}</TableCell>
-                      <TableCell className="text-xs">{r.account_name || "—"}</TableCell>
-                      <TableCell className="text-xs">{r.category_name || "—"}</TableCell>
-                      <TableCell className="text-xs">{r.entity_name || "—"}</TableCell>
-                      <TableCell className="text-xs text-destructive max-w-[200px]">
-                        {r.errors.join("; ")}
-                      </TableCell>
+            <TooltipProvider>
+              <ScrollArea className="flex-1 border rounded-md">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs w-[60px]">Status</TableHead>
+                      <TableHead className="text-xs">Competência</TableHead>
+                      <TableHead className="text-xs">Tipo</TableHead>
+                      <TableHead className="text-xs">Descrição</TableHead>
+                      <TableHead className="text-xs">Favorecido</TableHead>
+                      <TableHead className="text-xs">Valor</TableHead>
+                      <TableHead className="text-xs">Vencimento</TableHead>
+                      <TableHead className="text-xs">Conta</TableHead>
+                      <TableHead className="text-xs">Categoria</TableHead>
+                      <TableHead className="text-xs">Entidade</TableHead>
+                      <TableHead className="text-xs min-w-[250px]">Erros</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((r, i) => (
+                      <TableRow key={i} className={r.errors.length > 0 ? "bg-destructive/10" : ""}>
+                        <TableCell>
+                          {r.errors.length > 0 ? (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <AlertTriangle className="h-4 w-4 text-destructive" />
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-sm">
+                                <ul className="list-disc pl-3 text-xs space-y-1">
+                                  {r.errors.map((err, j) => <li key={j}>{err}</li>)}
+                                </ul>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs">{r.competence_date || "—"}</TableCell>
+                        <TableCell className="text-xs">{r.transaction_type || "—"}</TableCell>
+                        <TableCell className="text-xs max-w-[150px] truncate">{r.description || "—"}</TableCell>
+                        <TableCell className="text-xs">{r.payee || "—"}</TableCell>
+                        <TableCell className="text-xs">{fmt(r.amount)}</TableCell>
+                        <TableCell className="text-xs">{r.due_date || "—"}</TableCell>
+                        <TableCell className="text-xs">{r.account_name || "—"}</TableCell>
+                        <TableCell className="text-xs">{r.category_name || "—"}</TableCell>
+                        <TableCell className="text-xs">{r.entity_name || "—"}</TableCell>
+                        <TableCell className="text-xs text-destructive">
+                          {r.errors.length > 0 ? (
+                            <ul className="list-disc pl-3 space-y-0.5">
+                              {r.errors.map((err, j) => <li key={j}>{err}</li>)}
+                            </ul>
+                          ) : "—"}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            </TooltipProvider>
 
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => { reset(); }}>Limpar</Button>
