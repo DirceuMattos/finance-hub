@@ -51,7 +51,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
     defaultValues: {
       description: "", amount: "", frequency: "monthly", type: "expense",
       category_id: "", financial_entity_id: "", account_id: "",
-      start_date: null, end_date: null, is_active: true, notes: "",
+      start_date: null, end_date: null, is_active: true, payee: "", notes: "",
     },
   });
 
