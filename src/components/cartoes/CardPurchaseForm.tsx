@@ -45,7 +45,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
     resolver: zodResolver(schema),
     defaultValues: {
       description: "", card_id: "", category_id: "", financial_entity_id: "",
-      total_amount: 0, installments_count: 1, purchase_date: new Date(), notes: "",
+      total_amount: 0, installments_count: 1, purchase_date: new Date(), payee: "", notes: "",
     },
   });
 
