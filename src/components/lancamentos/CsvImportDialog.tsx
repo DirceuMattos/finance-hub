@@ -72,7 +72,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
       const lines = text.split(/\r?\n/).filter(l => l.trim());
       if (lines.length < 2) { toast.error("CSV vazio ou sem dados."); setLoading(false); return; }
 
-      const headers = lines[0].split(";").map(h => h.trim());
+      const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
 
       // Fetch reference data
       const [accRes, catRes, entRes] = await Promise.all([
