@@ -114,6 +114,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       ...data,
       category_id: data.category_id || null,
       account_id: data.account_id || null,
+      payee: data.payee || null,
       notes: data.notes || null,
       center_cost: data.center_cost || null,
       amount: parsedAmount,
