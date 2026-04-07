@@ -57,6 +57,7 @@ export default function ComprasCartao() {
   const columns: Column<CardPurchase>[] = [
     { key: "purchase_date", header: "Data", render: (r) => fmtDate(r.purchase_date) },
     { key: "description", header: "Descrição" },
+    { key: "payee", header: "Favorecido", render: (r) => r.payee || "—" },
     { key: "card", header: "Cartão", render: (r) => r.cards?.name || "—" },
     { key: "category", header: "Categoria", render: (r) => r.categories?.name || "—" },
     {
