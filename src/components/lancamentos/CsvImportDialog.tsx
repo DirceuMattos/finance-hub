@@ -99,7 +99,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
 
       const parsed: ParsedRow[] = [];
       for (let i = 1; i < lines.length; i++) {
-        const cols = lines[i].split(";").map(c => c.trim());
+        const cols = lines[i].split(",").map(c => c.trim().replace(/^"|"$/g, ""));
         const errors: string[] = [];
 
         const competence = parseBrDate(cols[colIdx["competence_date"]] || "");
