@@ -68,13 +68,14 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         start_date: recurrence.start_date ? new Date(recurrence.start_date) : null,
         end_date: recurrence.end_date ? new Date(recurrence.end_date) : null,
         is_active: recurrence.is_active,
+        payee: recurrence.payee || "",
         notes: recurrence.notes || "",
       });
     } else {
       form.reset({
         description: "", amount: "", frequency: "monthly", type: "expense",
         category_id: "", financial_entity_id: "", account_id: "",
-        start_date: null, end_date: null, is_active: true, notes: "",
+        start_date: null, end_date: null, is_active: true, payee: "", notes: "",
       });
     }
   }, [recurrence, open]);
