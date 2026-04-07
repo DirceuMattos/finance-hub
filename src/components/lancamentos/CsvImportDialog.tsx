@@ -361,6 +361,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
                   <TableBody>
                     {rows.map((r, i) => (
                       <TableRow key={i} className={r.errors.length > 0 ? "bg-destructive/10" : ""}>
+                        <TableCell className="text-xs text-muted-foreground">{r.lineNumber}</TableCell>
                         <TableCell>
                           {r.errors.length > 0 ? (
                             <Tooltip>
