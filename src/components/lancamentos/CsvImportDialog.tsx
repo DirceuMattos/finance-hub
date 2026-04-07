@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Upload, AlertTriangle, CheckCircle } from "lucide-react";
+import { Upload, AlertTriangle, CheckCircle, Copy } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
@@ -17,6 +17,8 @@ interface CsvImportDialogProps {
 }
 
 interface ParsedRow {
+  lineNumber: number;
+  rawLine: string;
   competence_date: string | null;
   transaction_type: string;
   description: string;
@@ -217,6 +219,8 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         const paymentDate = status === "paid" ? dueDate : null;
 
         parsed.push({
+          lineNumber: i + 1,
+          rawLine: lines[i],
           competence_date: competence,
           transaction_type: txType,
           description: desc,
@@ -246,6 +250,20 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
 
   const validRows = rows.filter(r => r.errors.length === 0);
   const errorRows = rows.filter(r => r.errors.length > 0);
+
+  const copyErrorsToClipboard = () => {
+    if (errorRows.length === 0) return;
+    const header = `Linha;Erros;Linha Original do CSV`;
+    const lines = errorRows.map(r =>
+      `${r.lineNumber};"${r.errors.join(" | ")}";"${r.rawLine.replace(/"/g, '""')}"`
+    );
+    const text = [header, ...lines].join("\n");
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success(`${errorRows.length} registro(s) com erro copiados para a área de transferência`);
+    }).catch(() => {
+      toast.error("Não foi possível copiar. Verifique as permissões do navegador.");
+    });
+  };
 
   const handleImport = async () => {
     if (validRows.length === 0) return;
@@ -326,6 +344,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="text-xs w-[50px]">Linha</TableHead>
                       <TableHead className="text-xs w-[60px]">Status</TableHead>
                       <TableHead className="text-xs">Competência</TableHead>
                       <TableHead className="text-xs">Tipo</TableHead>
@@ -342,6 +361,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
                   <TableBody>
                     {rows.map((r, i) => (
                       <TableRow key={i} className={r.errors.length > 0 ? "bg-destructive/10" : ""}>
+                        <TableCell className="text-xs text-muted-foreground">{r.lineNumber}</TableCell>
                         <TableCell>
                           {r.errors.length > 0 ? (
                             <Tooltip>
@@ -383,6 +403,11 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
 
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => { reset(); }}>Limpar</Button>
+              {errorRows.length > 0 && (
+                <Button variant="secondary" onClick={copyErrorsToClipboard} className="gap-1">
+                  <Copy className="h-4 w-4" /> Copiar {errorRows.length} erro(s)
+                </Button>
+              )}
               <Button onClick={handleImport} disabled={importing || validRows.length === 0}>
                 {importing ? "Importando..." : `Importar ${validRows.length} lançamento(s)`}
               </Button>
