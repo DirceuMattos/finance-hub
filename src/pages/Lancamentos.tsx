@@ -241,6 +241,9 @@ export default function Lancamentos() {
     <AppLayout>
       <PageHeader title="Lançamentos" description="Gerencie receitas e despesas" actions={
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4 mr-1" />Importar CSV
+          </Button>
           <Button size="sm" variant="outline" onClick={handleRepeatLast} title="Repetir último lançamento salvo">
             <Copy className="h-4 w-4 mr-1" />Repetir último
           </Button>
