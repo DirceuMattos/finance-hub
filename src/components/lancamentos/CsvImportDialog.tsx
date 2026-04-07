@@ -77,7 +77,7 @@ function parseCsvLine(line: string): string[] {
       if (ch === '"') {
         inQuotes = true;
         i++;
-      } else if (ch === ',') {
+      } else if (ch === ';') {
         fields.push(current.trim());
         current = "";
         i++;
@@ -280,7 +280,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         {rows.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-8">
             <Upload className="h-10 w-10 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Selecione um arquivo CSV UTF-8 delimitado por vírgulas</p>
+            <p className="text-sm text-muted-foreground">Selecione um arquivo CSV UTF-8 delimitado por ponto-e-vírgula (;)</p>
             <p className="text-xs text-muted-foreground">
               Colunas esperadas: competence_date, transaction_type, Description, payee, Valor, Vencimento, Observação, Conta, Categoria, Entidade Financeira
             </p>
