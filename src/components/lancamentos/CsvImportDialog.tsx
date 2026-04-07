@@ -164,9 +164,28 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         if (!competence && rawCompetence) errors.push(`Data competência inválida: "${rawCompetence}"`);
 
         const rawTxType = colIdx["transaction_type"] >= 0 ? (cols[colIdx["transaction_type"]] || "").toLowerCase().trim() : "";
-        const txType = rawTxType;
-        if (!["income", "expense", "transfer"].includes(txType)) {
-          errors.push(`Tipo inválido: "${rawTxType || "(vazio)"}". Use: income, expense ou transfer`);
+
+        // Derive transaction_type: category nature > CSV fallback mapping
+        const categoryName = colIdx["Categoria"] >= 0 ? (cols[colIdx["Categoria"]] || "").trim() : "";
+        const catEntry = categoryName ? catMap.get(categoryName.toLowerCase()) || null : null;
+        const categoryId = catEntry ? catEntry.id : null;
+        if (categoryName && !catEntry) errors.push(`Categoria não encontrada: "${categoryName}"`);
+
+        const txTypeFallbackMap: Record<string, string> = {
+          desp: "expense", despesa: "expense", despesas: "expense",
+          rec: "income", receita: "income", receitas: "income", rend: "income",
+          transf: "transfer", transferencia: "transfer", transferência: "transfer",
+          income: "income", expense: "expense", transfer: "transfer",
+        };
+        let txType = "";
+        if (catEntry?.nature) {
+          txType = catEntry.nature;
+        } else if (txTypeFallbackMap[rawTxType]) {
+          txType = txTypeFallbackMap[rawTxType];
+        } else if (rawTxType) {
+          errors.push(`Tipo inválido: "${rawTxType}". Use: income, expense ou transfer`);
+        } else {
+          txType = "expense"; // default
         }
 
         const desc = colIdx["Description"] >= 0 ? cols[colIdx["Description"]] || "" : "";
