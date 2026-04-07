@@ -23,6 +23,7 @@ const schema = z.object({
   total_amount: z.coerce.number().min(0.01, "Valor deve ser maior que zero"),
   installments_count: z.coerce.number().min(1, "Mínimo 1 parcela").max(72),
   purchase_date: z.date({ required_error: "Data é obrigatória" }),
+  payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
 
