@@ -212,7 +212,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         {rows.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-8">
             <Upload className="h-10 w-10 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Selecione um arquivo CSV separado por ponto-e-vírgula (;)</p>
+            <p className="text-sm text-muted-foreground">Selecione um arquivo CSV UTF-8 delimitado por vírgulas</p>
             <Input type="file" accept=".csv" onChange={handleFile} disabled={loading} className="max-w-xs" />
             {loading && <p className="text-sm text-muted-foreground">Processando...</p>}
           </div>
