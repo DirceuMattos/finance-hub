@@ -219,6 +219,8 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         const paymentDate = status === "paid" ? dueDate : null;
 
         parsed.push({
+          lineNumber: i + 1,
+          rawLine: lines[i],
           competence_date: competence,
           transaction_type: txType,
           description: desc,
