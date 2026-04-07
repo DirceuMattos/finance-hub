@@ -1,39 +1,23 @@
 
 
-## Plano: Importação de CSV de Lançamentos Comuns
+## Plano: Corrigir parsing de Tipo e Valor no importador CSV
 
-### O que será feito
-Uma funcionalidade de importação de CSV na página de Lançamentos, acessível por um botão "Importar CSV". O sistema lerá o arquivo, mapeará os nomes de contas/categorias/entidades para seus UUIDs e inserirá os registros no banco.
+### Problema
+1. **Tipo inválido ("Desp")**: O CSV usa abreviações como "Desp" (despesa) e "Rec" (receita), mas o sistema espera `income`/`expense`/`transfer`. Como as categorias já possuem `transaction_nature` (income/expense), o tipo pode ser derivado da categoria.
+2. **Valor inválido ("R$38,12")**: O campo contém o símbolo "R$" que não é removido antes do parsing numérico.
 
-### Mapeamento CSV → Banco
+### Solução
 
-| Coluna CSV | Coluna DB | Transformação |
-|---|---|---|
-| `competence_date` | `competence_date` | DD/MM/YYYY → YYYY-MM-DD |
-| `transaction_type` | `transaction_type` | Direto (income/expense/transfer) |
-| `Description` | `description` | Direto |
-| `payee` | `payee` | Direto |
-| `Valor` | `amount` | 1.500,00 → 1500.00 |
-| `Vencimento` | `due_date` | DD/MM/YYYY → YYYY-MM-DD |
-| `Observação` | `notes` | Direto |
-| `Conta` | `account_id` | Buscar UUID pelo nome na tabela `accounts` |
-| `Categoria` | `category_id` | Buscar UUID pelo nome na tabela `categories` |
-| `Entidade Financeira` | `financial_entity_id` | Buscar UUID pelo nome na tabela `financial_entities` |
+**Arquivo: `src/components/lancamentos/CsvImportDialog.tsx`**
 
-**Status automático**: se `Vencimento` ≤ hoje → `paid` (com `payment_date` = `due_date`), senão → `planned`.
+1. **Valor — limpar símbolo de moeda**: Na função `parseBrNumber`, remover prefixos como `R$` e espaços antes de processar o número.
 
-### Alterações técnicas
+2. **Tipo — derivar da categoria**: Em vez de exigir `income`/`expense`/`transfer` no CSV, buscar o campo `transaction_nature` das categorias. Ao fazer o fetch de categorias, incluir `transaction_nature` no select. Se a categoria for encontrada, usar seu `transaction_nature` como `transaction_type`. Se não for encontrada ou não tiver nature, usar mapeamento de fallback: `desp`→`expense`, `rec`→`income`. Remover a validação que rejeita valores diferentes de `income`/`expense`/`transfer`.
 
-**1. Novo componente `src/components/lancamentos/CsvImportDialog.tsx`**
-- Dialog com input de arquivo CSV
-- Ao carregar: parseia CSV, busca tabelas de referência (accounts, categories, financial_entities), mapeia nomes → UUIDs
-- Exibe preview dos dados mapeados com indicação de erros (ex: conta não encontrada)
-- Botão "Importar" insere em lote via `supabase.from("transactions").insert(rows)`
-- Exibe resumo: X importados, Y erros
+3. **Ajuste no select de categorias**: Mudar de `select("id, name")` para `select("id, name, transaction_nature")` e guardar o nature no mapa junto com o id.
 
-**2. Página `src/pages/Lancamentos.tsx`**
-- Adicionar botão "Importar CSV" ao lado dos botões existentes no header
-- Integrar o dialog de importação
-
-**3. Nenhuma alteração no banco** — as colunas já existem.
+### Resultado
+- Linhas com "Desp" ou "Rec" no tipo serão aceitas via mapeamento
+- Valores como "R$ 1.500,00" ou "R$38,12" serão parseados corretamente
+- Prioridade: `transaction_nature` da categoria > mapeamento do CSV
 
