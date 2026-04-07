@@ -28,6 +28,7 @@ const schema = z.object({
   start_date: z.date().optional().nullable(),
   end_date: z.date().optional().nullable(),
   is_active: z.boolean(),
+  payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
 
