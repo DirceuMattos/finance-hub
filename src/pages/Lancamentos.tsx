@@ -81,6 +81,7 @@ export default function Lancamentos() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Track last saved transaction for "repeat last"
   const lastSavedRef = useRef<Transaction | null>(null);
