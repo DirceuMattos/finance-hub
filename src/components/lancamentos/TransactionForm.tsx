@@ -27,6 +27,7 @@ const schema = z.object({
   due_date: z.date().optional().nullable(),
   payment_date: z.date().optional().nullable(),
   status: z.string().min(1, "Status é obrigatório"),
+  payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
   center_cost: z.string().optional().nullable(),
   installment_number: z.coerce.number().min(1).optional().nullable(),
