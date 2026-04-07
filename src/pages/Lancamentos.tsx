@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, subMonths, addMonths, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSearchParams } from "react-router-dom";
@@ -10,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload } from "lucide-react";
 import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
@@ -19,6 +20,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { PaymentDialog } from "@/components/lancamentos/PaymentDialog";
+import { CsvImportDialog } from "@/components/lancamentos/CsvImportDialog";
 import type { Transaction } from "@/types/database";
 
 function StatusBadge({ status }: { status: string }) {
@@ -59,6 +61,7 @@ function buildMonthOptions() {
 }
 
 export default function Lancamentos() {
+  const queryClient = useQueryClient();
   const { data = [], isLoading, create, update, remove } = useTransactions();
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
@@ -80,6 +83,7 @@ export default function Lancamentos() {
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Track last saved transaction for "repeat last"
   const lastSavedRef = useRef<Transaction | null>(null);
@@ -239,6 +243,9 @@ export default function Lancamentos() {
     <AppLayout>
       <PageHeader title="Lançamentos" description="Gerencie receitas e despesas" actions={
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
+            <Upload className="h-4 w-4 mr-1" />Importar CSV
+          </Button>
           <Button size="sm" variant="outline" onClick={handleRepeatLast} title="Repetir último lançamento salvo">
             <Copy className="h-4 w-4 mr-1" />Repetir último
           </Button>
@@ -352,6 +359,12 @@ export default function Lancamentos() {
       />
 
       <DeleteDialog open={!!deleting} onOpenChange={() => setDeleting(null)} onConfirm={() => { if (deleting) remove.mutate(deleting, { onSuccess: () => setDeleting(null) }); }} loading={remove.isPending} />
+
+      <CsvImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["transactions"] })}
+      />
 
       <PaymentDialog
         transaction={settling}
