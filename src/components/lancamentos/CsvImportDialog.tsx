@@ -17,6 +17,8 @@ interface CsvImportDialogProps {
 }
 
 interface ParsedRow {
+  lineNumber: number;
+  rawLine: string;
   competence_date: string | null;
   transaction_type: string;
   description: string;
