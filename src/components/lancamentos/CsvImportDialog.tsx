@@ -207,9 +207,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         const accountId = accountName ? accMap.get(accountName.toLowerCase()) || null : null;
         if (accountName && !accountId) errors.push(`Conta não encontrada: "${accountName}"`);
 
-        const categoryName = colIdx["Categoria"] >= 0 ? (cols[colIdx["Categoria"]] || "").trim() : "";
-        const categoryId = categoryName ? catMap.get(categoryName.toLowerCase()) || null : null;
-        if (categoryName && !categoryId) errors.push(`Categoria não encontrada: "${categoryName}"`);
+        // categoryName/categoryId already resolved above
 
         const entityName = colIdx["Entidade Financeira"] >= 0 ? (cols[colIdx["Entidade Financeira"]] || "").trim() : "";
         const entityId = entityName ? entMap.get(entityName.toLowerCase()) || null : null;
