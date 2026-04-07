@@ -46,7 +46,7 @@ function parseBrDate(raw: string): string | null {
 
 function parseBrNumber(raw: string): number | null {
   if (!raw) return null;
-  const cleaned = raw.trim().replace(/\./g, "").replace(",", ".");
+  const cleaned = raw.trim().replace(/^R\$\s*/i, "").replace(/\./g, "").replace(",", ".");
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
 }
