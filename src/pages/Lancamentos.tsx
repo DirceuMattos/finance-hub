@@ -19,6 +19,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { PaymentDialog } from "@/components/lancamentos/PaymentDialog";
+import { CsvImportDialog } from "@/components/lancamentos/CsvImportDialog";
 import type { Transaction } from "@/types/database";
 
 function StatusBadge({ status }: { status: string }) {
