@@ -71,12 +71,13 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
         total_amount: purchase.total_amount,
         installments_count: purchase.installments_count,
         purchase_date: new Date(purchase.purchase_date),
+        payee: purchase.payee || "",
         notes: purchase.notes || "",
       });
     } else {
       form.reset({
         description: "", card_id: "", category_id: "", financial_entity_id: "",
-        total_amount: 0, installments_count: 1, purchase_date: new Date(), notes: "",
+        total_amount: 0, installments_count: 1, purchase_date: new Date(), payee: "", notes: "",
       });
     }
   }, [purchase, open]);
