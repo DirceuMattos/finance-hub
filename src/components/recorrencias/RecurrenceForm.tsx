@@ -97,6 +97,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       start_date: data.start_date ? format(data.start_date, "yyyy-MM-dd") : null,
       end_date: data.end_date ? format(data.end_date, "yyyy-MM-dd") : null,
       is_active: data.is_active,
+      payee: data.payee || null,
       notes: data.notes || null,
     };
     onSubmit(recurrence ? { id: recurrence.id, ...payload } : payload);
