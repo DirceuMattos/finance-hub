@@ -121,14 +121,14 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
       // Fetch reference data
       const [accRes, catRes, entRes] = await Promise.all([
         (supabase as any).from("accounts").select("id, name"),
-        (supabase as any).from("categories").select("id, name"),
+        (supabase as any).from("categories").select("id, name, transaction_nature"),
         (supabase as any).from("financial_entities").select("id, name"),
       ]);
 
       const accMap = new Map<string, string>();
       (accRes.data || []).forEach((a: any) => accMap.set(a.name.toLowerCase().trim(), a.id));
-      const catMap = new Map<string, string>();
-      (catRes.data || []).forEach((c: any) => catMap.set(c.name.toLowerCase().trim(), c.id));
+      const catMap = new Map<string, { id: string; nature: string | null }>();
+      (catRes.data || []).forEach((c: any) => catMap.set(c.name.toLowerCase().trim(), { id: c.id, nature: c.transaction_nature || null }));
       const entMap = new Map<string, string>();
       (entRes.data || []).forEach((e: any) => entMap.set(e.name.toLowerCase().trim(), e.id));
 
