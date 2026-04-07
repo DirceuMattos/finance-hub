@@ -61,6 +61,7 @@ function buildMonthOptions() {
 }
 
 export default function Lancamentos() {
+  const queryClient = useQueryClient();
   const { data = [], isLoading, create, update, remove } = useTransactions();
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
