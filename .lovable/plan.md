@@ -1,42 +1,39 @@
 
 
-## Plano: Adicionar campo "Favorecido/Cliente" aos lançamentos
+## Plano: Importação de CSV de Lançamentos Comuns
 
-### O que muda
-Um novo campo de texto livre chamado **Favorecido/Cliente** será adicionado às três tabelas de lançamentos — transações comuns, compras de cartão e recorrências — e aos respectivos formulários e listagens.
+### O que será feito
+Uma funcionalidade de importação de CSV na página de Lançamentos, acessível por um botão "Importar CSV". O sistema lerá o arquivo, mapeará os nomes de contas/categorias/entidades para seus UUIDs e inserirá os registros no banco.
+
+### Mapeamento CSV → Banco
+
+| Coluna CSV | Coluna DB | Transformação |
+|---|---|---|
+| `competence_date` | `competence_date` | DD/MM/YYYY → YYYY-MM-DD |
+| `transaction_type` | `transaction_type` | Direto (income/expense/transfer) |
+| `Description` | `description` | Direto |
+| `payee` | `payee` | Direto |
+| `Valor` | `amount` | 1.500,00 → 1500.00 |
+| `Vencimento` | `due_date` | DD/MM/YYYY → YYYY-MM-DD |
+| `Observação` | `notes` | Direto |
+| `Conta` | `account_id` | Buscar UUID pelo nome na tabela `accounts` |
+| `Categoria` | `category_id` | Buscar UUID pelo nome na tabela `categories` |
+| `Entidade Financeira` | `financial_entity_id` | Buscar UUID pelo nome na tabela `financial_entities` |
+
+**Status automático**: se `Vencimento` ≤ hoje → `paid` (com `payment_date` = `due_date`), senão → `planned`.
 
 ### Alterações técnicas
 
-**1. Migração SQL — adicionar coluna `payee` nas 3 tabelas do banco externo**
+**1. Novo componente `src/components/lancamentos/CsvImportDialog.tsx`**
+- Dialog com input de arquivo CSV
+- Ao carregar: parseia CSV, busca tabelas de referência (accounts, categories, financial_entities), mapeia nomes → UUIDs
+- Exibe preview dos dados mapeados com indicação de erros (ex: conta não encontrada)
+- Botão "Importar" insere em lote via `supabase.from("transactions").insert(rows)`
+- Exibe resumo: X importados, Y erros
 
-O usuário precisará executar no SQL Editor do Supabase externo:
+**2. Página `src/pages/Lancamentos.tsx`**
+- Adicionar botão "Importar CSV" ao lado dos botões existentes no header
+- Integrar o dialog de importação
 
-```sql
-ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS payee TEXT;
-ALTER TABLE public.card_purchases ADD COLUMN IF NOT EXISTS payee TEXT;
-ALTER TABLE public.recurrences ADD COLUMN IF NOT EXISTS payee TEXT;
-```
-
-**2. Tipos — `src/types/database.ts`**
-- Adicionar `payee: string | null` em `Transaction`, `CardPurchase`
-
-**3. Hook de recorrências — `src/hooks/useRecurrences.ts`**
-- Adicionar `payee: string | null` na interface `Recurrence`
-
-**4. Formulário de Transações — `src/components/lancamentos/TransactionForm.tsx`**
-- Adicionar campo `payee` ao schema zod (texto, opcional, max 200)
-- Adicionar input de texto "Favorecido/Cliente" no formulário (logo após Descrição)
-- Incluir no reset e no payload de submissão
-
-**5. Formulário de Compras de Cartão — `src/components/cartoes/CardPurchaseForm.tsx`**
-- Mesmo padrão: campo `payee` no schema, input no form, reset e payload
-
-**6. Formulário de Recorrências — `src/components/recorrencias/RecurrenceForm.tsx`**
-- Mesmo padrão: campo `payee` no schema, input no form, reset e payload
-
-**7. Listagens — `src/pages/Lancamentos.tsx`, `src/pages/ComprasCartao.tsx`, `src/pages/Recorrencias.tsx`**
-- Adicionar coluna "Favorecido" na DataTable de cada página
-
-**8. Hook de Transações — `src/hooks/useTransactions.ts`**
-- Garantir que `payee` seja incluído no select (já vem automaticamente com `*`)
+**3. Nenhuma alteração no banco** — as colunas já existem.
 
