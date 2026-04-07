@@ -358,6 +358,12 @@ export default function Lancamentos() {
 
       <DeleteDialog open={!!deleting} onOpenChange={() => setDeleting(null)} onConfirm={() => { if (deleting) remove.mutate(deleting, { onSuccess: () => setDeleting(null) }); }} loading={remove.isPending} />
 
+      <CsvImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: ["transactions"] })}
+      />
+
       <PaymentDialog
         transaction={settling}
         open={!!settling}
