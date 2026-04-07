@@ -403,6 +403,11 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
 
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={() => { reset(); }}>Limpar</Button>
+              {errorRows.length > 0 && (
+                <Button variant="secondary" onClick={copyErrorsToClipboard} className="gap-1">
+                  <Copy className="h-4 w-4" /> Copiar {errorRows.length} erro(s)
+                </Button>
+              )}
               <Button onClick={handleImport} disabled={importing || validRows.length === 0}>
                 {importing ? "Importando..." : `Importar ${validRows.length} lançamento(s)`}
               </Button>
