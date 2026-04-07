@@ -100,6 +100,7 @@ export interface CardPurchase {
   installments_count: number;
   installment_amount: number;
   status: string;
+  payee: string | null;
   created_at: string;
   updated_at: string;
   cards?: { name: string };

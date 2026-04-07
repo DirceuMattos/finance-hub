@@ -15,6 +15,7 @@ export interface Recurrence {
   start_date: string | null;
   end_date: string | null;
   is_active: boolean;
+  payee: string | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
