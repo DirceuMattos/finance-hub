@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, subMonths, addMonths, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSearchParams } from "react-router-dom";
