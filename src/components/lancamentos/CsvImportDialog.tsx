@@ -344,6 +344,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="text-xs w-[50px]">Linha</TableHead>
                       <TableHead className="text-xs w-[60px]">Status</TableHead>
                       <TableHead className="text-xs">Competência</TableHead>
                       <TableHead className="text-xs">Tipo</TableHead>
