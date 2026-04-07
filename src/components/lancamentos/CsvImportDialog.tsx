@@ -77,7 +77,7 @@ function parseCsvLine(line: string): string[] {
       if (ch === '"') {
         inQuotes = true;
         i++;
-      } else if (ch === ',') {
+      } else if (ch === ';') {
         fields.push(current.trim());
         current = "";
         i++;
