@@ -136,6 +136,10 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
             <FormItem><FormLabel>Descrição *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
+          <FormField control={form.control} name="payee" render={({ field }) => (
+            <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+          )} />
+
           <div className="grid grid-cols-2 gap-3">
             <FormField control={form.control} name="type" render={({ field }) => (
               <FormItem><FormLabel>Tipo *</FormLabel><FormControl>

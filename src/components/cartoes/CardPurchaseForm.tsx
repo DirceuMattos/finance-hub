@@ -109,6 +109,10 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
             <FormItem><FormLabel>Descrição *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
+          <FormField control={form.control} name="payee" render={({ field }) => (
+            <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
+          )} />
+
           <FormField control={form.control} name="card_id" render={({ field }) => (
             <FormItem><FormLabel>Cartão *</FormLabel><FormControl>
               <Select onValueChange={field.onChange} value={field.value}>
