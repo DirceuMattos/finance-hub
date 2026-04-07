@@ -57,7 +57,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-      status: "planned", notes: "", center_cost: "",
+      status: "planned", payee: "", notes: "", center_cost: "",
       installment_number: 1, installment_total: 1,
     },
   });
@@ -86,6 +86,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         due_date: transaction.due_date ? new Date(transaction.due_date) : null,
         payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
         status: transaction.status,
+        payee: (transaction as any).payee || "",
         notes: transaction.notes || "",
         center_cost: (transaction as any).center_cost || "",
         installment_number: transaction.installment_number ?? 1,
@@ -95,7 +96,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-        status: "planned", notes: "", center_cost: "",
+        status: "planned", payee: "", notes: "", center_cost: "",
         installment_number: 1, installment_total: 1,
       });
     }
