@@ -55,17 +55,16 @@ export default function ComprasCartao() {
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
 
-  // Build month options from installments
+  // Generate month options dynamically (12 past + 6 future)
   const monthOptions = useMemo(() => {
-    const months = new Set<string>();
-    months.add(currentMonth);
-    installments.forEach((inst) => {
-      if (inst.billing_month) {
-        months.add(inst.billing_month.substring(0, 7));
-      }
-    });
-    return Array.from(months).sort().reverse();
-  }, [installments, currentMonth]);
+    const now = startOfDay(new Date());
+    const months: string[] = [];
+    for (let i = -12; i <= 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      months.push(format(d, "yyyy-MM"));
+    }
+    return months;
+  }, []);
 
   // Filter installments
   const filtered = useMemo(() => {
