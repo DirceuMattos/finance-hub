@@ -21,26 +21,38 @@ export type InstallmentRow = CardInstallment & {
     financial_entity_id: string;
     cards?: { name: string };
     categories?: { name: string } | null;
-    financial_entities?: { name: string };
+    financial_entities?: { name: string; entity_type?: string };
   };
 };
 
-export function useCardInstallments(cardId?: string, billingMonth?: string) {
+function getMonthRange(monthStr: string) {
+  const [y, m] = monthStr.split("-").map(Number);
+  const start = `${y}-${String(m).padStart(2, "0")}-01`;
+  const endMonth = m === 12 ? 1 : m + 1;
+  const endYear = m === 12 ? y + 1 : y;
+  const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
+  return { start, end };
+}
+
+export function useCardInstallments(filterMonth?: string) {
   return useQuery({
-    queryKey: ["card_installments", cardId, billingMonth],
+    queryKey: ["card_installments", filterMonth],
     queryFn: async () => {
       let query = (supabase as any)
         .from("card_installments")
-        .select("*, card_purchases(description, card_id, purchase_date, payee, installments_count, financial_entity_id, cards(name), categories(name), financial_entities(name))")
-        .order("billing_month")
-        .order("installment_number")
-        .limit(5000);
-      if (cardId) {
-        query = query.eq("card_purchases.card_id", cardId);
+        .select("*, card_purchases(description, card_id, purchase_date, payee, installments_count, financial_entity_id, cards(name), categories(name), financial_entities(name, entity_type))")
+        .order("due_date", { ascending: true })
+        .order("installment_number");
+
+      // Server-side filter by due_date month
+      if (filterMonth && filterMonth !== "all") {
+        const { start, end } = getMonthRange(filterMonth);
+        query = query.gte("due_date", start).lt("due_date", end);
+      } else {
+        // No month filter: limit to avoid truncation
+        query = query.limit(5000);
       }
-      if (billingMonth) {
-        query = query.eq("billing_month", billingMonth);
-      }
+
       const { data, error } = await query;
       if (error) throw error;
       return data as InstallmentRow[];
@@ -58,7 +70,6 @@ export function useBillingProjection() {
         .order("billing_month")
         .order("card_name");
       if (error) {
-        // View might not exist — fallback to manual aggregation
         const { data: installments, error: fallbackError } = await (supabase as any)
           .from("card_installments")
           .select("*, card_purchases(card_id, cards(name, due_day))")

@@ -213,12 +213,7 @@ export default function Lancamentos() {
         if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "BRA Pessoal")) return false;
         if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "Nu Infotkt")) return false;
       }
-      if (filterMonth !== "all") {
-        const monthStart = filterMonth + "-01";
-        const [y, m] = filterMonth.split("-").map(Number);
-        const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
-        if (t.competence_date < monthStart || t.competence_date >= nextMonth) return false;
-      }
+      // Month filtering is now done server-side in the hooks
       return true;
     });
   }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
