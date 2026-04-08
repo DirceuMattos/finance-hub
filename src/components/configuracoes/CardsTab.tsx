@@ -32,6 +32,7 @@ export function CardsTab() {
     { key: "name", header: "Nome" },
     { key: "issuer_bank", header: "Banco", render: (r) => r.issuer_bank || "—" },
     { key: "credit_limit", header: "Limite", render: (r) => fmt(r.credit_limit) },
+    { key: "managerial_limit", header: "Teto Gerencial", render: (r) => fmt(r.managerial_limit || r.credit_limit) },
     { key: "closing_day", header: "Fecha Dia", render: (r) => String(r.closing_day) },
     { key: "due_day", header: "Vence Dia", render: (r) => String(r.due_day) },
     {
