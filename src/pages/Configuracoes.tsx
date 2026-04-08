@@ -18,6 +18,7 @@ export default function Configuracoes() {
           <TabsTrigger value="accounts" className="gap-1.5"><Wallet className="h-4 w-4" />Contas</TabsTrigger>
           <TabsTrigger value="cards" className="gap-1.5"><CreditCard className="h-4 w-4" />Cartões</TabsTrigger>
           <TabsTrigger value="categories" className="gap-1.5"><Tag className="h-4 w-4" />Categorias</TabsTrigger>
+          <TabsTrigger value="inv-classes" className="gap-1.5"><BarChart3 className="h-4 w-4" />Classes Invest.</TabsTrigger>
           <TabsTrigger value="parameters" className="gap-1.5"><Settings className="h-4 w-4" />Parâmetros</TabsTrigger>
           <TabsTrigger value="users" className="gap-1.5"><Users className="h-4 w-4" />Usuários</TabsTrigger>
         </TabsList>
