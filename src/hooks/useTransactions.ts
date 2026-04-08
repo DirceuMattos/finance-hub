@@ -13,7 +13,8 @@ export function useTransactions() {
       const { data, error } = await (supabase as any)
         .from("transactions")
         .select("*, categories(name), financial_entities(name, entity_type), accounts(name)")
-        .order("competence_date", { ascending: false });
+        .order("competence_date", { ascending: false })
+        .limit(5000);
       if (error) throw error;
       return data as Transaction[];
     },
