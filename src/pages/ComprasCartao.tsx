@@ -42,8 +42,6 @@ export default function ComprasCartao() {
   const [search, setSearch] = useState("");
   const [filterCard, setFilterCard] = useState("all");
   const [filterEntity, setFilterEntity] = useState("all");
-  const currentMonth = format(new Date(), "yyyy-MM");
-  const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CardPurchase | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
