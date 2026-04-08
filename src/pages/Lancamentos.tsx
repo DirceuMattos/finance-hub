@@ -89,17 +89,17 @@ function buildMonthOptions() {
 
 export default function Lancamentos() {
   const queryClient = useQueryClient();
-  const { data = [], isLoading, create, update, remove } = useTransactions();
-  const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments();
+  const [searchParams] = useSearchParams();
+  const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
+  const [filterMonth, setFilterMonth] = useState(initialMonth);
+
+  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
+  const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
 
-  const [searchParams] = useSearchParams();
-  const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
-
   const [search, setSearch] = useState("");
-  const [filterMonth, setFilterMonth] = useState(initialMonth);
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterAccount, setFilterAccount] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -150,7 +150,7 @@ export default function Lancamentos() {
       status: inst.status === "paid" ? "paid" : inst.status === "cancelled" ? "cancelled" : "planned",
       category_name: inst.card_purchases?.categories?.name || null,
       entity_name: inst.card_purchases?.financial_entities?.name || null,
-      entity_type: null,
+      entity_type: (inst.card_purchases?.financial_entities as any)?.entity_type || null,
       account_name: null,
       payee: inst.card_purchases?.payee || null,
       installment_number: inst.installment_number,
@@ -213,12 +213,7 @@ export default function Lancamentos() {
         if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "BRA Pessoal")) return false;
         if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "Nu Infotkt")) return false;
       }
-      if (filterMonth !== "all") {
-        const monthStart = filterMonth + "-01";
-        const [y, m] = filterMonth.split("-").map(Number);
-        const nextMonth = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
-        if (t.competence_date < monthStart || t.competence_date >= nextMonth) return false;
-      }
+      // Month filtering is now done server-side in the hooks
       return true;
     });
   }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);

@@ -31,7 +31,9 @@ function StatusBadge({ status, dueDate }: { status: string; dueDate?: string }) 
 }
 
 export default function ComprasCartao() {
-  const { data: installments = [], isLoading: loadingInstallments } = useCardInstallments();
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
+  const { data: installments = [], isLoading: loadingInstallments } = useCardInstallments(filterMonth);
   const { create, update, remove } = useCardPurchases();
   const { data: cards = [] } = useCards();
   const { data: categories = [] } = useCategories();
@@ -40,8 +42,6 @@ export default function ComprasCartao() {
   const [search, setSearch] = useState("");
   const [filterCard, setFilterCard] = useState("all");
   const [filterEntity, setFilterEntity] = useState("all");
-  const currentMonth = format(new Date(), "yyyy-MM");
-  const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CardPurchase | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -55,32 +55,27 @@ export default function ComprasCartao() {
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
 
-  // Build month options from installments
+  // Generate month options dynamically (12 past + 6 future)
   const monthOptions = useMemo(() => {
-    const months = new Set<string>();
-    months.add(currentMonth);
-    installments.forEach((inst) => {
-      if (inst.billing_month) {
-        months.add(inst.billing_month.substring(0, 7));
-      }
-    });
-    return Array.from(months).sort().reverse();
-  }, [installments, currentMonth]);
+    const now = startOfDay(new Date());
+    const months: string[] = [];
+    for (let i = -12; i <= 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      months.push(format(d, "yyyy-MM"));
+    }
+    return months;
+  }, []);
 
-  // Filter installments
+  // Filter installments (month is already filtered server-side)
   const filtered = useMemo(() => {
     return installments.filter((inst) => {
       const desc = inst.card_purchases?.description || "";
       if (search && !desc.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterCard !== "all" && inst.card_purchases?.card_id !== filterCard) return false;
       if (filterEntity !== "all" && inst.card_purchases?.financial_entity_id !== filterEntity) return false;
-      if (filterMonth !== "all") {
-        const instMonth = inst.billing_month?.substring(0, 7);
-        if (instMonth !== filterMonth) return false;
-      }
       return true;
     });
-  }, [installments, search, filterCard, filterEntity, filterMonth]);
+  }, [installments, search, filterCard, filterEntity]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";

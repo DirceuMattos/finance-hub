@@ -4,17 +4,35 @@ import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { Transaction } from "@/types/database";
 
-export function useTransactions() {
+function getMonthRange(monthStr: string) {
+  const [y, m] = monthStr.split("-").map(Number);
+  const start = `${y}-${String(m).padStart(2, "0")}-01`;
+  const endMonth = m === 12 ? 1 : m + 1;
+  const endYear = m === 12 ? y + 1 : y;
+  const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
+  return { start, end };
+}
+
+export function useTransactions(filterMonth?: string) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["transactions"],
+    queryKey: ["transactions", filterMonth],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let q = (supabase as any)
         .from("transactions")
         .select("*, categories(name), financial_entities(name, entity_type), accounts(name)")
-        .order("competence_date", { ascending: false })
-        .limit(5000);
+        .order("competence_date", { ascending: false });
+
+      if (filterMonth && filterMonth !== "all") {
+        const { start, end } = getMonthRange(filterMonth);
+        // Filter: due_date in month OR (due_date is null AND competence_date in month)
+        q = q.or(`and(due_date.gte.${start},due_date.lt.${end}),and(due_date.is.null,competence_date.gte.${start},competence_date.lt.${end})`);
+      } else {
+        q = q.limit(5000);
+      }
+
+      const { data, error } = await q;
       if (error) throw error;
       return data as Transaction[];
     },
