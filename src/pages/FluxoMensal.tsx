@@ -4,7 +4,6 @@ import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
-import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,21 +16,28 @@ type ViewName = "consolidated" | "personal" | "business";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
+const parseReferenceMonthDate = (value: string) => {
+  const [yearStr, monthStr, dayStr = "01"] = value.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  const day = Number(dayStr);
+
+  if (!year || !month) return null;
+
+  const date = new Date(year, month - 1, day || 1);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const fmtMonth = (m: string) => {
-  try {
-    const d = new Date(m);
-    return format(d, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
-  } catch {
-    return m;
-  }
+  const date = parseReferenceMonthDate(m);
+  if (!date) return m;
+  return format(date, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
 };
 
 const toMonthParam = (m: string) => {
-  try {
-    return format(new Date(m), "yyyy-MM");
-  } catch {
-    return m;
-  }
+  const date = parseReferenceMonthDate(m);
+  if (!date) return m;
+  return format(date, "yyyy-MM");
 };
 
 type TrafficInfo = { label: string; className: string };
@@ -74,8 +80,10 @@ export default function FluxoMensal() {
   const totals = useMemo(() => {
     const income = data.reduce((s, r) => s + (r.income_paid || 0), 0);
     const expense = data.reduce((s, r) => s + (r.expense_paid || 0), 0);
-    return { income, expense, net: income - expense };
+    return { income, expense, result: income - expense };
   }, [data]);
+
+  const selectedYearLabel = selectedYear === "all" ? "Todos os anos" : selectedYear;
 
   const columns: Column<MonthlyCashflow>[] = [
     {
@@ -165,6 +173,17 @@ export default function FluxoMensal() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-[hsl(152,60%,40%)]">{fmt(totals.income)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Ano filtrado: {selectedYearLabel}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Resultado</CardTitle>
+            <Scale className="h-4 w-4 text-primary" />
+          </CardHeader>
+          <CardContent>
+            <p className={`text-2xl font-bold ${totals.result < 0 ? "text-destructive" : "text-foreground"}`}>{fmt(totals.result)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Receitas realizadas menos despesas realizadas</p>
           </CardContent>
         </Card>
         <Card>
@@ -174,15 +193,7 @@ export default function FluxoMensal() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-destructive">{fmt(totals.expense)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Saldo Líquido</CardTitle>
-            <Scale className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-bold ${totals.net < 0 ? "text-destructive" : "text-foreground"}`}>{fmt(totals.net)}</p>
+            <p className="mt-1 text-xs text-muted-foreground">Ano filtrado: {selectedYearLabel}</p>
           </CardContent>
         </Card>
       </div>
