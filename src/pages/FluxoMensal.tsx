@@ -135,13 +135,27 @@ export default function FluxoMensal() {
     <AppLayout>
       <PageHeader title="Fluxo Mensal" description="Projeção de receitas e despesas por mês" />
 
-      <Tabs value={view} onValueChange={(v) => setView(v as ViewName)} className="mb-6">
-        <TabsList>
-          <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
-          <TabsTrigger value="personal">Pessoal</TabsTrigger>
-          <TabsTrigger value="business">Empresarial</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+        <Tabs value={view} onValueChange={(v) => setView(v as ViewName)}>
+          <TabsList>
+            <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
+            <TabsTrigger value="personal">Pessoal</TabsTrigger>
+            <TabsTrigger value="business">Empresarial</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Ano" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os anos</SelectItem>
+            {availableYears.map((y) => (
+              <SelectItem key={y} value={y}>{y}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
