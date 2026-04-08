@@ -43,16 +43,15 @@ function useCardInvoiceTransactionsQuery() {
   return useQuery({
     queryKey: ["card_invoice_transactions"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      // Source 1: transactions by center_cost
+      const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
         .select("id, description, amount, competence_date, due_date, status, center_cost")
         .order("competence_date", { ascending: false });
-      if (error) throw error;
+      if (txError) throw txError;
 
-      return (data || [])
-        .filter((t: any) => {
-          return t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost);
-        })
+      const fromTransactions: CardInvoiceTransaction[] = (txData || [])
+        .filter((t: any) => t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost))
         .map((t: any): CardInvoiceTransaction => ({
           id: t.id,
           description: t.description,
@@ -64,6 +63,45 @@ function useCardInvoiceTransactionsQuery() {
           card_name: CENTER_COST_CARD_MAP[t.center_cost] || t.center_cost,
           entity_type: CENTER_COST_ENTITY_MAP[t.center_cost] || null,
         }));
+
+      // Source 2: card_installments from card_purchases
+      let fromInstallments: CardInvoiceTransaction[] = [];
+      try {
+        const { data: instData, error: instError } = await (supabase as any)
+          .from("card_installments")
+          .select("id, billing_month, due_date, amount, status, card_purchases(description, card_id, cards(name), financial_entities(entity_type))")
+          .order("billing_month", { ascending: false });
+
+        if (!instError && instData) {
+          fromInstallments = (instData as any[]).map((inst): CardInvoiceTransaction => {
+            const cardName = inst.card_purchases?.cards?.name || "—";
+            const entityRaw = inst.card_purchases?.financial_entities?.entity_type;
+            const entityType: "personal" | "business" | null =
+              entityRaw === "personal" || entityRaw === "business" ? entityRaw : null;
+            const statusMapped = inst.status === "paid" ? "paid" : "planned";
+
+            return {
+              id: inst.id,
+              description: inst.card_purchases?.description || "",
+              amount: Math.abs(inst.amount),
+              competence_date: inst.billing_month + "-01",
+              due_date: inst.due_date,
+              status: statusMapped,
+              center_cost: "",
+              card_name: cardName,
+              entity_type: entityType,
+            };
+          });
+        }
+      } catch {
+        // card_installments table may not exist — ignore
+      }
+
+      // Deduplicate: installment IDs won't collide with transaction IDs (both UUIDs)
+      const seenIds = new Set(fromTransactions.map((t) => t.id));
+      const unique = fromInstallments.filter((i) => !seenIds.has(i.id));
+
+      return [...fromTransactions, ...unique];
     },
   });
 }
