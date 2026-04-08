@@ -26,6 +26,7 @@ export default function Configuracoes() {
         <TabsContent value="accounts"><AccountsTab /></TabsContent>
         <TabsContent value="cards"><CardsTab /></TabsContent>
         <TabsContent value="categories"><CategoriesTab /></TabsContent>
+        <TabsContent value="inv-classes"><InvestmentClassesTab /></TabsContent>
         <TabsContent value="parameters"><SystemParametersTab /></TabsContent>
         <TabsContent value="users"><UsersTab /></TabsContent>
       </Tabs>
