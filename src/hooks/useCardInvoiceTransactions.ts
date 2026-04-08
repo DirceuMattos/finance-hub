@@ -106,19 +106,26 @@ function useCardInvoiceTransactionsQuery() {
   });
 }
 
-/** Total faturado por cartão (para barras de progresso) — soma apenas faturas com status planned */
-export function useCardInvoicesByCard() {
+/** Total faturado por cartão (para barras de progresso) — filtrado por mês */
+export function useCardInvoicesByCard(filterMonth?: string) {
   const { data: invoices = [], ...rest } = useCardInvoiceTransactionsQuery();
 
   const byCard = useMemo(() => {
     const map = new Map<string, number>();
     invoices
-      .filter((i) => i.status === "planned")
+      .filter((i) => {
+        // Filter by month if provided (compare YYYY-MM from competence_date)
+        if (filterMonth && filterMonth !== "all") {
+          const invMonth = i.competence_date.substring(0, 7);
+          if (invMonth !== filterMonth) return false;
+        }
+        return true;
+      })
       .forEach((i) => {
         map.set(i.card_name, (map.get(i.card_name) || 0) + i.amount);
       });
     return map;
-  }, [invoices]);
+  }, [invoices, filterMonth]);
 
   return { byCard, ...rest };
 }
