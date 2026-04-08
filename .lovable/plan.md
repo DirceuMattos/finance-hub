@@ -1,23 +1,41 @@
 
 
-## Plano: Corrigir parsing de Tipo e Valor no importador CSV
+## Diagnóstico: Dados de cartões não aparecem em Faturas Projetadas
 
-### Problema
-1. **Tipo inválido ("Desp")**: O CSV usa abreviações como "Desp" (despesa) e "Rec" (receita), mas o sistema espera `income`/`expense`/`transfer`. Como as categorias já possuem `transaction_nature` (income/expense), o tipo pode ser derivado da categoria.
-2. **Valor inválido ("R$38,12")**: O campo contém o símbolo "R$" que não é removido antes do parsing numérico.
+### Causa raiz
 
-### Solução
+O módulo **Faturas Projetadas** (`FaturasProjetadas.tsx`) usa o hook `useCardInvoiceProjections`, que lê da tabela **`transactions`** filtrando por `center_cost` (ex: "Cartão de Crédito - Pessoal"). Ele **não lê** de `card_purchases` nem `card_installments`.
 
-**Arquivo: `src/components/lancamentos/CsvImportDialog.tsx`**
+Os dados importados foram inseridos na tabela `card_purchases`, que é uma tabela separada. São dois fluxos de dados independentes:
 
-1. **Valor — limpar símbolo de moeda**: Na função `parseBrNumber`, remover prefixos como `R$` e espaços antes de processar o número.
+| Fonte | Tabela | Módulo que consome |
+|---|---|---|
+| Importador de lançamentos | `transactions` | Faturas Projetadas, Lançamentos |
+| Importador/cadastro de compras | `card_purchases` + `card_installments` | Compras Cartão |
 
-2. **Tipo — derivar da categoria**: Em vez de exigir `income`/`expense`/`transfer` no CSV, buscar o campo `transaction_nature` das categorias. Ao fazer o fetch de categorias, incluir `transaction_nature` no select. Se a categoria for encontrada, usar seu `transaction_nature` como `transaction_type`. Se não for encontrada ou não tiver nature, usar mapeamento de fallback: `desp`→`expense`, `rec`→`income`. Remover a validação que rejeita valores diferentes de `income`/`expense`/`transfer`.
+### Solução proposta
 
-3. **Ajuste no select de categorias**: Mudar de `select("id, name")` para `select("id, name, transaction_nature")` e guardar o nature no mapa junto com o id.
+Ajustar o hook `useCardInvoiceProjections` para **também incluir dados de `card_purchases`/`card_installments`**, unificando ambas as fontes na mesma visualização.
 
-### Resultado
-- Linhas com "Desp" ou "Rec" no tipo serão aceitas via mapeamento
-- Valores como "R$ 1.500,00" ou "R$38,12" serão parseados corretamente
-- Prioridade: `transaction_nature` da categoria > mapeamento do CSV
+### Alterações
+
+**1. `src/hooks/useCardInvoiceTransactions.ts`**
+
+Na função `useCardInvoiceTransactionsQuery`, após buscar os dados de `transactions` por `center_cost`, também buscar de `card_installments` (com join em `card_purchases` e `cards`) e unificar os dois conjuntos em um único array de `CardInvoiceTransaction`.
+
+- Buscar `card_installments` com status `pending`/`open`, fazendo join para obter `card_name` via `card_purchases.cards.name`
+- Mapear cada installment para o mesmo formato `CardInvoiceTransaction`:
+  - `competence_date` = `billing_month` + `-01`
+  - `due_date` = `due_date` da parcela
+  - `status` = mapear `pending`→`planned`, `paid`→`paid`
+  - `card_name` = nome do cartão via join
+  - `amount` = valor da parcela
+- Concatenar com os registros vindos de `transactions`
+- Deduplicar se necessário (evitar contar duas vezes o mesmo lançamento)
+
+**2. Nenhuma alteração no banco de dados** — apenas leitura das tabelas existentes.
+
+### Resultado esperado
+
+O módulo Faturas Projetadas passará a exibir tanto os lançamentos manuais (via `transactions` com `center_cost`) quanto as compras de cartão importadas (via `card_purchases`/`card_installments`), unificados na mesma projeção mensal.
 
