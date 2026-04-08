@@ -63,7 +63,8 @@ export function useBillingProjection() {
           .from("card_installments")
           .select("*, card_purchases(card_id, cards(name, due_day))")
           .in("status", ["pending", "open"])
-          .order("billing_month");
+          .order("billing_month")
+          .limit(5000);
         if (fallbackError) throw fallbackError;
 
         const grouped = new Map<string, BillingProjection>();
