@@ -47,7 +47,8 @@ function useCardInvoiceTransactionsQuery() {
       const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
         .select("id, description, amount, competence_date, due_date, status, center_cost")
-        .order("competence_date", { ascending: false });
+        .order("competence_date", { ascending: false })
+        .limit(5000);
       if (txError) throw txError;
 
       const fromTransactions: CardInvoiceTransaction[] = (txData || [])
@@ -70,7 +71,8 @@ function useCardInvoiceTransactionsQuery() {
         const { data: instData, error: instError } = await (supabase as any)
           .from("card_installments")
           .select("id, billing_month, due_date, amount, status, card_purchases(description, card_id, cards(name), financial_entities(entity_type))")
-          .order("billing_month", { ascending: false });
+          .order("billing_month", { ascending: false })
+          .limit(5000);
 
         if (!instError && instData) {
           fromInstallments = (instData as any[]).map((inst): CardInvoiceTransaction => {
