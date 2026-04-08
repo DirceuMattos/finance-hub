@@ -99,11 +99,7 @@ export default function Lancamentos() {
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
 
-  const [searchParams] = useSearchParams();
-  const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
-
   const [search, setSearch] = useState("");
-  const [filterMonth, setFilterMonth] = useState(initialMonth);
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterAccount, setFilterAccount] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
