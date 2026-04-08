@@ -4,10 +4,12 @@ import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
+import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TrendingUp, TrendingDown, Scale } from "lucide-react";
 import { useMonthlyCashflow, MonthlyCashflow } from "@/hooks/useMonthlyCashflow";
 
@@ -51,7 +53,23 @@ const trafficLightMap = (light: string | undefined): TrafficInfo | null => {
 export default function FluxoMensal() {
   const navigate = useNavigate();
   const [view, setView] = useState<ViewName>("consolidated");
-  const { data = [], isLoading } = useMonthlyCashflow(view);
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear);
+  const { data: rawData = [], isLoading } = useMonthlyCashflow(view);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    rawData.forEach((r) => {
+      try { years.add(r.reference_month.substring(0, 4)); } catch {}
+    });
+    if (years.size === 0) years.add(currentYear);
+    return Array.from(years).sort().reverse();
+  }, [rawData, currentYear]);
+
+  const data = useMemo(() => {
+    if (selectedYear === "all") return rawData;
+    return rawData.filter((r) => r.reference_month.substring(0, 4) === selectedYear);
+  }, [rawData, selectedYear]);
 
   const totals = useMemo(() => {
     const income = data.reduce((s, r) => s + (r.income_paid || 0), 0);
@@ -117,13 +135,27 @@ export default function FluxoMensal() {
     <AppLayout>
       <PageHeader title="Fluxo Mensal" description="Projeção de receitas e despesas por mês" />
 
-      <Tabs value={view} onValueChange={(v) => setView(v as ViewName)} className="mb-6">
-        <TabsList>
-          <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
-          <TabsTrigger value="personal">Pessoal</TabsTrigger>
-          <TabsTrigger value="business">Empresarial</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
+        <Tabs value={view} onValueChange={(v) => setView(v as ViewName)}>
+          <TabsList>
+            <TabsTrigger value="consolidated">Consolidado</TabsTrigger>
+            <TabsTrigger value="personal">Pessoal</TabsTrigger>
+            <TabsTrigger value="business">Empresarial</TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        <Select value={selectedYear} onValueChange={setSelectedYear}>
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Ano" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os anos</SelectItem>
+            {availableYears.map((y) => (
+              <SelectItem key={y} value={y}>{y}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <Card>
