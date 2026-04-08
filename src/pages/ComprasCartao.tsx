@@ -32,6 +32,8 @@ export default function ComprasCartao() {
   const [search, setSearch] = useState("");
   const [filterCard, setFilterCard] = useState("all");
   const [filterEntity, setFilterEntity] = useState("all");
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CardPurchase | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -45,10 +47,31 @@ export default function ComprasCartao() {
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
 
+  // Generate month options from data
+  const monthOptions = useMemo(() => {
+    const months = new Set<string>();
+    months.add(currentMonth);
+    data.forEach((p) => {
+      if (p.first_billing_month) {
+        const start = parse(p.first_billing_month.substring(0, 7), "yyyy-MM", new Date());
+        for (let i = 0; i < p.installments_count; i++) {
+          months.add(format(addMonths(start, i), "yyyy-MM"));
+        }
+      }
+    });
+    return Array.from(months).sort().reverse();
+  }, [data, currentMonth]);
+
   const filtered = data.filter((p) => {
     if (search && !p.description.toLowerCase().includes(search.toLowerCase())) return false;
     if (filterCard !== "all" && p.card_id !== filterCard) return false;
     if (filterEntity !== "all" && p.financial_entity_id !== filterEntity) return false;
+    if (filterMonth !== "all" && p.first_billing_month) {
+      const selectedMonth = parse(filterMonth, "yyyy-MM", new Date());
+      const firstMonth = parse(p.first_billing_month.substring(0, 7), "yyyy-MM", new Date());
+      const lastMonth = addMonths(firstMonth, p.installments_count - 1);
+      if (isBefore(selectedMonth, startOfMonth(firstMonth)) || isAfter(selectedMonth, startOfMonth(lastMonth))) return false;
+    }
     return true;
   });
 
