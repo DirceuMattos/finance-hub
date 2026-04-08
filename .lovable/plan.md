@@ -1,41 +1,90 @@
 
 
-## Diagnóstico: Dados de cartões não aparecem em Faturas Projetadas
+## Plano: Ajustes no Módulo Compras no Cartão e Lançamentos
 
-### Causa raiz
+### Resumo das 5 solicitações
 
-O módulo **Faturas Projetadas** (`FaturasProjetadas.tsx`) usa o hook `useCardInvoiceProjections`, que lê da tabela **`transactions`** filtrando por `center_cost` (ex: "Cartão de Crédito - Pessoal"). Ele **não lê** de `card_purchases` nem `card_installments`.
+1. Mostrar data de compra + data de vencimento; filtro por mês usa vencimento
+2. Corrigir status "Aberta" para compras já vencidas (ex: 25/03/2026)
+3. Expandir parcelas na lista — cada parcela aparece como linha separada
+4. Exibir parcelas de cartão na tela de Lançamentos (somente leitura)
+5. Seleção em lote para edição/manutenção de múltiplos lançamentos
 
-Os dados importados foram inseridos na tabela `card_purchases`, que é uma tabela separada. São dois fluxos de dados independentes:
+---
 
-| Fonte | Tabela | Módulo que consome |
-|---|---|---|
-| Importador de lançamentos | `transactions` | Faturas Projetadas, Lançamentos |
-| Importador/cadastro de compras | `card_purchases` + `card_installments` | Compras Cartão |
+### Etapa 1 — Explodir parcelas na lista de Compras no Cartão
 
-### Solução proposta
+**Arquivo:** `src/pages/ComprasCartao.tsx`
 
-Ajustar o hook `useCardInvoiceProjections` para **também incluir dados de `card_purchases`/`card_installments`**, unificando ambas as fontes na mesma visualização.
+Em vez de exibir uma linha por compra, o módulo passará a exibir **uma linha por parcela** (usando dados de `card_installments`). Cada linha mostrará:
 
-### Alterações
+- **Data Compra** — `purchase_date` da compra original
+- **Vencimento** — `due_date` da parcela (campo da `card_installments`)
+- **Descrição** — descrição da compra
+- **Parcela** — ex: "2/6"
+- **Valor Parcela** — `amount` da parcela
+- **Status** — da parcela individual
 
-**1. `src/hooks/useCardInvoiceTransactions.ts`**
+O hook `useCardInstallments` será usado para buscar as parcelas com join em `card_purchases`. A filtragem por mês usará o `due_date` (vencimento) da parcela.
 
-Na função `useCardInvoiceTransactionsQuery`, após buscar os dados de `transactions` por `center_cost`, também buscar de `card_installments` (com join em `card_purchases` e `cards`) e unificar os dois conjuntos em um único array de `CardInvoiceTransaction`.
+Quando o filtro for "Todos os meses", todas as parcelas de todas as compras serão exibidas, permitindo ver a evolução completa.
 
-- Buscar `card_installments` com status `pending`/`open`, fazendo join para obter `card_name` via `card_purchases.cards.name`
-- Mapear cada installment para o mesmo formato `CardInvoiceTransaction`:
-  - `competence_date` = `billing_month` + `-01`
-  - `due_date` = `due_date` da parcela
-  - `status` = mapear `pending`→`planned`, `paid`→`paid`
-  - `card_name` = nome do cartão via join
-  - `amount` = valor da parcela
-- Concatenar com os registros vindos de `transactions`
-- Deduplicar se necessário (evitar contar duas vezes o mesmo lançamento)
+### Etapa 2 — Corrigir status de parcelas vencidas
 
-**2. Nenhuma alteração no banco de dados** — apenas leitura das tabelas existentes.
+**Arquivo:** `src/pages/ComprasCartao.tsx` (lógica de exibição)
 
-### Resultado esperado
+Parcelas com `due_date` anterior à data atual e status "open"/"pending" serão exibidas com status visual **"Vencida"** (badge em vermelho/warning). Opcionalmente, uma atualização em lote no banco pode ser feita via migração/trigger para marcar automaticamente parcelas vencidas como "overdue" ou "closed".
 
-O módulo Faturas Projetadas passará a exibir tanto os lançamentos manuais (via `transactions` com `center_cost`) quanto as compras de cartão importadas (via `card_purchases`/`card_installments`), unificados na mesma projeção mensal.
+A abordagem mais segura: no frontend, derivar o status visual comparando `due_date < hoje` + `status !== 'paid'/'closed'`.
+
+### Etapa 3 — Colunas ajustadas na tabela
+
+**Arquivo:** `src/pages/ComprasCartao.tsx`
+
+Colunas da nova tabela (por parcela):
+| Data Compra | Vencimento | Descrição | Favorecido | Cartão | Categoria | Parcela | Valor | Status | Ações |
+
+### Etapa 4 — Exibir parcelas de cartão em Lançamentos
+
+**Arquivo:** `src/pages/Lancamentos.tsx`
+
+- Buscar `card_installments` (com join em `card_purchases`) no mesmo componente
+- Transformar cada parcela em um objeto compatível com a interface `Transaction` (campos mapeados: description, amount, due_date, competence_date, status, etc.)
+- Concatenar com as transações regulares na lista `filtered`
+- Marcar com badge "Cartão" e **desabilitar ações de edição/exclusão** (somente leitura)
+- Adicionar filtro para mostrar/ocultar lançamentos de cartão
+
+### Etapa 5 — Seleção e edição em lote
+
+**Arquivos:** `src/components/shared/DataTable.tsx`, `src/pages/Lancamentos.tsx`, `src/pages/ComprasCartao.tsx`
+
+- Adicionar coluna de **checkbox** no `DataTable` (prop opcional `selectable`)
+- Checkbox no header para selecionar/desselecionar todos
+- Estado `selectedIds` gerenciado no componente pai
+- Barra de ações em lote aparece quando há seleção: "Marcar como Realizado", "Cancelar", "Alterar Categoria", "Excluir"
+- As ações em lote chamam mutations existentes em loop ou via batch update
+
+**Componente DataTable** receberá novas props opcionais:
+```typescript
+selectable?: boolean;
+selectedKeys?: Set<string>;
+onSelectionChange?: (keys: Set<string>) => void;
+rowKey?: (row: T) => string;
+```
+
+---
+
+### Arquivos a modificar
+
+| Arquivo | Motivo |
+|---------|--------|
+| `src/pages/ComprasCartao.tsx` | Explodir parcelas, ajustar colunas, filtro por vencimento, status visual |
+| `src/hooks/useCardPurchases.ts` | Ajustar query para trazer installments se necessário |
+| `src/pages/Lancamentos.tsx` | Integrar parcelas de cartão (read-only), seleção em lote |
+| `src/components/shared/DataTable.tsx` | Suporte a checkbox de seleção |
+| `src/types/database.ts` | Tipo auxiliar para parcela expandida (se necessário) |
+
+### Sem alterações no banco de dados
+
+Todas as mudanças são no frontend, usando as tabelas e dados já existentes.
 
