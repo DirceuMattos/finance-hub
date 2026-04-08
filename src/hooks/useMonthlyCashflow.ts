@@ -20,22 +20,124 @@ export interface MonthlyCashflow {
 
 type ViewName = "consolidated" | "personal" | "business";
 
-const viewMap: Record<ViewName, string> = {
-  consolidated: "vw_monthly_cashflow_consolidated",
-  personal: "vw_monthly_cashflow_personal",
-  business: "vw_monthly_cashflow_business",
-};
-
+/**
+ * Builds monthly cashflow from transactions + card_installments tables directly.
+ * Replaces the previous view-based approach that was incomplete.
+ */
 export function useMonthlyCashflow(view: ViewName) {
   return useQuery({
     queryKey: ["monthly_cashflow", view],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from(viewMap[view])
-        .select("*")
-        .order("reference_month");
-      if (error) throw error;
-      return data as MonthlyCashflow[];
+      // 1. Fetch all transactions with entity info
+      const { data: txData, error: txError } = await (supabase as any)
+        .from("transactions")
+        .select("amount, competence_date, transaction_type, status, financial_entities(entity_type)")
+        .order("competence_date");
+      if (txError) throw txError;
+
+      // 2. Fetch card installments with entity info
+      let cardData: any[] = [];
+      try {
+        const { data: instData, error: instError } = await (supabase as any)
+          .from("card_installments")
+          .select("amount, billing_month, status, card_purchases(financial_entities(entity_type))")
+          .order("billing_month");
+        if (!instError && instData) cardData = instData;
+      } catch {
+        // table may not exist
+      }
+
+      // Helper: check entity filter
+      const matchesView = (entityType: string | null | undefined): boolean => {
+        if (view === "consolidated") return true;
+        if (view === "personal") return entityType === "personal" || entityType === "pessoa_fisica";
+        if (view === "business") return entityType === "business" || entityType === "pessoa_juridica";
+        return true;
+      };
+
+      // 3. Aggregate transactions by month
+      const monthMap = new Map<string, MonthlyCashflow>();
+
+      const getOrCreate = (month: string): MonthlyCashflow => {
+        let entry = monthMap.get(month);
+        if (!entry) {
+          entry = {
+            reference_month: month + "-01",
+            current_balance_base: 0,
+            income_planned: 0,
+            income_paid: 0,
+            expense_planned: 0,
+            expense_paid: 0,
+            projected_card_amount: 0,
+            potential_containment: 0,
+            total_portfolio_value: 0,
+            investment_estimated_return: 0,
+            projected_balance: 0,
+            minimum_reserve: 0,
+            traffic_light: "",
+          };
+          monthMap.set(month, entry);
+        }
+        return entry;
+      };
+
+      // Process transactions
+      (txData || []).forEach((tx: any) => {
+        const entityType = tx.financial_entities?.entity_type;
+        if (!matchesView(entityType)) return;
+
+        const month = (tx.competence_date || "").substring(0, 7);
+        if (!month || month.length < 7) return;
+
+        const entry = getOrCreate(month);
+        const amt = Math.abs(tx.amount || 0);
+        const isIncome = tx.transaction_type === "income" || tx.transaction_type === "receita";
+        const isPaid = tx.status === "paid";
+
+        if (isIncome) {
+          if (isPaid) entry.income_paid += amt;
+          else entry.income_planned += amt;
+        } else {
+          // expense or any other type
+          if (isPaid) entry.expense_paid += amt;
+          else entry.expense_planned += amt;
+        }
+      });
+
+      // Process card installments
+      cardData.forEach((inst: any) => {
+        const entityType = inst.card_purchases?.financial_entities?.entity_type;
+        if (!matchesView(entityType)) return;
+
+        const month = (inst.billing_month || "").substring(0, 7);
+        if (!month || month.length < 7) return;
+
+        const entry = getOrCreate(month);
+        const amt = Math.abs(inst.amount || 0);
+        entry.projected_card_amount += amt;
+      });
+
+      // Calculate projected_balance and traffic_light
+      const entries = Array.from(monthMap.values()).sort((a, b) =>
+        a.reference_month.localeCompare(b.reference_month)
+      );
+
+      entries.forEach((entry) => {
+        const totalIncome = entry.income_paid + entry.income_planned;
+        const totalExpense = entry.expense_paid + entry.expense_planned + entry.projected_card_amount;
+        entry.projected_balance = totalIncome - totalExpense;
+
+        // Simple traffic light
+        if (entry.projected_balance < 0) {
+          entry.traffic_light = "red";
+        } else if (entry.projected_balance < totalIncome * 0.1) {
+          entry.traffic_light = "yellow";
+        } else {
+          entry.traffic_light = "green";
+        }
+      });
+
+      return entries;
     },
   });
 }
