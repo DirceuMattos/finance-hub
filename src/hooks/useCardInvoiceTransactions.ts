@@ -71,8 +71,8 @@ function useCardInvoiceTransactionsQuery() {
         const { data: instData, error: instError } = await (supabase as any)
           .from("card_installments")
           .select("id, billing_month, due_date, amount, status, card_purchases(description, card_id, cards(name), financial_entities(entity_type))")
-          .order("billing_month", { ascending: false })
-          .limit(5000);
+          .order("due_date", { ascending: false })
+          .limit(10000);
 
         if (!instError && instData) {
           fromInstallments = (instData as any[]).map((inst): CardInvoiceTransaction => {
