@@ -33,7 +33,8 @@ export function useCardInstallments(cardId?: string, billingMonth?: string) {
         .from("card_installments")
         .select("*, card_purchases(description, card_id, purchase_date, payee, installments_count, financial_entity_id, cards(name), categories(name), financial_entities(name))")
         .order("billing_month")
-        .order("installment_number");
+        .order("installment_number")
+        .limit(5000);
       if (cardId) {
         query = query.eq("card_purchases.card_id", cardId);
       }
