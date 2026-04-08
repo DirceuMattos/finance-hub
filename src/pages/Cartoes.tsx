@@ -8,11 +8,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
-import { useCardInvoicesByCard, useCardInvoiceSummaryByCard } from "@/hooks/useCardInvoiceTransactions";
+import { useCardInvoicesByCard } from "@/hooks/useCardInvoiceTransactions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { CreditCard, Info, TrendingUp, TrendingDown, Hash } from "lucide-react";
+import { CreditCard, Info, AlertTriangle } from "lucide-react";
 
 type FilterView = "all" | "personal" | "business";
 
@@ -28,14 +28,21 @@ function buildMonthOptions() {
   return options;
 }
 
+function getUsageLevel(pct: number): "safe" | "warning" | "danger" {
+  if (pct >= 90) return "danger";
+  if (pct >= 70) return "warning";
+  return "safe";
+}
+
 export default function Cartoes() {
   const { data: cards = [], isLoading } = useCards();
   const { data: entities = [] } = useFinancialEntities();
-  const { byCard } = useCardInvoicesByCard();
-  const { summaries } = useCardInvoiceSummaryByCard();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<FilterView>("all");
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
+
+  // Pass the selected month to filter invoices
+  const { byCard } = useCardInvoicesByCard(filterMonth);
 
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
@@ -44,12 +51,6 @@ export default function Cartoes() {
     entities.forEach(e => map.set(e.id, e.entity_type));
     return map;
   }, [entities]);
-
-  const summaryMap = useMemo(() => {
-    const map = new Map<string, typeof summaries[0]>();
-    summaries.forEach(s => map.set(s.card_name, s));
-    return map;
-  }, [summaries]);
 
   const filtered = cards.filter((c) => {
     if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
@@ -61,6 +62,8 @@ export default function Cartoes() {
   });
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+  const selectedMonthLabel = monthOptions.find(o => o.value === filterMonth)?.label || filterMonth;
 
   return (
     <AppLayout>
@@ -102,12 +105,18 @@ export default function Cartoes() {
             const managerialLimit = card.managerial_limit || card.credit_limit;
             const entityType = entityMap.get(card.financial_entity_id);
             const usedAmount = byCard.get(card.name) || 0;
-            const usagePct = card.credit_limit > 0 ? Math.min((usedAmount / card.credit_limit) * 100, 100) : 0;
             const managerialUsagePct = managerialLimit > 0 ? Math.min((usedAmount / managerialLimit) * 100, 100) : 0;
-            const summary = summaryMap.get(card.name);
+            const usageLevel = getUsageLevel(managerialUsagePct);
+
+            const progressColor =
+              usageLevel === "danger"
+                ? "bg-destructive"
+                : usageLevel === "warning"
+                  ? "bg-[hsl(var(--warning,45_100%_51%))]"
+                  : "";
 
             return (
-              <Card key={card.id} className="relative overflow-hidden">
+              <Card key={card.id} className={`relative overflow-hidden ${usageLevel === "danger" ? "border-destructive/50" : usageLevel === "warning" ? "border-[hsl(var(--warning,45_100%_51%))]/50" : ""}`}>
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -126,13 +135,30 @@ export default function Cartoes() {
                   {card.issuer_bank && <p className="text-xs text-muted-foreground mt-1">{card.issuer_bank}</p>}
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Alert banner when usage is high */}
+                  {usageLevel !== "safe" && (
+                    <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
+                      usageLevel === "danger"
+                        ? "bg-destructive/10 text-destructive"
+                        : "bg-[hsl(var(--warning,45_100%_51%))]/10 text-[hsl(var(--warning,45_100%_51%))]"
+                    }`}>
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      {usageLevel === "danger"
+                        ? `Teto gerencial atingido (${managerialUsagePct.toFixed(0)}%)`
+                        : `Uso elevado do teto gerencial (${managerialUsagePct.toFixed(0)}%)`
+                      }
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-muted-foreground text-xs">Teto Gerencial</p>
                       <p className="font-semibold">{fmt(managerialLimit)}</p>
                     </div>
                     <div>
-                      <p className="text-muted-foreground text-xs">Usado no Mês</p>
+                      <p className="text-muted-foreground text-xs">
+                        Usado {filterMonth !== "all" ? `em ${selectedMonthLabel}` : "(acumulado)"}
+                      </p>
                       <p className="font-semibold">{fmt(usedAmount)}</p>
                     </div>
                     <div>
@@ -150,7 +176,7 @@ export default function Cartoes() {
                       <span className="text-muted-foreground">Uso do Teto Gerencial</span>
                       <span className="font-medium">{fmt(usedAmount)} / {fmt(managerialLimit)}</span>
                     </div>
-                    <Progress value={managerialUsagePct} className="h-2" />
+                    <Progress value={managerialUsagePct} className={`h-2 ${progressColor ? `[&>div]:${progressColor}` : ""}`} />
                   </div>
                   <p className="text-[11px] text-muted-foreground">Limite real do cartão: {fmt(card.credit_limit)}</p>
                   <p className="text-xs text-muted-foreground">
