@@ -1,47 +1,58 @@
 
+Objetivo: corrigir de forma definitiva os 2 grupos de problemas que ainda restam:
+1. cartões não aparecem / filtro de mês não funciona em Lançamentos e Compras no Cartão;
+2. lançamentos comuns de abril/2026 aparecem como “Cancelado”.
 
-## Plano: Correção dos 3 problemas nos módulos Lançamentos e Compras no Cartão
+Diagnóstico confirmado no código:
+- `ComprasCartao.tsx` e `Lancamentos.tsx` ainda chamam `useCardInstallments()` sem passar o mês filtrado.
+- `useCardInstallments.ts` continua buscando em massa com `order("billing_month")` ascendente + `limit(5000)`. Pela própria requisição de rede, a tela está carregando registros antigos de 2023 primeiro. Se houver mais de 5000 parcelas, os meses recentes ficam fora da resposta.
+- Depois disso, o filtro de mês é feito no frontend. Ou seja: a tela tenta filtrar um mês que nem chegou a ser carregado.
+- Em `Lancamentos.tsx`, as parcelas de cartão entram com `entity_type: null`, porque o hook traz `financial_entities(name)` mas não traz `entity_type`. Então filtros por entidade/tipo podem excluir parcelas indevidamente.
+- O status “Cancelado” dos lançamentos comuns não está sendo inventado pelo componente visual. O badge só mostra “Cancelado” quando `status === "cancelled"`. Portanto, abril/2026 precisa ser tratado como problema de dado retornado pela fonte ou de gravação anterior, não apenas de layout.
 
-### Diagnóstico
+Plano de implementação:
+1. Reestruturar `useCardInstallments.ts`
+- Trocar a assinatura simples por filtros explícitos, incluindo mês de referência.
+- Aplicar filtro server-side por intervalo de datas já na query.
+- Usar ordenação mais segura para meses recentes.
+- Trazer também `financial_entities(entity_type)` para suportar filtros corretos na tela de Lançamentos.
+- Manter compatibilidade com os usos atuais onde possível.
 
-**Problema 2 e 3 (Compras no Cartão vazia + parcelas de cartão ausentes em Lançamentos):**
-Causa raiz: **limite padrão de 1000 linhas do Supabase**. O hook `useCardInstallments()` busca TODOS os registros da tabela `card_installments` ordenados por `billing_month ASC`. Como há dados históricos desde 2023, as 1000 primeiras linhas cobrem apenas os meses antigos, e os meses recentes (como abril/2026) nunca são retornados. O filtro client-side então não encontra dados para o mês atual.
+2. Corrigir o módulo Compras no Cartão
+- Passar o mês selecionado para o hook, em vez de carregar tudo e filtrar só no cliente.
+- Fazer o filtro mensal pela data de vencimento, que é a referência pedida para essa tela.
+- Manter o default no mês atual.
+- Ajustar a geração de opções de mês para não depender apenas dos dados já carregados, evitando lista incompleta quando a consulta vier vazia.
 
-**Problema 1 (todos os lançamentos com status "Cancelado"):**
-Preciso verificar se é um bug visual ou se os registros do mês filtrado realmente possuem status `cancelled` no banco. O código do `StatusBadge` está correto — se `status !== "paid"` e `status !== "cancelled"`, exibe "Previsto". Vou verificar na implementação e corrigir se necessário.
+3. Corrigir o módulo Lançamentos para cartões
+- Passar o mês selecionado para a busca de parcelas de cartão.
+- Filtrar as parcelas de cartão pelo vencimento/mês correto na própria consulta.
+- Popular `entity_type` e demais metadados das parcelas para que os filtros “Origem”, “Entidade” e “Status” funcionem de forma consistente.
+- Revisar a montagem de `cardRows` para não depender de dados truncados.
 
-### Correções
+4. Tratar o caso específico de abril/2026 nos lançamentos comuns
+- Revisar `useTransactions.ts` para permitir leitura por mês filtrado e reduzir ambiguidade.
+- Verificar se abril/2026 está vindo da base realmente com `status = cancelled`.
+- Se o problema for dado incorreto histórico, preparar uma correção direcionada apenas para os registros afetados.
+- Se o problema for interpretação inconsistente de status legado, normalizar apenas valores inválidos; não sobrescrever “cancelled” válido.
 
-#### 1. Corrigir o limite de 1000 linhas no `useCardInstallments`
+5. Validar os fluxos afetados
+- Compras no Cartão: abrir no mês atual e confirmar que há parcelas visíveis.
+- Lançamentos: visão consolidada, somente cartão e somente lançamentos comuns.
+- Abril/2026: confirmar se os comuns deixam de aparecer todos como cancelados.
+- Validar filtros de entidade, mês e origem após a correção.
 
-**Arquivo:** `src/hooks/useCardInstallments.ts`
+Arquivos a ajustar:
+- `src/hooks/useCardInstallments.ts`
+- `src/pages/ComprasCartao.tsx`
+- `src/pages/Lancamentos.tsx`
+- `src/hooks/useTransactions.ts`
 
-Adicionar `.limit(5000)` à query para garantir que todos os registros sejam retornados. Alternativamente, inverter a ordenação para `desc` e aplicar um filtro server-side por range de meses relevantes. A abordagem mais segura é usar filtro server-side para buscar apenas o que é necessário.
+Detalhes técnicos:
+- A correção principal não é “aumentar limite” novamente; é mover o filtro do mês para a query.
+- Para cartões, o mês deve usar `due_date` como referência visual/funcional.
+- Para lançamentos comuns de abril/2026, a UI atual já prova que o valor `cancelled` está chegando no campo `status`; por isso a revisão precisa incluir a origem dos dados, não só o badge.
 
-A query da página ComprasCartao (que não passa parâmetros) buscará os últimos 24 meses por padrão. A query usada em Lancamentos fará o mesmo.
-
-#### 2. Corrigir o filtro de card installments na query do hook `useCardInvoiceTransactions`
-
-**Arquivo:** `src/hooks/useCardInvoiceTransactions.ts`
-
-Mesmo problema de limite de 1000 linhas na query de `card_installments` (linha 70-73). Adicionar `.limit(5000)` ou filtro por range de datas.
-
-#### 3. Verificar e corrigir o problema de status em Lançamentos
-
-**Arquivo:** `src/pages/Lancamentos.tsx`
-
-Verificar se o filtro por mês está resultando em transações que realmente têm status "cancelled", ou se há um bug de renderização. Se for um problema visual, corrigir o `StatusBadge` ou o mapeamento de status.
-
-### Arquivos modificados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/hooks/useCardInstallments.ts` | Adicionar limite ou filtro server-side de data |
-| `src/hooks/useCardInvoiceTransactions.ts` | Mesmo ajuste de limite/filtro |
-| `src/pages/Lancamentos.tsx` | Verificar e corrigir bug de status (se confirmado) |
-| `src/pages/ComprasCartao.tsx` | Ajustar filtro padrão se necessário |
-
-### Sem alterações no banco de dados
-
-Todas as correções são no frontend.
-
+Banco de dados:
+- Não prevejo mudança estrutural.
+- Pode ser necessária uma correção pontual de dados de abril/2026 se a revisão confirmar que esses registros foram gravados com status incorreto.
