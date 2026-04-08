@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, subMonths, addMonths, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload } from "lucide-react";
 import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useCardInstallments } from "@/hooks/useCardInstallments";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
@@ -21,7 +22,33 @@ import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { PaymentDialog } from "@/components/lancamentos/PaymentDialog";
 import { CsvImportDialog } from "@/components/lancamentos/CsvImportDialog";
+import { toast } from "sonner";
 import type { Transaction } from "@/types/database";
+
+// Unified row type for the table
+interface UnifiedRow {
+  id: string;
+  description: string;
+  transaction_type: string;
+  amount: number;
+  competence_date: string;
+  due_date: string | null;
+  payment_date: string | null;
+  status: string;
+  category_name: string | null;
+  entity_name: string | null;
+  entity_type: string | null;
+  account_name: string | null;
+  payee: string | null;
+  installment_number: number | null;
+  installment_total: number | null;
+  center_cost?: string;
+  category_id?: string | null;
+  financial_entity_id?: string;
+  account_id?: string | null;
+  is_card_installment: boolean;
+  _original?: Transaction;
+}
 
 function StatusBadge({ status }: { status: string }) {
   if (status === "paid") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Realizado</Badge>;
@@ -35,7 +62,7 @@ function TypeBadge({ type }: { type: string }) {
   return <Badge variant="destructive">Despesa</Badge>;
 }
 
-function EntityTypeBadge({ entityType }: { entityType?: string }) {
+function EntityTypeBadge({ entityType }: { entityType?: string | null }) {
   if (entityType === "personal") return <Badge variant="outline" className="text-xs border-primary text-primary">Pessoal</Badge>;
   if (entityType === "business") return <Badge variant="outline" className="text-xs border-accent-foreground text-accent-foreground">Empresa</Badge>;
   return null;
@@ -63,6 +90,7 @@ function buildMonthOptions() {
 export default function Lancamentos() {
   const queryClient = useQueryClient();
   const { data = [], isLoading, create, update, remove } = useTransactions();
+  const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments();
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
@@ -78,21 +106,16 @@ export default function Lancamentos() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeTab, setFilterTypeTab] = useState("all");
   const [filterCardInvoice, setFilterCardInvoice] = useState("all");
+  const [filterSource, setFilterSource] = useState("all"); // all | transactions | card
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
-  // Track last saved transaction for "repeat last"
   const lastSavedRef = useRef<Transaction | null>(null);
-
-  const entityMap = useMemo(() => {
-    const map = new Map<string, string>();
-    entities.forEach(e => map.set(e.id, e.entity_type));
-    return map;
-  }, [entities]);
 
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
@@ -111,27 +134,85 @@ export default function Lancamentos() {
     }
     return accounts;
   }, [accounts, filterEntity, personalEntities, businessEntities]);
+
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
+  // Map card installments to unified rows
+  const cardRows: UnifiedRow[] = useMemo(() => {
+    return cardInstallments.map(inst => ({
+      id: `ci_${inst.id}`,
+      description: inst.card_purchases?.description || "Compra cartão",
+      transaction_type: "expense",
+      amount: inst.amount,
+      competence_date: inst.billing_month,
+      due_date: inst.due_date,
+      payment_date: null,
+      status: inst.status === "paid" ? "paid" : inst.status === "cancelled" ? "cancelled" : "planned",
+      category_name: inst.card_purchases?.categories?.name || null,
+      entity_name: inst.card_purchases?.financial_entities?.name || null,
+      entity_type: null,
+      account_name: null,
+      payee: inst.card_purchases?.payee || null,
+      installment_number: inst.installment_number,
+      installment_total: inst.card_purchases?.installments_count || null,
+      financial_entity_id: inst.card_purchases?.financial_entity_id,
+      is_card_installment: true,
+    }));
+  }, [cardInstallments]);
+
+  // Map transactions to unified rows
+  const txRows: UnifiedRow[] = useMemo(() => {
+    return data.map(t => ({
+      id: t.id,
+      description: t.description,
+      transaction_type: t.transaction_type,
+      amount: t.amount,
+      competence_date: t.competence_date,
+      due_date: t.due_date,
+      payment_date: (t as any).payment_date,
+      status: t.status,
+      category_name: t.categories?.name || null,
+      entity_name: t.financial_entities?.name || null,
+      entity_type: (t.financial_entities as any)?.entity_type || null,
+      account_name: t.accounts?.name || null,
+      payee: (t as any).payee || null,
+      installment_number: t.installment_number,
+      installment_total: t.installment_total,
+      center_cost: (t as any).center_cost,
+      category_id: t.category_id,
+      financial_entity_id: t.financial_entity_id,
+      account_id: t.account_id,
+      is_card_installment: false,
+      _original: t,
+    }));
+  }, [data]);
+
+  // Merge and filter
+  const allRows = useMemo(() => {
+    if (filterSource === "transactions") return txRows;
+    if (filterSource === "card") return cardRows;
+    return [...txRows, ...cardRows];
+  }, [txRows, cardRows, filterSource]);
+
   const filtered = useMemo(() => {
-    return data.filter((t) => {
+    return allRows.filter((t) => {
       if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterEntity === "all_personal") {
-        const et = (t.financial_entities as any)?.entity_type;
-        if (et !== "personal") return false;
+        if (t.entity_type !== "personal") return false;
       } else if (filterEntity === "all_business") {
-        const et = (t.financial_entities as any)?.entity_type;
-        if (et !== "business") return false;
+        if (t.entity_type !== "business") return false;
       } else if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
-      if (filterAccount !== "all" && t.account_id !== filterAccount) return false;
-      if (filterCategory !== "all" && t.category_id !== filterCategory) return false;
+      if (filterAccount !== "all" && !t.is_card_installment && t.account_id !== filterAccount) return false;
+      if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
-      const isCCInvoice = isCardInvoiceByCenterCost((t as any).center_cost) || isCardInvoice(t.categories?.name);
-      if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
-      if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
-      if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "BRA Pessoal")) return false;
-      if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost((t as any).center_cost) === "Nu Infotkt")) return false;
+      if (!t.is_card_installment) {
+        const isCCInvoice = isCardInvoiceByCenterCost(t.center_cost) || isCardInvoice(t.category_name || "");
+        if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
+        if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
+        if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "BRA Pessoal")) return false;
+        if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "Nu Infotkt")) return false;
+      }
       if (filterMonth !== "all") {
         const monthStart = filterMonth + "-01";
         const [y, m] = filterMonth.split("-").map(Number);
@@ -140,21 +221,32 @@ export default function Lancamentos() {
       }
       return true;
     });
-  }, [data, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
+  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
 
-  const columns: Column<Transaction>[] = [
+  const columns: Column<UnifiedRow>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
     { key: "competence_date", header: "Mês do Evento", sortable: true, sortValue: (r) => r.competence_date || "", render: (r) => fmtMonth(r.competence_date) },
     {
       key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
       render: (r) => {
-        const isCCInvoice = isCardInvoiceByCenterCost((r as any).center_cost) || isCardInvoice(r.categories?.name);
+        if (r.is_card_installment) {
+          return (
+            <div className="flex items-center gap-1.5">
+              <span>{r.description}</span>
+              <InstallmentBadge number={r.installment_number} total={r.installment_total} />
+              <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
+                <CreditCard className="h-3 w-3" />Cartão
+              </Badge>
+            </div>
+          );
+        }
+        const isCCInvoice = isCardInvoiceByCenterCost(r.center_cost) || isCardInvoice(r.category_name || "");
         if (isCCInvoice) {
-          const cardLabel = getCardNameFromCenterCost((r as any).center_cost) || getCardInvoiceLabel(r.categories?.name || "");
+          const cardLabel = getCardNameFromCenterCost(r.center_cost) || getCardInvoiceLabel(r.category_name || "");
           return (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5">
@@ -176,33 +268,38 @@ export default function Lancamentos() {
       },
     },
     { key: "transaction_type", header: "Tipo", sortable: true, sortValue: (r) => r.transaction_type, render: (r) => <TypeBadge type={r.transaction_type} /> },
-    { key: "payee", header: "Favorecido", sortable: true, sortValue: (r) => (r as any).payee || "", render: (r) => (r as any).payee || "—" },
-    { key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.categories?.name || "", render: (r) => r.categories?.name || "—" },
+    { key: "payee", header: "Favorecido", sortable: true, sortValue: (r) => r.payee || "", render: (r) => r.payee || "—" },
+    { key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.category_name || "", render: (r) => r.category_name || "—" },
     {
-      key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.financial_entities?.name || "",
+      key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.entity_name || "",
       render: (r) => {
-        const entityType = (r.financial_entities as any)?.entity_type;
-        if (!r.financial_entities?.name) return "—";
-        return <EntityTypeBadge entityType={entityType} />;
+        if (!r.entity_name) return "—";
+        return <EntityTypeBadge entityType={r.entity_type} />;
       },
     },
-    { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.accounts?.name || "", render: (r) => r.accounts?.name || "—" },
+    { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.account_name || "", render: (r) => r.account_name || "—" },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : "text-foreground"}>{fmt(r.amount)}</span> },
     { key: "status", header: "Status", sortable: true, sortValue: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
-    { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => (r as any).payment_date || "", render: (r) => fmtDate((r as any).payment_date) },
+    { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => r.payment_date || "", render: (r) => fmtDate(r.payment_date) },
     {
-      key: "actions", header: "", render: (r) => (
-        <div className="flex gap-0.5">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(r); setFormOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
-          {r.status === "planned" && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSettling(r)} title="Registrar baixa"><CheckCircle className="h-3.5 w-3.5 text-[hsl(var(--success))]" /></Button>
-          )}
-          {r.status === "planned" && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCancel(r.id)} title="Cancelar"><Ban className="h-3.5 w-3.5 text-[hsl(var(--warning))]" /></Button>
-          )}
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleting(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-        </div>
-      ),
+      key: "actions", header: "", render: (r) => {
+        if (r.is_card_installment) {
+          return <span className="text-[10px] text-muted-foreground italic">Somente leitura</span>;
+        }
+        const orig = r._original!;
+        return (
+          <div className="flex gap-0.5">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditing(orig); setFormOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
+            {orig.status === "planned" && (
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSettling(orig)} title="Registrar baixa"><CheckCircle className="h-3.5 w-3.5 text-[hsl(var(--success))]" /></Button>
+            )}
+            {orig.status === "planned" && (
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCancel(orig.id)} title="Cancelar"><Ban className="h-3.5 w-3.5 text-[hsl(var(--warning))]" /></Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleting(orig.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -212,7 +309,6 @@ export default function Lancamentos() {
 
   const handleRepeatLast = () => {
     if (lastSavedRef.current) {
-      // Clone last saved as a new entry (no id, reset dates)
       const last = { ...lastSavedRef.current };
       delete (last as any).id;
       delete (last as any).created_at;
@@ -231,13 +327,53 @@ export default function Lancamentos() {
     const mutation = d.id ? update : create;
     mutation.mutate(d as any, {
       onSuccess: () => {
-        // Save as last transaction for repeat
         lastSavedRef.current = d as Transaction;
         setFormOpen(false);
         setEditing(null);
       },
     });
   };
+
+  // Batch actions
+  const handleBatchStatus = useCallback((newStatus: string) => {
+    const txIds = [...selectedKeys].filter(k => !k.startsWith("ci_"));
+    if (txIds.length === 0) {
+      toast.info("Nenhum lançamento editável selecionado.");
+      return;
+    }
+    let done = 0;
+    txIds.forEach(id => {
+      update.mutate({ id, status: newStatus } as any, {
+        onSuccess: () => {
+          done++;
+          if (done === txIds.length) {
+            toast.success(`${done} lançamento(s) atualizado(s)`);
+            setSelectedKeys(new Set());
+          }
+        },
+      });
+    });
+  }, [selectedKeys, update]);
+
+  const handleBatchDelete = useCallback(() => {
+    const txIds = [...selectedKeys].filter(k => !k.startsWith("ci_"));
+    if (txIds.length === 0) {
+      toast.info("Nenhum lançamento editável selecionado.");
+      return;
+    }
+    let done = 0;
+    txIds.forEach(id => {
+      remove.mutate(id, {
+        onSuccess: () => {
+          done++;
+          if (done === txIds.length) {
+            toast.success(`${done} lançamento(s) excluído(s)`);
+            setSelectedKeys(new Set());
+          }
+        },
+      });
+    });
+  }, [selectedKeys, remove]);
 
   return (
     <AppLayout>
@@ -280,6 +416,14 @@ export default function Lancamentos() {
             {monthOptions.map(o => (
               <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterSource} onValueChange={setFilterSource}>
+          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Origem" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos (Lanç. + Cartão)</SelectItem>
+            <SelectItem value="transactions">Somente Lançamentos</SelectItem>
+            <SelectItem value="card">Somente Cartão</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterCardInvoice} onValueChange={setFilterCardInvoice}>
@@ -337,14 +481,35 @@ export default function Lancamentos() {
         </Select>
       </FilterBar>
 
+      {/* Batch action bar */}
+      {selectedKeys.size > 0 && (
+        <div className="flex items-center gap-2 mb-3 p-2 rounded-md bg-muted border border-border">
+          <span className="text-xs font-medium">{selectedKeys.size} selecionado(s)</span>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBatchStatus("paid")}>
+            <CheckCircle className="h-3.5 w-3.5 mr-1" />Marcar Realizado
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBatchStatus("cancelled")}>
+            <Ban className="h-3.5 w-3.5 mr-1" />Cancelar
+          </Button>
+          <Button size="sm" variant="destructive" className="h-7 text-xs" onClick={handleBatchDelete}>
+            <Trash2 className="h-3.5 w-3.5 mr-1" />Excluir
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedKeys(new Set())}>Limpar seleção</Button>
+        </div>
+      )}
+
       <DataTable
         columns={columns}
-        data={filtered as any}
-        loading={isLoading}
+        data={filtered}
+        loading={isLoading || loadingCI}
         emptyMessage="Nenhum lançamento encontrado."
         defaultSortKey="due_date"
         defaultSortDir="asc"
         className="text-xs [&_th]:text-xs [&_th]:px-2 [&_th]:py-2 [&_td]:px-2 [&_td]:py-1.5"
+        selectable
+        selectedKeys={selectedKeys}
+        onSelectionChange={setSelectedKeys}
+        rowKey={(r) => r.id}
       />
 
       <TransactionForm
