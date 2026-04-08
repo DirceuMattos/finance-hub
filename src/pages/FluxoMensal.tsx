@@ -53,7 +53,23 @@ const trafficLightMap = (light: string | undefined): TrafficInfo | null => {
 export default function FluxoMensal() {
   const navigate = useNavigate();
   const [view, setView] = useState<ViewName>("consolidated");
-  const { data = [], isLoading } = useMonthlyCashflow(view);
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear);
+  const { data: rawData = [], isLoading } = useMonthlyCashflow(view);
+
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    rawData.forEach((r) => {
+      try { years.add(r.reference_month.substring(0, 4)); } catch {}
+    });
+    if (years.size === 0) years.add(currentYear);
+    return Array.from(years).sort().reverse();
+  }, [rawData, currentYear]);
+
+  const data = useMemo(() => {
+    if (selectedYear === "all") return rawData;
+    return rawData.filter((r) => r.reference_month.substring(0, 4) === selectedYear);
+  }, [rawData, selectedYear]);
 
   const totals = useMemo(() => {
     const income = data.reduce((s, r) => s + (r.income_paid || 0), 0);
