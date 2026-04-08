@@ -89,8 +89,12 @@ function buildMonthOptions() {
 
 export default function Lancamentos() {
   const queryClient = useQueryClient();
-  const { data = [], isLoading, create, update, remove } = useTransactions();
-  const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments();
+  const [searchParams] = useSearchParams();
+  const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
+  const [filterMonth, setFilterMonth] = useState(initialMonth);
+
+  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
+  const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
