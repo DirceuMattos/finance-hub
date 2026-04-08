@@ -150,7 +150,7 @@ export default function Lancamentos() {
       status: inst.status === "paid" ? "paid" : inst.status === "cancelled" ? "cancelled" : "planned",
       category_name: inst.card_purchases?.categories?.name || null,
       entity_name: inst.card_purchases?.financial_entities?.name || null,
-      entity_type: null,
+      entity_type: (inst.card_purchases?.financial_entities as any)?.entity_type || null,
       account_name: null,
       payee: inst.card_purchases?.payee || null,
       installment_number: inst.installment_number,
