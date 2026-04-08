@@ -66,20 +66,16 @@ export default function ComprasCartao() {
     return months;
   }, []);
 
-  // Filter installments
+  // Filter installments (month is already filtered server-side)
   const filtered = useMemo(() => {
     return installments.filter((inst) => {
       const desc = inst.card_purchases?.description || "";
       if (search && !desc.toLowerCase().includes(search.toLowerCase())) return false;
       if (filterCard !== "all" && inst.card_purchases?.card_id !== filterCard) return false;
       if (filterEntity !== "all" && inst.card_purchases?.financial_entity_id !== filterEntity) return false;
-      if (filterMonth !== "all") {
-        const instMonth = inst.billing_month?.substring(0, 7);
-        if (instMonth !== filterMonth) return false;
-      }
       return true;
     });
-  }, [installments, search, filterCard, filterEntity, filterMonth]);
+  }, [installments, search, filterCard, filterEntity]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
