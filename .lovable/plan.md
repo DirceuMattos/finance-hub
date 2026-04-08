@@ -1,90 +1,47 @@
 
 
-## Plano: Ajustes no Módulo Compras no Cartão e Lançamentos
+## Plano: Correção dos 3 problemas nos módulos Lançamentos e Compras no Cartão
 
-### Resumo das 5 solicitações
+### Diagnóstico
 
-1. Mostrar data de compra + data de vencimento; filtro por mês usa vencimento
-2. Corrigir status "Aberta" para compras já vencidas (ex: 25/03/2026)
-3. Expandir parcelas na lista — cada parcela aparece como linha separada
-4. Exibir parcelas de cartão na tela de Lançamentos (somente leitura)
-5. Seleção em lote para edição/manutenção de múltiplos lançamentos
+**Problema 2 e 3 (Compras no Cartão vazia + parcelas de cartão ausentes em Lançamentos):**
+Causa raiz: **limite padrão de 1000 linhas do Supabase**. O hook `useCardInstallments()` busca TODOS os registros da tabela `card_installments` ordenados por `billing_month ASC`. Como há dados históricos desde 2023, as 1000 primeiras linhas cobrem apenas os meses antigos, e os meses recentes (como abril/2026) nunca são retornados. O filtro client-side então não encontra dados para o mês atual.
 
----
+**Problema 1 (todos os lançamentos com status "Cancelado"):**
+Preciso verificar se é um bug visual ou se os registros do mês filtrado realmente possuem status `cancelled` no banco. O código do `StatusBadge` está correto — se `status !== "paid"` e `status !== "cancelled"`, exibe "Previsto". Vou verificar na implementação e corrigir se necessário.
 
-### Etapa 1 — Explodir parcelas na lista de Compras no Cartão
+### Correções
 
-**Arquivo:** `src/pages/ComprasCartao.tsx`
+#### 1. Corrigir o limite de 1000 linhas no `useCardInstallments`
 
-Em vez de exibir uma linha por compra, o módulo passará a exibir **uma linha por parcela** (usando dados de `card_installments`). Cada linha mostrará:
+**Arquivo:** `src/hooks/useCardInstallments.ts`
 
-- **Data Compra** — `purchase_date` da compra original
-- **Vencimento** — `due_date` da parcela (campo da `card_installments`)
-- **Descrição** — descrição da compra
-- **Parcela** — ex: "2/6"
-- **Valor Parcela** — `amount` da parcela
-- **Status** — da parcela individual
+Adicionar `.limit(5000)` à query para garantir que todos os registros sejam retornados. Alternativamente, inverter a ordenação para `desc` e aplicar um filtro server-side por range de meses relevantes. A abordagem mais segura é usar filtro server-side para buscar apenas o que é necessário.
 
-O hook `useCardInstallments` será usado para buscar as parcelas com join em `card_purchases`. A filtragem por mês usará o `due_date` (vencimento) da parcela.
+A query da página ComprasCartao (que não passa parâmetros) buscará os últimos 24 meses por padrão. A query usada em Lancamentos fará o mesmo.
 
-Quando o filtro for "Todos os meses", todas as parcelas de todas as compras serão exibidas, permitindo ver a evolução completa.
+#### 2. Corrigir o filtro de card installments na query do hook `useCardInvoiceTransactions`
 
-### Etapa 2 — Corrigir status de parcelas vencidas
+**Arquivo:** `src/hooks/useCardInvoiceTransactions.ts`
 
-**Arquivo:** `src/pages/ComprasCartao.tsx` (lógica de exibição)
+Mesmo problema de limite de 1000 linhas na query de `card_installments` (linha 70-73). Adicionar `.limit(5000)` ou filtro por range de datas.
 
-Parcelas com `due_date` anterior à data atual e status "open"/"pending" serão exibidas com status visual **"Vencida"** (badge em vermelho/warning). Opcionalmente, uma atualização em lote no banco pode ser feita via migração/trigger para marcar automaticamente parcelas vencidas como "overdue" ou "closed".
-
-A abordagem mais segura: no frontend, derivar o status visual comparando `due_date < hoje` + `status !== 'paid'/'closed'`.
-
-### Etapa 3 — Colunas ajustadas na tabela
-
-**Arquivo:** `src/pages/ComprasCartao.tsx`
-
-Colunas da nova tabela (por parcela):
-| Data Compra | Vencimento | Descrição | Favorecido | Cartão | Categoria | Parcela | Valor | Status | Ações |
-
-### Etapa 4 — Exibir parcelas de cartão em Lançamentos
+#### 3. Verificar e corrigir o problema de status em Lançamentos
 
 **Arquivo:** `src/pages/Lancamentos.tsx`
 
-- Buscar `card_installments` (com join em `card_purchases`) no mesmo componente
-- Transformar cada parcela em um objeto compatível com a interface `Transaction` (campos mapeados: description, amount, due_date, competence_date, status, etc.)
-- Concatenar com as transações regulares na lista `filtered`
-- Marcar com badge "Cartão" e **desabilitar ações de edição/exclusão** (somente leitura)
-- Adicionar filtro para mostrar/ocultar lançamentos de cartão
+Verificar se o filtro por mês está resultando em transações que realmente têm status "cancelled", ou se há um bug de renderização. Se for um problema visual, corrigir o `StatusBadge` ou o mapeamento de status.
 
-### Etapa 5 — Seleção e edição em lote
+### Arquivos modificados
 
-**Arquivos:** `src/components/shared/DataTable.tsx`, `src/pages/Lancamentos.tsx`, `src/pages/ComprasCartao.tsx`
-
-- Adicionar coluna de **checkbox** no `DataTable` (prop opcional `selectable`)
-- Checkbox no header para selecionar/desselecionar todos
-- Estado `selectedIds` gerenciado no componente pai
-- Barra de ações em lote aparece quando há seleção: "Marcar como Realizado", "Cancelar", "Alterar Categoria", "Excluir"
-- As ações em lote chamam mutations existentes em loop ou via batch update
-
-**Componente DataTable** receberá novas props opcionais:
-```typescript
-selectable?: boolean;
-selectedKeys?: Set<string>;
-onSelectionChange?: (keys: Set<string>) => void;
-rowKey?: (row: T) => string;
-```
-
----
-
-### Arquivos a modificar
-
-| Arquivo | Motivo |
-|---------|--------|
-| `src/pages/ComprasCartao.tsx` | Explodir parcelas, ajustar colunas, filtro por vencimento, status visual |
-| `src/hooks/useCardPurchases.ts` | Ajustar query para trazer installments se necessário |
-| `src/pages/Lancamentos.tsx` | Integrar parcelas de cartão (read-only), seleção em lote |
-| `src/components/shared/DataTable.tsx` | Suporte a checkbox de seleção |
-| `src/types/database.ts` | Tipo auxiliar para parcela expandida (se necessário) |
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/hooks/useCardInstallments.ts` | Adicionar limite ou filtro server-side de data |
+| `src/hooks/useCardInvoiceTransactions.ts` | Mesmo ajuste de limite/filtro |
+| `src/pages/Lancamentos.tsx` | Verificar e corrigir bug de status (se confirmado) |
+| `src/pages/ComprasCartao.tsx` | Ajustar filtro padrão se necessário |
 
 ### Sem alterações no banco de dados
 
-Todas as mudanças são no frontend, usando as tabelas e dados já existentes.
+Todas as correções são no frontend.
 
