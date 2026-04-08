@@ -31,7 +31,9 @@ function StatusBadge({ status, dueDate }: { status: string; dueDate?: string }) 
 }
 
 export default function ComprasCartao() {
-  const { data: installments = [], isLoading: loadingInstallments } = useCardInstallments();
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const [filterMonth, setFilterMonth] = useState(currentMonth);
+  const { data: installments = [], isLoading: loadingInstallments } = useCardInstallments(filterMonth);
   const { create, update, remove } = useCardPurchases();
   const { data: cards = [] } = useCards();
   const { data: categories = [] } = useCategories();
