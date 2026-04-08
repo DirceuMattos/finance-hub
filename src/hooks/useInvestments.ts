@@ -6,7 +6,6 @@ import { getUserErrorMessage } from "@/lib/errorMessages";
 export interface InvestmentClass {
   id: string;
   name: string;
-  institution_name: string | null;
   is_active: boolean;
 }
 
