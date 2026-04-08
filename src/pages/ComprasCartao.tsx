@@ -121,6 +121,16 @@ export default function ComprasCartao() {
       } />
 
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar compra...">
+        <Select value={filterMonth} onValueChange={setFilterMonth}>
+          <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os meses</SelectItem>
+            {monthOptions.map(m => {
+              const d = parse(m, "yyyy-MM", new Date());
+              return <SelectItem key={m} value={m}>{format(d, "MMM/yyyy", { locale: ptBR })}</SelectItem>;
+            })}
+          </SelectContent>
+        </Select>
         <Select value={filterCard} onValueChange={setFilterCard}>
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
           <SelectContent>
