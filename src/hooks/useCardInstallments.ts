@@ -11,13 +11,27 @@ export interface BillingProjection {
   installments_count: number;
 }
 
+export type InstallmentRow = CardInstallment & {
+  card_purchases?: {
+    description: string;
+    card_id: string;
+    purchase_date: string;
+    payee: string | null;
+    installments_count: number;
+    financial_entity_id: string;
+    cards?: { name: string };
+    categories?: { name: string } | null;
+    financial_entities?: { name: string };
+  };
+};
+
 export function useCardInstallments(cardId?: string, billingMonth?: string) {
   return useQuery({
     queryKey: ["card_installments", cardId, billingMonth],
     queryFn: async () => {
       let query = (supabase as any)
         .from("card_installments")
-        .select("*, card_purchases(description, card_id, cards(name))")
+        .select("*, card_purchases(description, card_id, purchase_date, payee, installments_count, financial_entity_id, cards(name), categories(name), financial_entities(name))")
         .order("billing_month")
         .order("installment_number");
       if (cardId) {
@@ -28,7 +42,7 @@ export function useCardInstallments(cardId?: string, billingMonth?: string) {
       }
       const { data, error } = await query;
       if (error) throw error;
-      return data as (CardInstallment & { card_purchases?: { description: string; card_id: string; cards?: { name: string } } })[];
+      return data as InstallmentRow[];
     },
   });
 }

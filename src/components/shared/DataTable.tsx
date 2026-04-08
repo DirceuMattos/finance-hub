@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
 export interface Column<T> {
@@ -26,6 +27,10 @@ export interface DataTableProps<T> {
   defaultSortKey?: string;
   defaultSortDir?: "asc" | "desc";
   className?: string;
+  selectable?: boolean;
+  selectedKeys?: Set<string>;
+  onSelectionChange?: (keys: Set<string>) => void;
+  rowKey?: (row: T) => string;
 }
 
 export function DataTable<T extends object>({
@@ -36,6 +41,10 @@ export function DataTable<T extends object>({
   defaultSortKey,
   defaultSortDir = "asc",
   className,
+  selectable = false,
+  selectedKeys,
+  onSelectionChange,
+  rowKey,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(defaultSortDir);
@@ -71,12 +80,44 @@ export function DataTable<T extends object>({
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
+  const allKeys = useMemo(() => {
+    if (!selectable || !rowKey) return new Set<string>();
+    return new Set(sorted.map(row => rowKey(row)));
+  }, [sorted, selectable, rowKey]);
+
+  const allSelected = selectable && selectedKeys && allKeys.size > 0 && [...allKeys].every(k => selectedKeys.has(k));
+  const someSelected = selectable && selectedKeys && allKeys.size > 0 && [...allKeys].some(k => selectedKeys.has(k)) && !allSelected;
+
+  const handleSelectAll = () => {
+    if (!onSelectionChange || !rowKey) return;
+    if (allSelected) {
+      // Deselect all visible
+      const next = new Set(selectedKeys);
+      allKeys.forEach(k => next.delete(k));
+      onSelectionChange(next);
+    } else {
+      // Select all visible
+      const next = new Set(selectedKeys);
+      allKeys.forEach(k => next.add(k));
+      onSelectionChange(next);
+    }
+  };
+
+  const handleSelectRow = (key: string) => {
+    if (!onSelectionChange || !selectedKeys) return;
+    const next = new Set(selectedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onSelectionChange(next);
+  };
+
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
+              {selectable && <TableHead className="w-10" />}
               {columns.map((col) => (
                 <TableHead key={col.key}>{col.header}</TableHead>
               ))}
@@ -85,6 +126,7 @@ export function DataTable<T extends object>({
           <TableBody>
             {Array.from({ length: 5 }).map((_, i) => (
               <TableRow key={i}>
+                {selectable && <TableCell><Skeleton className="h-4 w-4" /></TableCell>}
                 {columns.map((col) => (
                   <TableCell key={col.key}>
                     <Skeleton className="h-4 w-full" />
@@ -103,6 +145,17 @@ export function DataTable<T extends object>({
       <Table>
         <TableHeader>
           <TableRow>
+            {selectable && (
+              <TableHead className="w-10 px-2">
+                <Checkbox
+                  checked={allSelected}
+                  ref={(el) => {
+                    if (el) (el as any).indeterminate = someSelected;
+                  }}
+                  onCheckedChange={handleSelectAll}
+                />
+              </TableHead>
+            )}
             {columns.map((col) => (
               <TableHead
                 key={col.key}
@@ -120,20 +173,32 @@ export function DataTable<T extends object>({
         <TableBody>
           {sorted.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={columns.length + (selectable ? 1 : 0)} className="text-center py-8 text-muted-foreground">
                 {emptyMessage}
               </TableCell>
             </TableRow>
           ) : (
-            sorted.map((row, idx) => (
-              <TableRow key={idx}>
-                {columns.map((col) => (
-                  <TableCell key={col.key} className="text-xs py-1.5 px-2">
-                    {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))
+            sorted.map((row, idx) => {
+              const key = selectable && rowKey ? rowKey(row) : String(idx);
+              const isSelected = selectable && selectedKeys?.has(key);
+              return (
+                <TableRow key={key} className={isSelected ? "bg-muted/50" : ""}>
+                  {selectable && (
+                    <TableCell className="px-2">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => handleSelectRow(key)}
+                      />
+                    </TableCell>
+                  )}
+                  {columns.map((col) => (
+                    <TableCell key={col.key} className="text-xs py-1.5 px-2">
+                      {col.render ? col.render(row) : String((row as any)[col.key] ?? "")}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              );
+            })
           )}
         </TableBody>
       </Table>

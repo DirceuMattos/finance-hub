@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, addMonths, parse, isAfter, isBefore, startOfMonth } from "date-fns";
+import { format, parse, parseISO, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Pencil, Trash2, Info } from "lucide-react";
+import { useCardInstallments, InstallmentRow } from "@/hooks/useCardInstallments";
 import { useCardPurchases } from "@/hooks/useCardPurchases";
 import { useCards } from "@/hooks/useCards";
 import { useCategories } from "@/hooks/useCategories";
@@ -17,14 +18,21 @@ import { CardPurchaseForm } from "@/components/cartoes/CardPurchaseForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import type { CardPurchase } from "@/types/database";
 
-function StatusBadge({ status }: { status: string }) {
-  if (status === "closed") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Fechada</Badge>;
+const today = startOfDay(new Date());
+
+function StatusBadge({ status, dueDate }: { status: string; dueDate?: string }) {
+  if (status === "paid") return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Paga</Badge>;
   if (status === "cancelled") return <Badge variant="destructive">Cancelada</Badge>;
+  // Check if overdue
+  if (dueDate && isBefore(parseISO(dueDate), today) && status !== "paid" && status !== "cancelled") {
+    return <Badge variant="destructive">Vencida</Badge>;
+  }
   return <Badge variant="outline" className="border-primary text-primary">Aberta</Badge>;
 }
 
 export default function ComprasCartao() {
-  const { data = [], isLoading, create, update, remove } = useCardPurchases();
+  const { data: installments = [], isLoading: loadingInstallments } = useCardInstallments();
+  const { create, update, remove } = useCardPurchases();
   const { data: cards = [] } = useCards();
   const { data: categories = [] } = useCategories();
   const { data: entities = [] } = useFinancialEntities();
@@ -47,67 +55,90 @@ export default function ComprasCartao() {
   const personalEntities = useMemo(() => entities.filter(e => e.entity_type === "personal"), [entities]);
   const businessEntities = useMemo(() => entities.filter(e => e.entity_type === "business"), [entities]);
 
-  // Generate month options from data
+  // Build month options from installments
   const monthOptions = useMemo(() => {
     const months = new Set<string>();
     months.add(currentMonth);
-    data.forEach((p) => {
-      if (p.first_billing_month) {
-        const start = parse(p.first_billing_month.substring(0, 7), "yyyy-MM", new Date());
-        for (let i = 0; i < p.installments_count; i++) {
-          months.add(format(addMonths(start, i), "yyyy-MM"));
-        }
+    installments.forEach((inst) => {
+      if (inst.billing_month) {
+        months.add(inst.billing_month.substring(0, 7));
       }
     });
     return Array.from(months).sort().reverse();
-  }, [data, currentMonth]);
+  }, [installments, currentMonth]);
 
-  const filtered = data.filter((p) => {
-    if (search && !p.description.toLowerCase().includes(search.toLowerCase())) return false;
-    if (filterCard !== "all" && p.card_id !== filterCard) return false;
-    if (filterEntity !== "all" && p.financial_entity_id !== filterEntity) return false;
-    if (filterMonth !== "all" && p.first_billing_month) {
-      const selectedMonth = parse(filterMonth, "yyyy-MM", new Date());
-      const firstMonth = parse(p.first_billing_month.substring(0, 7), "yyyy-MM", new Date());
-      const lastMonth = addMonths(firstMonth, p.installments_count - 1);
-      if (isBefore(selectedMonth, startOfMonth(firstMonth)) || isAfter(selectedMonth, startOfMonth(lastMonth))) return false;
-    }
-    return true;
-  });
+  // Filter installments
+  const filtered = useMemo(() => {
+    return installments.filter((inst) => {
+      const desc = inst.card_purchases?.description || "";
+      if (search && !desc.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterCard !== "all" && inst.card_purchases?.card_id !== filterCard) return false;
+      if (filterEntity !== "all" && inst.card_purchases?.financial_entity_id !== filterEntity) return false;
+      if (filterMonth !== "all") {
+        const instMonth = inst.billing_month?.substring(0, 7);
+        if (instMonth !== filterMonth) return false;
+      }
+      return true;
+    });
+  }, [installments, search, filterCard, filterEntity, filterMonth]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
-  const fmtDate = (d: string | null) => d ? format(new Date(d), "dd/MM/yyyy") : "—";
+  const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
 
-  const columns: Column<CardPurchase>[] = [
-    { key: "purchase_date", header: "Data", render: (r) => fmtDate(r.purchase_date) },
-    { key: "description", header: "Descrição" },
-    { key: "payee", header: "Favorecido", render: (r) => r.payee || "—" },
-    { key: "card", header: "Cartão", render: (r) => r.cards?.name || "—" },
-    { key: "category", header: "Categoria", render: (r) => r.categories?.name || "—" },
+  const columns: Column<InstallmentRow>[] = [
+    { key: "purchase_date", header: "Data Compra", sortable: true, sortValue: (r) => r.card_purchases?.purchase_date || "", render: (r) => fmtDate(r.card_purchases?.purchase_date || null) },
+    { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
+    { key: "description", header: "Descrição", sortable: true, sortValue: (r) => (r.card_purchases?.description || "").toLowerCase(), render: (r) => r.card_purchases?.description || "—" },
+    { key: "payee", header: "Favorecido", render: (r) => r.card_purchases?.payee || "—" },
+    { key: "card", header: "Cartão", render: (r) => r.card_purchases?.cards?.name || "—" },
+    { key: "category", header: "Categoria", render: (r) => r.card_purchases?.categories?.name || "—" },
     {
       key: "entity", header: "Entidade", render: (r) => {
-        const type = entityMap.get(r.financial_entity_id);
+        const entId = r.card_purchases?.financial_entity_id;
+        const type = entId ? entityMap.get(entId) : undefined;
         return (
           <div className="flex items-center gap-1.5">
-            <span>{r.financial_entities?.name || "—"}</span>
+            <span>{r.card_purchases?.financial_entities?.name || "—"}</span>
             {type === "personal" && <Badge variant="outline" className="text-[10px] border-primary text-primary">Pessoal</Badge>}
             {type === "business" && <Badge variant="outline" className="text-[10px] border-accent-foreground text-accent-foreground">Empresa</Badge>}
           </div>
         );
       },
     },
-    { key: "total_amount", header: "Total", render: (r) => <span className={r.total_amount < 0 ? "text-destructive font-medium" : ""}>{fmt(r.total_amount)}</span> },
-    { key: "installments", header: "Parcelas", render: (r) => <span className={r.installment_amount < 0 ? "text-destructive font-medium" : ""}>{`${r.installments_count}x ${fmt(r.installment_amount)}`}</span> },
-    { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: "installment", header: "Parcela", sortable: true, sortValue: (r) => r.installment_number,
+      render: (r) => <span className="font-mono text-xs">{r.installment_number}/{r.card_purchases?.installments_count || "?"}</span>,
+    },
+    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.amount < 0 ? "text-destructive font-medium" : ""}>{fmt(r.amount)}</span> },
+    { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} dueDate={r.due_date} /> },
     {
       key: "actions", header: "Ações", render: (r) => (
         <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={() => { setEditing(r); setFormOpen(true); }}><Pencil className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => setDeleting(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => handleEditPurchase(r.card_purchase_id)}><Pencil className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => setDeleting(r.card_purchase_id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
         </div>
       ),
     },
   ];
+
+  // Build a purchase map from installments for editing
+  const handleEditPurchase = (purchaseId: string) => {
+    // Find any installment with this purchase to get purchase data
+    const inst = installments.find(i => i.card_purchase_id === purchaseId);
+    if (!inst?.card_purchases) return;
+    const p = inst.card_purchases;
+    setEditing({
+      id: purchaseId,
+      description: p.description,
+      card_id: p.card_id,
+      financial_entity_id: p.financial_entity_id,
+      purchase_date: p.purchase_date,
+      payee: p.payee,
+      installments_count: p.installments_count,
+      // Fill other fields as needed
+    } as any);
+    setFormOpen(true);
+  };
 
   const handleSubmit = (d: Partial<CardPurchase>) => {
     const mutation = d.id ? update : create;
@@ -158,11 +189,11 @@ export default function ComprasCartao() {
         </Select>
       </FilterBar>
 
-      <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma compra parcelada registrada. Utilize o botão 'Nova' para cadastrar compras no cartão." />
+      <DataTable columns={columns} data={filtered} loading={loadingInstallments} emptyMessage="Nenhuma parcela encontrada para o período selecionado." defaultSortKey="due_date" defaultSortDir="asc" />
 
       <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
         <Info className="h-3 w-3" />
-        Os dados atuais de cartão disponíveis no sistema vêm de lançamentos em Lançamentos (identificados por centro de custo). Compras parceladas detalhadas dependem de registros específicos nesta tela.
+        Cada linha representa uma parcela individual. Parcelas vencidas e não pagas são destacadas em vermelho.
       </p>
 
       <CardPurchaseForm
