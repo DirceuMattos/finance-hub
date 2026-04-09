@@ -8,6 +8,7 @@ interface FilterBarProps {
   searchPlaceholder?: string;
   children?: React.ReactNode;
   onClear?: () => void;
+  hasActiveFilters?: boolean;
 }
 
 export function FilterBar({
@@ -16,8 +17,9 @@ export function FilterBar({
   searchPlaceholder = "Buscar...",
   children,
   onClear,
+  hasActiveFilters = false,
 }: FilterBarProps) {
-  const hasActiveFilters = searchValue.length > 0;
+  const showClear = searchValue.length > 0 || hasActiveFilters;
 
   const handleClear = () => {
     onSearchChange("");
@@ -35,8 +37,8 @@ export function FilterBar({
           className="pl-9"
         />
       </div>
-      {children && <div className="flex items-center gap-2">{children}</div>}
-      {hasActiveFilters && (
+      {children && <div className="flex items-center gap-2 flex-wrap">{children}</div>}
+      {showClear && (
         <Button variant="ghost" size="sm" onClick={handleClear} className="text-muted-foreground">
           <X className="h-4 w-4 mr-1" />
           Limpar
