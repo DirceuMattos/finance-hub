@@ -112,6 +112,25 @@ export function useInvestmentPortfolioSummary() {
   });
 }
 
+export function usePreviousClosingValue(month?: string, investmentClassId?: string, financialEntityId?: string) {
+  return useQuery({
+    queryKey: ["prev_closing_investment", month, investmentClassId, financialEntityId],
+    enabled: !!month && !!investmentClassId && !!financialEntityId && month.length >= 7,
+    queryFn: async () => {
+      const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("investment_snapshots" as any)
+        .select("closing_value")
+        .eq("reference_month", prevMonth)
+        .eq("investment_class_id", investmentClassId!)
+        .eq("financial_entity_id", financialEntityId!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as any)?.closing_value as number | null;
+    },
+  });
+}
+
 export function useInvestmentCrud() {
   const queryClient = useQueryClient();
 

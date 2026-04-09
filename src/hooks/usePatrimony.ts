@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
+import { subMonths, format } from "date-fns";
 
 export interface AssetCategory {
   id: string;
