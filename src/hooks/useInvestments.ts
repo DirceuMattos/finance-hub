@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
-import { subMonths, format } from "date-fns";
+import { subMonths, addMonths, format, parseISO } from "date-fns";
 
 export interface InvestmentClass {
   id: string;
@@ -21,34 +21,6 @@ export interface InvestmentSnapshot {
   updated_at: string;
   investment_classes?: { name: string };
   financial_entities?: { name: string };
-}
-
-export interface InvestmentReturnByClass {
-  reference_month: string;
-  financial_entity_id: string;
-  investment_class_id: string;
-  investment_class_name: string;
-  institution_name: string;
-  opening_value: number;
-  closing_value: number;
-  contributions: number;
-  redemptions: number;
-  migrations_in: number;
-  migrations_out: number;
-  fees: number;
-  manual_yield: number;
-  estimated_return: number;
-}
-
-export interface InvestmentPortfolioSummary {
-  reference_month: string;
-  financial_entity_id: string;
-  total_portfolio_value: number;
-  total_estimated_return: number;
-  total_contributions: number;
-  total_redemptions: number;
-  total_migrations_in: number;
-  total_migrations_out: number;
 }
 
 export function useInvestmentClasses() {
@@ -84,32 +56,21 @@ export function useInvestmentSnapshots(month?: string) {
   });
 }
 
-export function useInvestmentReturnByClass() {
-  return useQuery({
-    queryKey: ["vw_investment_return_by_class"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vw_investment_return_by_class")
-        .select("*")
-        .order("reference_month");
-      if (error) throw error;
-      return data as InvestmentReturnByClass[];
-    },
-  });
-}
-
-export function useInvestmentPortfolioSummary() {
-  return useQuery({
-    queryKey: ["vw_investment_portfolio_summary"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("vw_investment_portfolio_summary")
-        .select("*")
-        .order("reference_month");
-      if (error) throw error;
-      return data as InvestmentPortfolioSummary[];
-    },
-  });
+/** Helper: get effective closing value for a snapshot, considering next month's opening */
+export function getEffectiveClosing(
+  snapshot: InvestmentSnapshot,
+  allSnapshots: InvestmentSnapshot[]
+): number {
+  if (snapshot.closing_value > 0) return snapshot.closing_value;
+  // Find the next month's opening for the same class+entity
+  const nextMonth = format(addMonths(parseISO(snapshot.reference_month), 1), "yyyy-MM-dd");
+  const next = allSnapshots.find(
+    (s) =>
+      s.reference_month === nextMonth &&
+      s.investment_class_id === snapshot.investment_class_id &&
+      s.financial_entity_id === snapshot.financial_entity_id
+  );
+  return next?.opening_value ?? snapshot.closing_value;
 }
 
 export function usePreviousClosingValue(month?: string, investmentClassId?: string, financialEntityId?: string) {
@@ -136,13 +97,11 @@ export function useInvestmentCrud() {
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["investment_snapshots"] });
-    queryClient.invalidateQueries({ queryKey: ["vw_investment_return_by_class"] });
-    queryClient.invalidateQueries({ queryKey: ["vw_investment_portfolio_summary"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
   };
 
   const normalizeMonth = (data: Partial<InvestmentSnapshot>) => {
     const copy = { ...data };
-    // HTML month input sends "YYYY-MM"; DB date column needs "YYYY-MM-DD"
     if (copy.reference_month && copy.reference_month.length === 7) {
       copy.reference_month = `${copy.reference_month}-01`;
     }
@@ -152,13 +111,11 @@ export function useInvestmentCrud() {
   const create = useMutation({
     mutationFn: async (snapshot: Partial<InvestmentSnapshot>) => {
       const payload = normalizeMonth(snapshot);
-      console.log("[InvestmentCrud] INSERT payload:", JSON.stringify(payload));
-      const { error, data } = await (supabase as any).from("investment_snapshots").insert(payload);
-      console.log("[InvestmentCrud] INSERT response error:", JSON.stringify(error), "data:", JSON.stringify(data));
+      const { error } = await (supabase as any).from("investment_snapshots").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro criado com sucesso"); },
-    onError: (e: any) => { console.error("[InvestmentCrud] CREATE error:", e); toast.error(getUserErrorMessage(e)); },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({

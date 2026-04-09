@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -11,16 +11,16 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PieChart, TrendingUp, Wallet, BarChart3, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { PieChart, TrendingUp, Wallet, Percent, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import {
   useInvestmentSnapshots,
-  useInvestmentReturnByClass,
-  useInvestmentPortfolioSummary,
   useInvestmentCrud,
   useInvestmentClasses,
+  getEffectiveClosing,
   InvestmentSnapshot,
 } from "@/hooks/useInvestments";
+import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { InvestmentForm } from "@/components/investimentos/InvestmentForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 
@@ -29,7 +29,7 @@ const fmt = (v: number) =>
 
 const fmtMonth = (m: string) => {
   try {
-    const d = new Date(m);
+    const d = parseISO(m);
     return format(d, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
   } catch {
     return m;
@@ -38,9 +38,6 @@ const fmtMonth = (m: string) => {
 
 type ViewType = "all" | "personal" | "business";
 
-const PERSONAL_ENTITY_ID = "d3570d76-4e1e-4f3f-9b47-b71c1d8a884b";
-const BUSINESS_ENTITY_ID = "750b0ab2-09b4-44eb-9309-78c4b4d2dab0";
-
 export default function Investimentos() {
   const [view, setView] = useState<ViewType>("all");
   const [formOpen, setFormOpen] = useState(false);
@@ -48,9 +45,18 @@ export default function Investimentos() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: snapshots = [], isLoading: loadingSnapshots } = useInvestmentSnapshots();
-  const { data: returnByClass = [], isLoading: loadingReturns } = useInvestmentReturnByClass();
-  const { data: portfolioSummary = [], isLoading: loadingSummary } = useInvestmentPortfolioSummary();
+  const { data: entities = [] } = useFinancialEntities();
   const { create, update, remove } = useInvestmentCrud();
+
+  // Dynamic entity filtering by type
+  const personalIds = useMemo(() => entities.filter(e => e.entity_type === "personal").map(e => e.id), [entities]);
+  const businessIds = useMemo(() => entities.filter(e => e.entity_type === "business").map(e => e.id), [entities]);
+
+  const filterByEntity = <T extends { financial_entity_id: string }>(data: T[]) => {
+    if (view === "personal") return data.filter((d) => personalIds.includes(d.financial_entity_id));
+    if (view === "business") return data.filter((d) => businessIds.includes(d.financial_entity_id));
+    return data;
+  };
 
   // Unique months from snapshots
   const months = useMemo(() => {
@@ -61,67 +67,59 @@ export default function Investimentos() {
   const [selectedMonth, setSelectedMonth] = useState<string>("");
   const activeMonth = selectedMonth || months[0] || "";
 
-  const filterByEntity = <T extends { financial_entity_id: string }>(data: T[]) => {
-    if (view === "personal") return data.filter((d) => d.financial_entity_id === PERSONAL_ENTITY_ID);
-    if (view === "business") return data.filter((d) => d.financial_entity_id === BUSINESS_ENTITY_ID);
-    return data;
-  };
-
-  // Snapshots for table (with CRUD)
+  // Snapshots for the selected month with effective closing
   const filteredSnapshots = useMemo(() => {
     let data = filterByEntity(snapshots);
     if (activeMonth) data = data.filter((s) => s.reference_month === activeMonth);
-    return data;
-  }, [snapshots, activeMonth, view]);
+    return data.map((s) => ({
+      ...s,
+      closing_value: getEffectiveClosing(s, snapshots),
+    }));
+  }, [snapshots, activeMonth, view, personalIds, businessIds]);
 
-  // Return by class for stat cards and allocation
-  const filteredReturns = useMemo(() => {
-    let data = filterByEntity(returnByClass);
-    if (activeMonth) data = data.filter((r) => r.reference_month === activeMonth);
-    return data;
-  }, [returnByClass, activeMonth, view]);
-
-  // Portfolio totals for selected month
+  // Stat cards computed from snapshots
   const totals = useMemo(() => {
-    const filtered = filterByEntity(portfolioSummary).filter(
-      (p) => p.reference_month === activeMonth
-    );
-    return filtered.reduce(
-      (acc, p) => ({
-        total_portfolio_value: acc.total_portfolio_value + p.total_portfolio_value,
-        total_estimated_return: acc.total_estimated_return + p.total_estimated_return,
-        total_contributions: acc.total_contributions + p.total_contributions,
-        total_redemptions: acc.total_redemptions + p.total_redemptions,
-      }),
-      { total_portfolio_value: 0, total_estimated_return: 0, total_contributions: 0, total_redemptions: 0 }
-    );
-  }, [portfolioSummary, activeMonth, view]);
+    const totalOpening = filteredSnapshots.reduce((s, r) => s + r.opening_value, 0);
+    const totalClosing = filteredSnapshots.reduce((s, r) => s + r.closing_value, 0);
+    const variation = totalClosing - totalOpening;
+    const variationPct = totalOpening > 0 ? (variation / totalOpening) * 100 : 0;
+    return { totalClosing, totalOpening, variation, variationPct };
+  }, [filteredSnapshots]);
 
-  // Allocation by class
+  // Allocation by class with variation %
   const allocation = useMemo(() => {
-    const totalValue = filteredReturns.reduce((s, r) => s + r.closing_value, 0);
-    return filteredReturns
-      .filter((r) => r.closing_value > 0)
-      .map((r) => ({
-        name: r.investment_class_name,
-        value: r.closing_value,
-        pct: totalValue > 0 ? (r.closing_value / totalValue) * 100 : 0,
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [filteredReturns]);
-
-  // Evolution chart data
-  const chartData = useMemo(() => {
-    const filtered = filterByEntity(portfolioSummary);
-    const byMonth = new Map<string, { month: string; portfolio: number; retorno: number }>();
-    filtered.forEach((p) => {
-      const existing = byMonth.get(p.reference_month) || { month: p.reference_month, portfolio: 0, retorno: 0 };
-      existing.portfolio += p.total_portfolio_value;
-      existing.retorno += p.total_estimated_return;
-      byMonth.set(p.reference_month, existing);
+    const classMap = new Map<string, { opening: number; closing: number }>();
+    filteredSnapshots.forEach((s) => {
+      const name = s.investment_classes?.name || "Outros";
+      const existing = classMap.get(name) || { opening: 0, closing: 0 };
+      existing.opening += s.opening_value;
+      existing.closing += s.closing_value;
+      classMap.set(name, existing);
     });
-    return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
-  }, [portfolioSummary, view]);
+    const totalClosing = totals.totalClosing;
+    return Array.from(classMap.entries())
+      .map(([name, v]) => ({
+        name,
+        value: v.closing,
+        pct: totalClosing > 0 ? (v.closing / totalClosing) * 100 : 0,
+        variationPct: v.opening > 0 ? ((v.closing - v.opening) / v.opening) * 100 : 0,
+      }))
+      .filter((a) => a.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [filteredSnapshots, totals.totalClosing]);
+
+  // Evolution chart from all snapshots grouped by month
+  const chartData = useMemo(() => {
+    const entityFiltered = filterByEntity(snapshots);
+    const byMonth = new Map<string, number>();
+    entityFiltered.forEach((s) => {
+      const eff = getEffectiveClosing(s, snapshots);
+      byMonth.set(s.reference_month, (byMonth.get(s.reference_month) || 0) + eff);
+    });
+    return Array.from(byMonth.entries())
+      .map(([month, portfolio]) => ({ month, portfolio }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+  }, [snapshots, view, personalIds, businessIds]);
 
   const hasEnoughHistory = chartData.length >= 2;
 
@@ -185,10 +183,11 @@ export default function Investimentos() {
       sortValue: (r) => r.closing_value - r.opening_value,
       render: (r) => {
         const diff = r.closing_value - r.opening_value;
+        const pct = r.opening_value > 0 ? ((diff / r.opening_value) * 100).toFixed(2) : "—";
         if (diff === 0) return <span className="text-muted-foreground">—</span>;
         return (
-          <span className={`font-mono text-xs ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>
-            {diff > 0 ? "+" : ""}{fmt(diff)}
+          <span className={`font-mono text-xs ${diff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
+            {diff > 0 ? "+" : ""}{fmt(diff)} ({pct}%)
           </span>
         );
       },
@@ -246,10 +245,29 @@ export default function Investimentos() {
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Carteira Total" value={fmt(totals.total_portfolio_value)} icon={PieChart} variant={totals.total_portfolio_value < 0 ? "negative" : "neutral"} />
-        <StatCard title="Retorno Estimado" value={fmt(totals.total_estimated_return)} icon={TrendingUp} variant={totals.total_estimated_return < 0 ? "negative" : "neutral"} />
-        <StatCard title="Aportes" value={fmt(totals.total_contributions)} icon={Wallet} />
-        <StatCard title="Resgates" value={fmt(totals.total_redemptions)} icon={BarChart3} />
+        <StatCard
+          title="Carteira Total"
+          value={fmt(totals.totalClosing)}
+          icon={PieChart}
+          variant={totals.totalClosing > 0 ? "positive" : "neutral"}
+        />
+        <StatCard
+          title="Abertura do Mês"
+          value={fmt(totals.totalOpening)}
+          icon={Wallet}
+        />
+        <StatCard
+          title="Variação do Mês"
+          value={fmt(totals.variation)}
+          icon={TrendingUp}
+          variant={totals.variation > 0 ? "positive" : totals.variation < 0 ? "negative" : "neutral"}
+        />
+        <StatCard
+          title="Variação %"
+          value={`${totals.variationPct >= 0 ? "+" : ""}${totals.variationPct.toFixed(2)}%`}
+          icon={Percent}
+          variant={totals.variationPct > 0 ? "positive" : totals.variationPct < 0 ? "negative" : "neutral"}
+        />
       </div>
 
       {/* Evolution chart */}
@@ -270,7 +288,6 @@ export default function Investimentos() {
                 />
                 <Legend />
                 <Line type="monotone" dataKey="portfolio" name="Carteira" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="retorno" name="Retorno Est." stroke="hsl(142 76% 36%)" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -282,7 +299,7 @@ export default function Investimentos() {
         </Alert>
       )}
 
-      {/* Allocation summary */}
+      {/* Allocation summary with variation % */}
       {allocation.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
           {allocation.map((a) => (
@@ -290,9 +307,14 @@ export default function Investimentos() {
               <CardContent className="p-3">
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">{a.name}</p>
                 <p className="text-sm font-semibold font-mono mt-1">{fmt(a.value)}</p>
-                <Badge variant="outline" className="text-[10px] mt-1">
-                  {a.pct.toFixed(1)}%
-                </Badge>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <Badge variant="outline" className="text-[10px]">
+                    {a.pct.toFixed(1)}%
+                  </Badge>
+                  <span className={`text-[10px] font-mono ${a.variationPct > 0 ? "text-emerald-600 dark:text-emerald-400" : a.variationPct < 0 ? "text-destructive" : "text-muted-foreground"}`}>
+                    {a.variationPct > 0 ? "+" : ""}{a.variationPct.toFixed(2)}%
+                  </span>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -303,7 +325,7 @@ export default function Investimentos() {
       <DataTable
         columns={columns}
         data={filteredSnapshots}
-        loading={loadingSnapshots || loadingReturns || loadingSummary}
+        loading={loadingSnapshots}
         emptyMessage="Nenhum registro de investimento encontrado."
         defaultSortKey="closing_value"
         defaultSortDir="desc"
