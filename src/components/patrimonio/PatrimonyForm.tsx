@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAssetCategories, type PatrimonySnapshot } from "@/hooks/usePatrimony";
+import { useAssetCategories, usePreviousPatrimonyClosingValue, type PatrimonySnapshot } from "@/hooks/usePatrimony";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 
 const schema = z.object({
@@ -47,6 +47,23 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       notes: "",
     },
   });
+
+  const watchMonth = form.watch("reference_month");
+  const watchItem = form.watch("item_name");
+  const watchEntity = form.watch("financial_entity_id");
+
+  const { data: prevClosing } = usePreviousPatrimonyClosingValue(
+    !snapshot ? watchMonth : undefined,
+    !snapshot ? watchItem : undefined,
+    !snapshot ? watchEntity : undefined
+  );
+
+  // Auto-fill opening_value from previous month's closing_value (new records only)
+  useEffect(() => {
+    if (!snapshot && prevClosing != null) {
+      form.setValue("opening_value", prevClosing);
+    }
+  }, [prevClosing, snapshot]);
 
   useEffect(() => {
     if (snapshot) {

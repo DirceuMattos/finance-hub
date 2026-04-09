@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
+import { subMonths, format } from "date-fns";
 
 export interface InvestmentClass {
   id: string;
@@ -107,6 +108,25 @@ export function useInvestmentPortfolioSummary() {
         .order("reference_month");
       if (error) throw error;
       return data as InvestmentPortfolioSummary[];
+    },
+  });
+}
+
+export function usePreviousClosingValue(month?: string, investmentClassId?: string, financialEntityId?: string) {
+  return useQuery({
+    queryKey: ["prev_closing_investment", month, investmentClassId, financialEntityId],
+    enabled: !!month && !!investmentClassId && !!financialEntityId && month.length >= 7,
+    queryFn: async () => {
+      const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("investment_snapshots" as any)
+        .select("closing_value")
+        .eq("reference_month", prevMonth)
+        .eq("investment_class_id", investmentClassId!)
+        .eq("financial_entity_id", financialEntityId!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as any)?.closing_value as number | null;
     },
   });
 }

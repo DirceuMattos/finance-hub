@@ -7,7 +7,7 @@ import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { useInvestmentClasses, type InvestmentSnapshot } from "@/hooks/useInvestments";
+import { useInvestmentClasses, usePreviousClosingValue, type InvestmentSnapshot } from "@/hooks/useInvestments";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 
 const schema = z.object({
@@ -42,6 +42,23 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
       closing_value: 0,
     },
   });
+
+  const watchMonth = form.watch("reference_month");
+  const watchClass = form.watch("investment_class_id");
+  const watchEntity = form.watch("financial_entity_id");
+
+  const { data: prevClosing } = usePreviousClosingValue(
+    !snapshot ? watchMonth : undefined,
+    !snapshot ? watchClass : undefined,
+    !snapshot ? watchEntity : undefined
+  );
+
+  // Auto-fill opening_value from previous month's closing_value (new records only)
+  useEffect(() => {
+    if (!snapshot && prevClosing != null) {
+      form.setValue("opening_value", prevClosing);
+    }
+  }, [prevClosing, snapshot]);
 
   useEffect(() => {
     if (snapshot) {
