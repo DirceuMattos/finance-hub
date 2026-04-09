@@ -232,30 +232,44 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- Investment total (latest month) ---
+  // --- Investment total (latest month, with effective closing logic) ---
   const investmentData = useQuery({
     queryKey: ["dashboard_investments", view],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("investment_snapshots")
-        .select("closing_value, reference_month, investment_class_id, financial_entity_id, investment_classes(name)")
+        .select("closing_value, opening_value, reference_month, investment_class_id, financial_entity_id, investment_classes(name)")
         .order("reference_month", { ascending: false });
       if (error) throw error;
       if (!data || data.length === 0) return { total: 0, byClass: [] };
 
-      const latestMonth = data[0].reference_month;
-      const latestItems = (data as any[]).filter((d: any) => d.reference_month === latestMonth);
+      const allData = data as any[];
+      const latestMonth = allData[0].reference_month;
+      const latestItems = allData.filter((d: any) => d.reference_month === latestMonth);
 
       const filtered = filterIds && filterIds.length > 0
         ? latestItems.filter((d: any) => filterIds.includes(d.financial_entity_id))
         : latestItems;
 
-      const total = filtered.reduce((s: number, d: any) => s + (d.closing_value || 0), 0);
+      // Effective closing: if closing_value is 0, use next month's opening_value
+      const getEffective = (item: any) => {
+        if (item.closing_value > 0) return item.closing_value;
+        const nextMonthStr = format(addMonths(parseISO(item.reference_month), 1), "yyyy-MM-dd");
+        const next = allData.find(
+          (d: any) =>
+            d.reference_month === nextMonthStr &&
+            d.investment_class_id === item.investment_class_id &&
+            d.financial_entity_id === item.financial_entity_id
+        );
+        return next?.opening_value ?? item.closing_value;
+      };
+
+      const total = filtered.reduce((s: number, d: any) => s + getEffective(d), 0);
 
       const classMap = new Map<string, number>();
       filtered.forEach((d: any) => {
         const name = d.investment_classes?.name || "Outros";
-        classMap.set(name, (classMap.get(name) || 0) + (d.closing_value || 0));
+        classMap.set(name, (classMap.get(name) || 0) + getEffective(d));
       });
 
       const byClass = Array.from(classMap.entries())
