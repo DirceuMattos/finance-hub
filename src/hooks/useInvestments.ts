@@ -141,7 +141,8 @@ export function useInvestmentCrud() {
 
   const update = useMutation({
     mutationFn: async ({ id, ...data }: Partial<InvestmentSnapshot> & { id: string }) => {
-      const { error } = await (supabase as any).from("investment_snapshots").update(data).eq("id", id);
+      const payload = normalizeMonth(data);
+      const { error } = await (supabase as any).from("investment_snapshots").update(payload).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro atualizado"); },
