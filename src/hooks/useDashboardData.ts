@@ -261,7 +261,9 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
             d.investment_class_id === item.investment_class_id &&
             d.financial_entity_id === item.financial_entity_id
         );
-        return next?.opening_value ?? item.closing_value;
+        if (next?.opening_value > 0) return next.opening_value;
+        // Fallback: use opening_value of current month when no closing or next month exists
+        return item.opening_value > 0 ? item.opening_value : item.closing_value;
       };
 
       const total = filtered.reduce((s: number, d: any) => s + getEffective(d), 0);
