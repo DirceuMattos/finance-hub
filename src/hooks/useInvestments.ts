@@ -120,9 +120,19 @@ export function useInvestmentCrud() {
     queryClient.invalidateQueries({ queryKey: ["vw_investment_portfolio_summary"] });
   };
 
+  const normalizeMonth = (data: Partial<InvestmentSnapshot>) => {
+    const copy = { ...data };
+    // HTML month input sends "YYYY-MM"; DB date column needs "YYYY-MM-DD"
+    if (copy.reference_month && copy.reference_month.length === 7) {
+      copy.reference_month = `${copy.reference_month}-01`;
+    }
+    return copy;
+  };
+
   const create = useMutation({
     mutationFn: async (snapshot: Partial<InvestmentSnapshot>) => {
-      const { error } = await (supabase as any).from("investment_snapshots").insert(snapshot);
+      const payload = normalizeMonth(snapshot);
+      const { error } = await (supabase as any).from("investment_snapshots").insert(payload);
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro criado com sucesso"); },
