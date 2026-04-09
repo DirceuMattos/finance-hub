@@ -152,11 +152,13 @@ export function useInvestmentCrud() {
   const create = useMutation({
     mutationFn: async (snapshot: Partial<InvestmentSnapshot>) => {
       const payload = normalizeMonth(snapshot);
-      const { error } = await (supabase as any).from("investment_snapshots").insert(payload);
+      console.log("[InvestmentCrud] INSERT payload:", JSON.stringify(payload));
+      const { error, data } = await (supabase as any).from("investment_snapshots").insert(payload);
+      console.log("[InvestmentCrud] INSERT response error:", JSON.stringify(error), "data:", JSON.stringify(data));
       if (error) throw error;
     },
     onSuccess: () => { invalidate(); toast.success("Registro criado com sucesso"); },
-    onError: (e: any) => toast.error(getUserErrorMessage(e)),
+    onError: (e: any) => { console.error("[InvestmentCrud] CREATE error:", e); toast.error(getUserErrorMessage(e)); },
   });
 
   const update = useMutation({
