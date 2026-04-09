@@ -106,7 +106,7 @@ export default function FaturasProjetadas() {
     <AppLayout>
       <PageHeader title="Faturas Projetadas" description="Previsão de faturas dos cartões de crédito" />
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar...">
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar..." hasActiveFilters={filterCard !== "all" || includePast} onClear={() => { setFilterCard("all"); setIncludePast(false); }}>
         <Select value={filterCard} onValueChange={setFilterCard}>
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
           <SelectContent>

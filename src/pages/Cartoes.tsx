@@ -80,7 +80,7 @@ export default function Cartoes() {
         </TabsList>
       </Tabs>
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão...">
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão..." hasActiveFilters={filterMonth !== format(new Date(), "yyyy-MM")} onClear={() => setFilterMonth(format(new Date(), "yyyy-MM"))}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
