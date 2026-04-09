@@ -146,7 +146,7 @@ export default function ComprasCartao() {
         <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>
       } />
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar compra...">
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar compra..." hasActiveFilters={filterMonth !== currentMonth || filterCard !== "all" || filterEntity !== "all"} onClear={() => { setFilterMonth(currentMonth); setFilterCard("all"); setFilterEntity("all"); }}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>

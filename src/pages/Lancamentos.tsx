@@ -404,7 +404,7 @@ export default function Lancamentos() {
         </div>
       )}
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento...">
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento..." hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all"} onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); }}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
