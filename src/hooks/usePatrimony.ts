@@ -120,3 +120,22 @@ export function usePatrimonyCrud() {
 
   return { create, update, remove };
 }
+
+export function usePreviousPatrimonyClosingValue(month?: string, itemName?: string, financialEntityId?: string) {
+  return useQuery({
+    queryKey: ["prev_closing_patrimony", month, itemName, financialEntityId],
+    enabled: !!month && !!itemName && !!financialEntityId && month.length >= 7,
+    queryFn: async () => {
+      const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
+      const { data, error } = await supabase
+        .from("patrimony_snapshots" as any)
+        .select("closing_value")
+        .eq("reference_month", prevMonth)
+        .eq("item_name", itemName!)
+        .eq("financial_entity_id", financialEntityId!)
+        .maybeSingle();
+      if (error) throw error;
+      return (data as any)?.closing_value as number | null;
+    },
+  });
+}
