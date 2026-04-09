@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
-import { format, addMonths, startOfMonth } from "date-fns";
+import { format, addMonths, startOfMonth, parseISO } from "date-fns";
 import type { FinancialEntity } from "@/types/database";
 import type { MonthlyCashflow } from "@/hooks/useMonthlyCashflow";
 
