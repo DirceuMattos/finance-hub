@@ -15,8 +15,8 @@ const schema = z.object({
   bank_name: z.string().max(100).optional().nullable(),
   account_type: z.string().min(1, "Tipo é obrigatório"),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
-  opening_balance: z.coerce.number(),
-  current_balance: z.coerce.number(),
+  opening_balance: z.string(),
+  current_balance: z.string(),
   currency: z.string().min(1, "Moeda é obrigatória"),
   is_active: z.boolean(),
 });
