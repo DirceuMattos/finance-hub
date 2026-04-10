@@ -114,7 +114,8 @@ export function DataTable<T extends object>({
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-card">
-        <Table>
+        <div className="overflow-x-auto scrollbar-always">
+          <Table>
           <TableHeader>
             <TableRow>
               {selectable && <TableHead className="w-10" />}
@@ -135,14 +136,16 @@ export function DataTable<T extends object>({
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+          </Table>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`rounded-lg border border-border bg-card ${className || ""}`}>
-      <Table>
+      <div className="overflow-x-auto scrollbar-always">
+        <Table>
         <TableHeader>
           <TableRow>
             {selectable && (
@@ -201,7 +204,8 @@ export function DataTable<T extends object>({
             })
           )}
         </TableBody>
-      </Table>
+        </Table>
+      </div>
     </div>
   );
 }
