@@ -51,6 +51,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       if (error) throw error;
       return data as FinancialEntity[];
     },
+    staleTime: 0,
   });
 
   const entities = entitiesQuery.data ?? [];
@@ -62,6 +63,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   // --- Account balances ---
   const accountBalances = useQuery({
     queryKey: ["dashboard_account_balances_split", view],
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("accounts")
@@ -88,6 +90,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   // --- Monthly cashflow from view (single source of truth) ---
   const monthlyFlow = useQuery({
     queryKey: ["dashboard_monthly_flow_view", start, view],
+    staleTime: 0,
     queryFn: async () => {
       const viewName = cashflowViewMap[view];
       const { data, error } = await (supabase as any)
@@ -144,6 +147,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   // --- Expenses by category (no dedicated view — keep query) ---
   const expensesByCategory = useQuery({
     queryKey: ["dashboard_expenses_category", start, view],
+    staleTime: 0,
     queryFn: async () => {
       let query = (supabase as any)
         .from("transactions")
@@ -172,6 +176,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   // --- Cashflow chart (12 months from view) ---
   const cashflowChart = useQuery({
     queryKey: ["dashboard_cashflow_chart", view],
+    staleTime: 0,
     queryFn: async () => {
       const viewName = cashflowViewMap[view];
       const { data, error } = await (supabase as any)
@@ -187,6 +192,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   // --- Patrimony total (latest month) ---
   const patrimonyData = useQuery({
     queryKey: ["dashboard_patrimony", view],
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("patrimony_snapshots")
@@ -235,6 +241,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   // --- Investment total (latest month, with effective closing logic) ---
   const investmentData = useQuery({
     queryKey: ["dashboard_investments", view],
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("investment_snapshots")
