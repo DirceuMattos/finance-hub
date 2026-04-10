@@ -70,7 +70,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      recalculate_account_balances: { Args: never; Returns: number }
     }
     Enums: {
       [_ in never]: never

@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { AccountForm } from "./AccountForm";
 import { DeleteDialog } from "./DeleteDialog";
 import type { Account } from "@/types/database";
@@ -16,10 +19,30 @@ const typeLabels: Record<string, string> = { checking: "Corrente", savings: "Pou
 export function AccountsTab() {
   const { data = [], isLoading, create, update, remove } = useAccounts();
   const { data: entities = [] } = useFinancialEntities();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
+
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      const { error } = await (supabase as any).rpc("recalculate_account_balances");
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      toast.success("Saldos recalculados com sucesso");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao recalcular saldos");
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   const filtered = data.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -50,7 +73,13 @@ export function AccountsTab() {
   return (
     <div>
       <PageHeader title="Contas Bancárias" description="Gerencie suas contas" actions={
-        <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={recalculating}>
+            <RefreshCw className={`h-4 w-4 mr-1 ${recalculating ? "animate-spin" : ""}`} />
+            Recalcular Saldos
+          </Button>
+          <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>
+        </div>
       } />
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar conta..." />
       <DataTable columns={columns} data={filtered as any} loading={isLoading} emptyMessage="Nenhuma conta encontrada." />
