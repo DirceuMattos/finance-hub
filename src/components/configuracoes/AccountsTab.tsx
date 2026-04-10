@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
+import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { AccountForm } from "./AccountForm";
 import { DeleteDialog } from "./DeleteDialog";
 import type { Account } from "@/types/database";
