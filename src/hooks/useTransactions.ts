@@ -26,8 +26,9 @@ export function useTransactions(filterMonth?: string) {
 
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        // Filter: due_date in month OR (due_date is null AND competence_date in month)
-        q = q.or(`and(due_date.gte.${start},due_date.lt.${end}),and(due_date.is.null,competence_date.gte.${start},competence_date.lt.${end})`);
+        // Keep items visible when either due_date or competence_date falls in the selected month.
+        // This also restores older records previously saved with a shifted due_date.
+        q = q.or(`and(due_date.gte.${start},due_date.lt.${end}),and(competence_date.gte.${start},competence_date.lt.${end})`);
       } else {
         q = q.limit(5000);
       }
