@@ -47,7 +47,7 @@ export function AccountsTab() {
         let balance = Number(acc.opening_balance ?? 0);
 
         for (const t of txns || []) {
-          const amount = Number(t.amount ?? 0);
+          const amount = Math.abs(Number(t.amount ?? 0));
           if (t.transaction_type === "income") balance += amount;
           if (t.transaction_type === "expense") balance -= amount;
         }
