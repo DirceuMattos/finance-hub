@@ -1,39 +1,39 @@
 
 
-## Plano: Auto-atualização do Dashboard ao lançar receitas/despesas
+## Plano: Corrigir desaparecimento de lançamentos após edição
 
-### Problema
-O Dashboard usa `useQuery` do TanStack Query com cache padrão. Quando o usuário insere lançamentos em outras telas, o cache do Dashboard não é invalidado — os dados ficam desatualizados até o usuário recarregar a página.
+### Causa raiz
 
-### Solução
-Duas ações complementares:
+No `TransactionForm.tsx`, ao carregar um lançamento para edição, as datas são convertidas assim:
 
-**1. Invalidar queries do Dashboard ao voltar para a página**
-- Adicionar `refetchOnWindowFocus: true` (já é o padrão do React Query, mas garantir)
-- Reduzir o `staleTime` das queries do Dashboard para que refetch automático ocorra ao navegar de volta
+```typescript
+due_date: transaction.due_date ? new Date(transaction.due_date) : null,
+payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
+```
 
-**2. Invalidar o cache do Dashboard após mutations de transações**
-- No hook `useTransactions.ts`, as mutations `create`, `update` e `remove` já invalidam `["transactions"]`. Adicionar invalidação das query keys do Dashboard (`dashboard_*`) nessas mesmas mutations
-- Fazer o mesmo no `useCardPurchases.ts` e `useRecurrences.ts`
+`new Date("2026-01-15")` cria meia-noite UTC. No fuso do Brasil (UTC-3), isso vira 14/01 às 21h. Quando o formulário salva, `format(date, "yyyy-MM-dd")` usa hora local e grava `"2026-01-14"` — um dia a menos. Se a data original era dia 01, ela recua para o mês anterior, saindo do filtro.
 
-### Arquivos modificados
+### Correção
+
+No `TransactionForm.tsx`, trocar `new Date(dateStr)` por parsing local:
+
+```typescript
+// Antes
+due_date: transaction.due_date ? new Date(transaction.due_date) : null,
+
+// Depois  
+due_date: transaction.due_date
+  ? (() => { const [y,m,d] = transaction.due_date.split('-').map(Number); return new Date(y, m-1, d); })()
+  : null,
+```
+
+Mesma correção para `payment_date`. Isso cria o Date em meia-noite **local**, e `format()` devolve a data correta.
+
+### Arquivo modificado
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useTransactions.ts` | Adicionar invalidação de queries `dashboard_*` no `onSuccess` de create/update/remove |
-| `src/hooks/useCardPurchases.ts` | Idem — invalidar queries do dashboard |
-| `src/hooks/useDashboardData.ts` | Definir `staleTime: 0` nas queries para garantir refetch ao revisitar |
+| `src/components/lancamentos/TransactionForm.tsx` | Substituir `new Date(dateStr)` por parsing local para `due_date` e `payment_date` no `useEffect` de edição (linhas ~88-89) |
 
-### Detalhes técnicos
-```typescript
-// Em cada onSuccess das mutations:
-queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
-queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
-queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
-queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
-queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
-queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
-```
-
-Isso garante que, ao criar/editar/excluir um lançamento e depois navegar ao Dashboard, os dados já estarão atualizados.
+### Sem alterações no banco de dados
 
