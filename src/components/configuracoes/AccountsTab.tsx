@@ -19,10 +19,30 @@ const typeLabels: Record<string, string> = { checking: "Corrente", savings: "Pou
 export function AccountsTab() {
   const { data = [], isLoading, create, update, remove } = useAccounts();
   const { data: entities = [] } = useFinancialEntities();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [recalculating, setRecalculating] = useState(false);
+
+  const handleRecalculate = async () => {
+    setRecalculating(true);
+    try {
+      const { error } = await (supabase as any).rpc("recalculate_account_balances");
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      toast.success("Saldos recalculados com sucesso");
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao recalcular saldos");
+    } finally {
+      setRecalculating(false);
+    }
+  };
 
   const filtered = data.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
 
