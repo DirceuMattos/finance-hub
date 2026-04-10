@@ -29,8 +29,65 @@ export function AccountsTab() {
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
-      const { error } = await (supabase as any).rpc("recalculate_account_balances");
-      if (error) throw error;
+      // Fetch all active accounts
+      const { data: accounts, error: accErr } = await (supabase as any)
+        .from("accounts")
+        .select("id")
+        .eq("is_active", true);
+      if (accErr) throw accErr;
+
+      for (const acc of accounts) {
+        // Sum paid transactions (income positive, expense negative)
+        const { data: txns, error: txErr } = await (supabase as any)
+          .from("transactions")
+          .select("transaction_type, amount")
+          .eq("account_id", acc.id)
+          .eq("status", "paid");
+        if (txErr) throw txErr;
+
+        let balance = 0;
+        for (const t of txns || []) {
+          balance += t.transaction_type === "income" ? Number(t.amount) : -Number(t.amount);
+        }
+
+        // Subtract paid card installments linked via cards → card_purchases
+        const { data: cards, error: cardErr } = await (supabase as any)
+          .from("cards")
+          .select("id")
+          .eq("account_id", acc.id);
+        if (cardErr) throw cardErr;
+
+        if (cards && cards.length > 0) {
+          const cardIds = cards.map((c: any) => c.id);
+          const { data: purchases, error: purErr } = await (supabase as any)
+            .from("card_purchases")
+            .select("id")
+            .in("card_id", cardIds);
+          if (purErr) throw purErr;
+
+          if (purchases && purchases.length > 0) {
+            const purchaseIds = purchases.map((p: any) => p.id);
+            const { data: installments, error: instErr } = await (supabase as any)
+              .from("card_installments")
+              .select("amount")
+              .in("card_purchase_id", purchaseIds)
+              .eq("status", "paid");
+            if (instErr) throw instErr;
+
+            for (const inst of installments || []) {
+              balance -= Number(inst.amount);
+            }
+          }
+        }
+
+        // Update account balance
+        const { error: upErr } = await (supabase as any)
+          .from("accounts")
+          .update({ current_balance: balance })
+          .eq("id", acc.id);
+        if (upErr) throw upErr;
+      }
+
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
