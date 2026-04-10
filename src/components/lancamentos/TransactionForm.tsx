@@ -83,8 +83,12 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         account_id: transaction.account_id || "",
         amount: String(transaction.amount),
         competence_date: transaction.competence_date.substring(0, 7),
-        due_date: transaction.due_date ? new Date(transaction.due_date) : null,
-        payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
+        due_date: transaction.due_date
+          ? (() => { const [y, m, d] = transaction.due_date.split('-').map(Number); return new Date(y, m - 1, d); })()
+          : null,
+        payment_date: transaction.payment_date
+          ? (() => { const [y, m, d] = transaction.payment_date.split('-').map(Number); return new Date(y, m - 1, d); })()
+          : null,
         status: transaction.status,
         payee: (transaction as any).payee || "",
         notes: transaction.notes || "",
