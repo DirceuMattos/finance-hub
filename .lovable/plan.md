@@ -1,40 +1,48 @@
 
 
-## Plano: Botão "Recalcular Saldos" na aba Contas
+## Plano: Correção dos saldos no Dashboard e Recálculo de Contas
 
-### Objetivo
-Adicionar um botão na aba Contas (Configurações) que recalcula o `current_balance` de todas as contas com base nos lançamentos comuns e de cartão realizados. O resultado se reflete imediatamente no Dashboard e demais telas.
+### Diagnóstico
 
-### Implementação
+Após análise detalhada do código, identifiquei três problemas raiz:
 
-**1. Criar função RPC no banco de dados (migration)**
+1. **Dashboard depende de views do banco externo (`vw_monthly_cashflow_*`)** que podem estar com lógica incorreta ou desatualizada. O `useDashboardData.ts` lê diretamente dessas views para obter receitas, despesas, saldo projetado e valores de cartão. Se as views estão erradas, tudo no Dashboard fica errado.
 
-Uma função `recalculate_account_balances()` que, para cada conta ativa:
-- Soma receitas pagas (`transactions` com `transaction_type = income` e `status = paid`)
-- Subtrai despesas pagas (`transactions` com `transaction_type = expense` e `status = paid`)
-- Subtrai parcelas de cartão pagas (`card_installments` com `status = paid`, vinculadas à conta via `card_purchases` → `cards`)
-- Atualiza `accounts.current_balance` com o valor calculado
+2. **O hook `useMonthlyCashflow` (usado no Fluxo Mensal) soma TODAS as parcelas de cartão como `projected_card_amount`**, sem distinguir se estão pagas ou previstas. Isso infla o comprometimento de cartão.
 
-Retorna o número de contas atualizadas.
+3. **O botão Recalcular Saldos considera apenas `transactions`**, o que é correto se pagamentos de fatura de cartão são registrados como transações de despesa. Porém, não há log ou transparência para o usuário verificar o cálculo.
 
-**2. Alterar `AccountsTab.tsx`**
+### Alterações
 
-- Adicionar botão "Recalcular Saldos" (ícone RefreshCw) ao lado do botão "Nova"
-- Ao clicar, chamar `supabase.rpc("recalculate_account_balances")`
-- Mostrar loading no botão durante a execução
-- Ao concluir, invalidar caches: `accounts`, `dashboard_account_balances_split` e demais chaves `dashboard_*`
-- Exibir toast de sucesso/erro
+**1. `src/hooks/useDashboardData.ts` — Eliminar dependência das views**
+
+Substituir a leitura das views `vw_monthly_cashflow_*` por cálculo direto no frontend (mesmo padrão do `useMonthlyCashflow`), garantindo que:
+- Receitas pagas = transações `income` + `status = paid` no mês
+- Receitas previstas = transações `income` + `status = planned` no mês
+- Despesas pagas = transações `expense` + `status = paid` no mês
+- Despesas previstas = transações `expense` + `status = planned` no mês
+- Cartão previsto = parcelas `card_installments` com `status != paid` no mês
+- Cartão pago = parcelas com `status = paid` no mês (informativo)
+- Saldo projetado = (receitas pagas + previstas) - (despesas pagas + previstas) - cartão previsto
+- Semáforo calculado com base no saldo projetado vs reserva mínima
+
+**2. `src/hooks/useMonthlyCashflow.ts` — Separar cartão pago vs previsto**
+
+Corrigir para que `projected_card_amount` conte apenas parcelas **não pagas** (previstas/pendentes), e adicionar campo `card_paid_amount` para parcelas já pagas.
+
+**3. `src/components/configuracoes/AccountsTab.tsx` — Adicionar log de recálculo**
+
+Após recalcular, exibir toast detalhado com o resumo: número de contas processadas e o total de transações consideradas, para que o usuário possa validar.
 
 ### Arquivos modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Migration SQL | Criar função `recalculate_account_balances()` |
-| `src/components/configuracoes/AccountsTab.tsx` | Adicionar botão e lógica de chamada RPC com invalidação de cache |
+| `src/hooks/useDashboardData.ts` | Substituir leitura de views por cálculo direto de `transactions` + `card_installments` |
+| `src/hooks/useMonthlyCashflow.ts` | Separar parcelas pagas vs previstas no cálculo de cartão |
+| `src/components/configuracoes/AccountsTab.tsx` | Toast com resumo do recálculo |
 
-### Fluxo do usuário
-1. Acessa Configurações → aba Contas
-2. Clica em "Recalcular Saldos"
-3. Sistema executa o cálculo no banco
-4. Saldos atualizados aparecem na tabela e no Dashboard
+### Sem alterações no banco de dados
+
+Todo o trabalho é exclusivamente frontend. As tabelas `transactions` e `card_installments` já contêm os dados necessários.
 
