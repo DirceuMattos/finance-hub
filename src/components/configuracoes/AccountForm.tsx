@@ -44,7 +44,7 @@ interface Props {
 export function AccountForm({ open, onOpenChange, account, entities, onSubmit, loading }: Props) {
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", bank_name: "", account_type: "checking", financial_entity_id: "", opening_balance: 0, current_balance: 0, currency: "BRL", is_active: true },
+    defaultValues: { name: "", bank_name: "", account_type: "checking", financial_entity_id: "", opening_balance: "0", current_balance: "0", currency: "BRL", is_active: true },
   });
 
   useEffect(() => {
@@ -54,18 +54,23 @@ export function AccountForm({ open, onOpenChange, account, entities, onSubmit, l
         bank_name: account.bank_name || "",
         account_type: account.account_type,
         financial_entity_id: account.financial_entity_id,
-        opening_balance: account.opening_balance,
-        current_balance: account.current_balance,
+        opening_balance: String(account.opening_balance),
+        current_balance: String(account.current_balance),
         currency: account.currency,
         is_active: account.is_active,
       });
     } else {
-      form.reset({ name: "", bank_name: "", account_type: "checking", financial_entity_id: "", opening_balance: 0, current_balance: 0, currency: "BRL", is_active: true });
+      form.reset({ name: "", bank_name: "", account_type: "checking", financial_entity_id: "", opening_balance: "0", current_balance: "0", currency: "BRL", is_active: true });
     }
   }, [account, open]);
 
   const handleSubmit = (data: FormData) => {
-    onSubmit(account ? { id: account.id, ...data } : data);
+    const payload = {
+      ...data,
+      opening_balance: Number(data.opening_balance) || 0,
+      current_balance: Number(data.current_balance) || 0,
+    };
+    onSubmit(account ? { id: account.id, ...payload } : payload);
   };
 
   return (
