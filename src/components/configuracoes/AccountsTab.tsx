@@ -36,6 +36,9 @@ export function AccountsTab() {
         .eq("is_active", true);
       if (accErr) throw accErr;
 
+      let totalAccounts = 0;
+      let totalTxns = 0;
+
       for (const acc of accounts ?? []) {
         const { data: txns, error: txErr } = await (supabase as any)
           .from("transactions")
@@ -45,6 +48,8 @@ export function AccountsTab() {
         if (txErr) throw txErr;
 
         let balance = Number(acc.opening_balance ?? 0);
+        const txCount = (txns || []).length;
+        totalTxns += txCount;
 
         for (const t of txns || []) {
           const amount = Math.abs(Number(t.amount ?? 0));
@@ -57,6 +62,7 @@ export function AccountsTab() {
           .update({ current_balance: balance })
           .eq("id", acc.id);
         if (upErr) throw upErr;
+        totalAccounts++;
       }
 
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
@@ -66,7 +72,7 @@ export function AccountsTab() {
       queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
-      toast.success("Saldos recalculados com sucesso");
+      toast.success(`Saldos recalculados: ${totalAccounts} contas processadas com ${totalTxns} transações realizadas`);
     } catch (e: any) {
       toast.error(getUserErrorMessage(e));
     } finally {

@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth, parseISO } from "date-fns";
 import type { FinancialEntity } from "@/types/database";
-import type { MonthlyCashflow } from "@/hooks/useMonthlyCashflow";
 
 type ViewType = "consolidated" | "personal" | "business";
 
@@ -10,12 +9,6 @@ const monthRange = (month: Date) => {
   const start = format(startOfMonth(month), "yyyy-MM-dd");
   const end = format(startOfMonth(addMonths(month, 1)), "yyyy-MM-dd");
   return { start, end };
-};
-
-const cashflowViewMap: Record<ViewType, string> = {
-  consolidated: "vw_monthly_cashflow_consolidated",
-  personal: "vw_monthly_cashflow_personal",
-  business: "vw_monthly_cashflow_business",
 };
 
 export interface CategoryBreakdown {
@@ -38,7 +31,6 @@ const fmtCur = (v: number) =>
 
 export function useDashboardData(view: ViewType = "consolidated", selectedMonth: Date = new Date()) {
   const { start, end } = monthRange(selectedMonth);
-  const monthStr = format(startOfMonth(selectedMonth), "yyyy-MM-dd");
 
   // --- Financial entities ---
   const entitiesQuery = useQuery({
@@ -87,25 +79,129 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     enabled: entities.length > 0,
   });
 
-  // --- Monthly cashflow from view (single source of truth) ---
+  // --- Monthly cashflow calculated directly from transactions + card_installments ---
   const monthlyFlow = useQuery({
     queryKey: ["dashboard_monthly_flow_view", start, view],
     staleTime: 0,
     queryFn: async () => {
-      const viewName = cashflowViewMap[view];
-      const { data, error } = await (supabase as any)
-        .from(viewName)
-        .select("*")
-        .eq("reference_month", monthStr)
-        .maybeSingle();
-      if (error) throw error;
-      return data as MonthlyCashflow | null;
+      // Fetch transactions for the selected month
+      let txQuery = (supabase as any)
+        .from("transactions")
+        .select("amount, transaction_type, status, financial_entity_id")
+        .neq("status", "cancelled")
+        .gte("competence_date", start)
+        .lt("competence_date", end);
+
+      if (filterIds && filterIds.length > 0) {
+        txQuery = txQuery.in("financial_entity_id", filterIds);
+      }
+
+      const { data: txData, error: txError } = await txQuery;
+      if (txError) throw txError;
+
+      // Fetch card installments for the selected month
+      let cardData: any[] = [];
+      try {
+        const { data: instData, error: instError } = await (supabase as any)
+          .from("card_installments")
+          .select("amount, status, card_purchases(financial_entity_id)")
+          .gte("billing_month", start)
+          .lt("billing_month", end);
+
+        if (!instError && instData) {
+          // Filter by entity if needed
+          if (filterIds && filterIds.length > 0) {
+            cardData = instData.filter((inst: any) =>
+              filterIds.includes(inst.card_purchases?.financial_entity_id)
+            );
+          } else {
+            cardData = instData;
+          }
+        }
+      } catch {
+        // table may not exist
+      }
+
+      // Aggregate transactions
+      let income_paid = 0;
+      let income_planned = 0;
+      let expense_paid = 0;
+      let expense_planned = 0;
+
+      for (const tx of (txData || []) as any[]) {
+        const amt = Math.abs(tx.amount || 0);
+        const isIncome = tx.transaction_type === "income" || tx.transaction_type === "receita";
+        const isPaid = tx.status === "paid";
+
+        if (isIncome) {
+          if (isPaid) income_paid += amt;
+          else income_planned += amt;
+        } else {
+          if (isPaid) expense_paid += amt;
+          else expense_planned += amt;
+        }
+      }
+
+      // Aggregate card installments — only unpaid count as projected
+      let projected_card_amount = 0;
+      let card_paid_amount = 0;
+
+      for (const inst of cardData) {
+        const amt = Math.abs(inst.amount || 0);
+        if (inst.status === "paid") {
+          card_paid_amount += amt;
+        } else {
+          projected_card_amount += amt;
+        }
+      }
+
+      // Projected balance: total income - total expenses - projected card
+      const totalIncome = income_paid + income_planned;
+      const totalExpense = expense_paid + expense_planned;
+      const projected_balance = totalIncome - totalExpense - projected_card_amount;
+
+      // Potential containment = planned expenses that could be cut
+      const potential_containment = expense_planned;
+
+      // Fetch minimum reserve from system parameters
+      let minimum_reserve = 0;
+      try {
+        const { data: paramData } = await (supabase as any)
+          .from("system_parameters")
+          .select("parameter_value")
+          .eq("parameter_key", "minimum_reserve")
+          .maybeSingle();
+        if (paramData) minimum_reserve = Number(paramData.parameter_value) || 0;
+      } catch {
+        // ignore
+      }
+
+      // Traffic light
+      let traffic_light = "green";
+      if (projected_balance < 0) {
+        traffic_light = "red";
+      } else if (projected_balance < minimum_reserve) {
+        traffic_light = "yellow";
+      }
+
+      return {
+        income_paid,
+        income_planned,
+        expense_paid,
+        expense_planned,
+        projected_card_amount,
+        card_paid_amount,
+        projected_balance,
+        potential_containment,
+        minimum_reserve,
+        traffic_light,
+      };
     },
   });
 
   const flow = monthlyFlow.data;
 
-  // Forecast directly from view — zero recalculation
+  // Forecast directly from calculated data
   const forecast: MonthForecast = {
     income_paid: flow?.income_paid ?? 0,
     income_planned: flow?.income_planned ?? 0,
@@ -116,7 +212,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     potential_containment: flow?.potential_containment ?? 0,
   };
 
-  // --- Risk: directly from view's traffic_light ---
+  // --- Risk ---
   const trafficLight = flow?.traffic_light ?? "green";
   const minimumReserve = flow?.minimum_reserve ?? 0;
   const projectedBalance = flow?.projected_balance ?? 0;
@@ -144,7 +240,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     message: riskMessageMap[trafficLight] ?? riskMessageMap.green,
   };
 
-  // --- Expenses by category (no dedicated view — keep query) ---
+  // --- Expenses by category ---
   const expensesByCategory = useQuery({
     queryKey: ["dashboard_expenses_category", start, view],
     staleTime: 0,
@@ -164,7 +260,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       const map = new Map<string, number>();
       for (const t of (data || []) as { amount: number; categories: { name: string } | null }[]) {
         const name = t.categories?.name || "Sem categoria";
-        map.set(name, (map.get(name) || 0) + t.amount);
+        map.set(name, (map.get(name) || 0) + Math.abs(t.amount));
       }
       return Array.from(map.entries())
         .map(([name, total]) => ({ name, total }))
@@ -173,23 +269,64 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- Cashflow chart (12 months from view) ---
+  // --- Cashflow chart (12 months, calculated directly) ---
   const cashflowChart = useQuery({
     queryKey: ["dashboard_cashflow_chart", view],
     staleTime: 0,
     queryFn: async () => {
-      const viewName = cashflowViewMap[view];
-      const { data, error } = await (supabase as any)
-        .from(viewName)
-        .select("reference_month, income_paid, expense_paid, projected_balance")
-        .order("reference_month")
-        .limit(12);
-      if (error) return [];
-      return (data || []) as { reference_month: string; income_paid: number; expense_paid: number; projected_balance: number }[];
+      // Fetch all transactions
+      let txQuery = (supabase as any)
+        .from("transactions")
+        .select("amount, competence_date, transaction_type, status, financial_entity_id")
+        .neq("status", "cancelled")
+        .order("competence_date");
+
+      if (filterIds && filterIds.length > 0) {
+        txQuery = txQuery.in("financial_entity_id", filterIds);
+      }
+
+      const { data: txData, error: txError } = await txQuery;
+      if (txError) return [];
+
+      // Aggregate by month
+      const monthMap = new Map<string, { income_paid: number; expense_paid: number; projected_balance: number }>();
+
+      for (const tx of (txData || []) as any[]) {
+        const month = (tx.competence_date || "").substring(0, 7);
+        if (!month || month.length < 7) continue;
+
+        let entry = monthMap.get(month);
+        if (!entry) {
+          entry = { income_paid: 0, expense_paid: 0, projected_balance: 0 };
+          monthMap.set(month, entry);
+        }
+
+        const amt = Math.abs(tx.amount || 0);
+        const isIncome = tx.transaction_type === "income" || tx.transaction_type === "receita";
+
+        if (isIncome) {
+          if (tx.status === "paid") entry.income_paid += amt;
+        } else {
+          if (tx.status === "paid") entry.expense_paid += amt;
+        }
+      }
+
+      // Calculate projected_balance per month
+      const entries = Array.from(monthMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .slice(-12)
+        .map(([month, data]) => ({
+          reference_month: month + "-01",
+          income_paid: data.income_paid,
+          expense_paid: data.expense_paid,
+          projected_balance: data.income_paid - data.expense_paid,
+        }));
+
+      return entries;
     },
   });
 
-  // --- Patrimony total (latest month) ---
+  // --- Patrimony total ---
   const patrimonyData = useQuery({
     queryKey: ["dashboard_patrimony", view],
     staleTime: 0,
@@ -238,7 +375,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
-  // --- Investment total (latest month, with effective closing logic) ---
+  // --- Investment total ---
   const investmentData = useQuery({
     queryKey: ["dashboard_investments", view],
     staleTime: 0,
@@ -258,7 +395,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         ? latestItems.filter((d: any) => filterIds.includes(d.financial_entity_id))
         : latestItems;
 
-      // Effective closing: if closing_value is 0, use next month's opening_value
       const getEffective = (item: any) => {
         if (item.closing_value > 0) return item.closing_value;
         const nextMonthStr = format(addMonths(parseISO(item.reference_month), 1), "yyyy-MM-dd");
@@ -269,7 +405,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
             d.financial_entity_id === item.financial_entity_id
         );
         if (next?.opening_value > 0) return next.opening_value;
-        // Fallback: use opening_value of current month when no closing or next month exists
         return item.opening_value > 0 ? item.opening_value : item.closing_value;
       };
 

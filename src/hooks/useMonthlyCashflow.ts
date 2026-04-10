@@ -9,6 +9,7 @@ export interface MonthlyCashflow {
   expense_planned: number;
   expense_paid: number;
   projected_card_amount: number;
+  card_paid_amount: number;
   potential_containment: number;
   total_portfolio_value: number;
   investment_estimated_return: number;
@@ -20,10 +21,6 @@ export interface MonthlyCashflow {
 
 type ViewName = "consolidated" | "personal" | "business";
 
-/**
- * Builds monthly cashflow from transactions + card_installments tables directly.
- * Replaces the previous view-based approach that was incomplete.
- */
 export function useMonthlyCashflow(view: ViewName) {
   return useQuery({
     queryKey: ["monthly_cashflow", view],
@@ -32,6 +29,7 @@ export function useMonthlyCashflow(view: ViewName) {
       const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
         .select("amount, competence_date, transaction_type, status, financial_entities(entity_type)")
+        .neq("status", "cancelled")
         .order("competence_date");
       if (txError) throw txError;
 
@@ -55,7 +53,7 @@ export function useMonthlyCashflow(view: ViewName) {
         return true;
       };
 
-      // 3. Aggregate transactions by month
+      // 3. Aggregate by month
       const monthMap = new Map<string, MonthlyCashflow>();
 
       const getOrCreate = (month: string): MonthlyCashflow => {
@@ -69,6 +67,7 @@ export function useMonthlyCashflow(view: ViewName) {
             expense_planned: 0,
             expense_paid: 0,
             projected_card_amount: 0,
+            card_paid_amount: 0,
             potential_containment: 0,
             total_portfolio_value: 0,
             investment_estimated_return: 0,
@@ -98,13 +97,12 @@ export function useMonthlyCashflow(view: ViewName) {
           if (isPaid) entry.income_paid += amt;
           else entry.income_planned += amt;
         } else {
-          // expense or any other type
           if (isPaid) entry.expense_paid += amt;
           else entry.expense_planned += amt;
         }
       });
 
-      // Process card installments
+      // Process card installments — separate paid vs projected
       cardData.forEach((inst: any) => {
         const entityType = inst.card_purchases?.financial_entities?.entity_type;
         if (!matchesView(entityType)) return;
@@ -114,7 +112,12 @@ export function useMonthlyCashflow(view: ViewName) {
 
         const entry = getOrCreate(month);
         const amt = Math.abs(inst.amount || 0);
-        entry.projected_card_amount += amt;
+
+        if (inst.status === "paid") {
+          entry.card_paid_amount += amt;
+        } else {
+          entry.projected_card_amount += amt;
+        }
       });
 
       // Calculate projected_balance and traffic_light
@@ -126,8 +129,8 @@ export function useMonthlyCashflow(view: ViewName) {
         const totalIncome = entry.income_paid + entry.income_planned;
         const totalExpense = entry.expense_paid + entry.expense_planned + entry.projected_card_amount;
         entry.projected_balance = totalIncome - totalExpense;
+        entry.potential_containment = entry.expense_planned;
 
-        // Simple traffic light
         if (entry.projected_balance < 0) {
           entry.traffic_light = "red";
         } else if (entry.projected_balance < totalIncome * 0.1) {
