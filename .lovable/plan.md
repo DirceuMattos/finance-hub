@@ -1,39 +1,36 @@
 
 
-## Plano: Corrigir desaparecimento de lançamentos após edição
+## Plano: Gerar lançamento de saldo ao baixar com valor menor
 
-### Causa raiz
+### Comportamento desejado
+Quando o usuário registra a baixa de um lançamento (receita ou despesa) e o valor realizado for menor que o valor previsto, o sistema deve exibir um diálogo perguntando se deseja gerar um novo lançamento "previsto" com o valor da diferença (saldo). Esse novo lançamento herda os mesmos dados do original (descrição, categoria, entidade, conta, tipo, etc.).
 
-No `TransactionForm.tsx`, ao carregar um lançamento para edição, as datas são convertidas assim:
+### Implementação
 
-```typescript
-due_date: transaction.due_date ? new Date(transaction.due_date) : null,
-payment_date: transaction.payment_date ? new Date(transaction.payment_date) : null,
-```
+**1. Alterar `PaymentDialog.tsx`**
+- Adicionar um estado interno para controlar um "passo 2" (confirmação de saldo)
+- Após o clique em "Confirmar Baixa", verificar se `valorRealizado < valorPrevisto`
+- Se sim, mostrar um sub-diálogo/alerta perguntando: "O valor realizado é menor que o previsto. Deseja gerar um novo lançamento previsto com o saldo de R$ X?"
+- Se o usuário confirmar, chamar um novo callback `onCreateRemainder`
+- Se não, apenas confirmar a baixa normalmente
 
-`new Date("2026-01-15")` cria meia-noite UTC. No fuso do Brasil (UTC-3), isso vira 14/01 às 21h. Quando o formulário salva, `format(date, "yyyy-MM-dd")` usa hora local e grava `"2026-01-14"` — um dia a menos. Se a data original era dia 01, ela recua para o mês anterior, saindo do filtro.
+**2. Atualizar a interface `PaymentDialogProps`**
+- Adicionar prop `onCreateRemainder: (data: Partial<Transaction>) => void` para que o componente pai crie o lançamento de saldo
 
-### Correção
+**3. Alterar `Lancamentos.tsx`**
+- No uso do `PaymentDialog`, passar o callback `onCreateRemainder` que chama `create.mutate` com os dados do lançamento original, substituindo o valor pelo saldo e status "planned"
 
-No `TransactionForm.tsx`, trocar `new Date(dateStr)` por parsing local:
-
-```typescript
-// Antes
-due_date: transaction.due_date ? new Date(transaction.due_date) : null,
-
-// Depois  
-due_date: transaction.due_date
-  ? (() => { const [y,m,d] = transaction.due_date.split('-').map(Number); return new Date(y, m-1, d); })()
-  : null,
-```
-
-Mesma correção para `payment_date`. Isso cria o Date em meia-noite **local**, e `format()` devolve a data correta.
-
-### Arquivo modificado
+### Arquivos modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/lancamentos/TransactionForm.tsx` | Substituir `new Date(dateStr)` por parsing local para `due_date` e `payment_date` no `useEffect` de edição (linhas ~88-89) |
+| `src/components/lancamentos/PaymentDialog.tsx` | Adicionar lógica de detecção de saldo e diálogo de confirmação; nova prop `onCreateRemainder` |
+| `src/pages/Lancamentos.tsx` | Passar `onCreateRemainder` ao `PaymentDialog`, criando novo lançamento com o saldo |
 
-### Sem alterações no banco de dados
+### Fluxo do usuário
+1. Clica em "Registrar Baixa" num lançamento previsto
+2. Informa valor realizado menor que o previsto
+3. Clica "Confirmar Baixa"
+4. Sistema exibe: "O valor realizado (R$ X) é menor que o previsto (R$ Y). Deseja gerar um novo lançamento previsto com o saldo de R$ Z?"
+5. Sim → baixa é registrada + novo lançamento criado / Não → apenas baixa registrada
 
