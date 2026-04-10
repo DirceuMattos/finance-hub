@@ -47,6 +47,9 @@ export function useRecurrences() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       toast.success("Recorrência criada com sucesso");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
@@ -61,6 +64,9 @@ export function useRecurrences() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       toast.success("Recorrência atualizada");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
@@ -73,6 +79,9 @@ export function useRecurrences() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       toast.success("Recorrência excluída");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
