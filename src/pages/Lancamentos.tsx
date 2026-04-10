@@ -533,6 +533,9 @@ export default function Lancamentos() {
         onConfirm={(data) => {
           update.mutate(data as any, { onSuccess: () => setSettling(null) });
         }}
+        onCreateRemainder={(remainder) => {
+          create.mutate(remainder as any);
+        }}
         loading={update.isPending}
       />
     </AppLayout>

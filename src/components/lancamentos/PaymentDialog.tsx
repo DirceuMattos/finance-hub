@@ -4,6 +4,7 @@ import { ptBR } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,12 +17,15 @@ interface PaymentDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (data: { id: string; status: string; payment_date: string; amount: number }) => void;
+  onCreateRemainder?: (data: Partial<Transaction>) => void;
   loading?: boolean;
 }
 
-export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, loading }: PaymentDialogProps) {
+export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCreateRemainder, loading }: PaymentDialogProps) {
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(undefined);
   const [amount, setAmount] = useState("");
+  const [showRemainderAlert, setShowRemainderAlert] = useState(false);
+  const [pendingConfirmData, setPendingConfirmData] = useState<{ id: string; status: string; payment_date: string; amount: number } | null>(null);
 
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && transaction) {
@@ -33,72 +37,132 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, load
 
   const handleConfirm = () => {
     if (!transaction || !paymentDate) return;
-    onConfirm({
+    const realizedAmount = parseFloat(amount) || transaction.amount;
+    const confirmData = {
       id: transaction.id,
       status: "paid",
       payment_date: format(paymentDate, "yyyy-MM-dd"),
-      amount: parseFloat(amount) || transaction.amount,
+      amount: realizedAmount,
+    };
+
+    if (realizedAmount < transaction.amount && onCreateRemainder) {
+      setPendingConfirmData(confirmData);
+      setShowRemainderAlert(true);
+    } else {
+      onConfirm(confirmData);
+    }
+  };
+
+  const remainderAmount = transaction ? transaction.amount - (parseFloat(amount) || 0) : 0;
+  const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+
+  const handleRemainderYes = () => {
+    if (!pendingConfirmData || !transaction) return;
+    onConfirm(pendingConfirmData);
+    onCreateRemainder?.({
+      description: transaction.description,
+      transaction_type: transaction.transaction_type,
+      category_id: transaction.category_id,
+      financial_entity_id: transaction.financial_entity_id,
+      account_id: transaction.account_id,
+      amount: remainderAmount,
+      competence_date: transaction.competence_date,
+      due_date: transaction.due_date,
+      status: "planned",
+      notes: transaction.notes,
+      payee: transaction.payee,
+      payment_method: transaction.payment_method,
+      source_type: transaction.source_type,
+      tags: transaction.tags,
     });
+    setShowRemainderAlert(false);
+    setPendingConfirmData(null);
+  };
+
+  const handleRemainderNo = () => {
+    if (pendingConfirmData) {
+      onConfirm(pendingConfirmData);
+    }
+    setShowRemainderAlert(false);
+    setPendingConfirmData(null);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpen}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Registrar Baixa</DialogTitle>
-        </DialogHeader>
-        {transaction && (
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              {transaction.description} — {transaction.transaction_type === "income" ? "Receita" : "Despesa"}
-            </p>
+    <>
+      <Dialog open={open} onOpenChange={handleOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar Baixa</DialogTitle>
+          </DialogHeader>
+          {transaction && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                {transaction.description} — {transaction.transaction_type === "income" ? "Receita" : "Despesa"}
+              </p>
 
-            {/* Datas: Prevista x Efetiva lado a lado */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs">Vencimento previsto</Label>
-                <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted text-sm">
-                  {transaction.due_date ? format(parseISO(transaction.due_date), "dd/MM/yyyy") : "—"}
+              {/* Datas: Prevista x Efetiva lado a lado */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Vencimento previsto</Label>
+                  <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted text-sm">
+                    {transaction.due_date ? format(parseISO(transaction.due_date), "dd/MM/yyyy") : "—"}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Data efetiva</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !paymentDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {paymentDate ? format(paymentDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Data efetiva</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !paymentDate && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {paymentDate ? format(paymentDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecionar data"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={paymentDate} onSelect={setPaymentDate} initialFocus className="p-3 pointer-events-auto" />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
 
-            {/* Valores: Previsto x Realizado lado a lado */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-muted-foreground text-xs">Valor previsto (R$)</Label>
-                <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted text-sm">
-                  {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(transaction.amount)}
+              {/* Valores: Previsto x Realizado lado a lado */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground text-xs">Valor previsto (R$)</Label>
+                  <div className="flex items-center h-10 px-3 rounded-md border border-input bg-muted text-sm">
+                    {fmt(transaction.amount)}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor realizado (R$)</Label>
+                  <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Valor realizado (R$)</Label>
-                <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
-              </div>
             </div>
-          </div>
-        )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleConfirm} disabled={loading || !paymentDate}>
-            {loading ? "Salvando..." : "Confirmar Baixa"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+            <Button onClick={handleConfirm} disabled={loading || !paymentDate}>
+              {loading ? "Salvando..." : "Confirmar Baixa"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showRemainderAlert} onOpenChange={setShowRemainderAlert}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Gerar lançamento de saldo?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O valor realizado ({fmt(parseFloat(amount) || 0)}) é menor que o previsto ({fmt(transaction?.amount || 0)}).
+              Deseja gerar um novo lançamento previsto com o saldo de <strong className="text-foreground">{fmt(remainderAmount)}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleRemainderNo}>Não, apenas registrar a baixa</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRemainderYes}>Sim, gerar saldo</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
