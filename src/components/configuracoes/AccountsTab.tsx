@@ -3,6 +3,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 import { toast } from "sonner";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { DataTable, Column } from "@/components/shared/DataTable";
@@ -29,15 +30,13 @@ export function AccountsTab() {
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
-      // Fetch all active accounts
       const { data: accounts, error: accErr } = await (supabase as any)
         .from("accounts")
-        .select("id")
+        .select("id, opening_balance")
         .eq("is_active", true);
       if (accErr) throw accErr;
 
-      for (const acc of accounts) {
-        // Sum paid transactions (income positive, expense negative)
+      for (const acc of accounts ?? []) {
         const { data: txns, error: txErr } = await (supabase as any)
           .from("transactions")
           .select("transaction_type, amount")
@@ -45,42 +44,14 @@ export function AccountsTab() {
           .eq("status", "paid");
         if (txErr) throw txErr;
 
-        let balance = 0;
+        let balance = Number(acc.opening_balance ?? 0);
+
         for (const t of txns || []) {
-          balance += t.transaction_type === "income" ? Number(t.amount) : -Number(t.amount);
+          const amount = Number(t.amount ?? 0);
+          if (t.transaction_type === "income") balance += amount;
+          if (t.transaction_type === "expense") balance -= amount;
         }
 
-        // Subtract paid card installments linked via cards → card_purchases
-        const { data: cards, error: cardErr } = await (supabase as any)
-          .from("cards")
-          .select("id")
-          .eq("account_id", acc.id);
-        if (cardErr) throw cardErr;
-
-        if (cards && cards.length > 0) {
-          const cardIds = cards.map((c: any) => c.id);
-          const { data: purchases, error: purErr } = await (supabase as any)
-            .from("card_purchases")
-            .select("id")
-            .in("card_id", cardIds);
-          if (purErr) throw purErr;
-
-          if (purchases && purchases.length > 0) {
-            const purchaseIds = purchases.map((p: any) => p.id);
-            const { data: installments, error: instErr } = await (supabase as any)
-              .from("card_installments")
-              .select("amount")
-              .in("card_purchase_id", purchaseIds)
-              .eq("status", "paid");
-            if (instErr) throw instErr;
-
-            for (const inst of installments || []) {
-              balance -= Number(inst.amount);
-            }
-          }
-        }
-
-        // Update account balance
         const { error: upErr } = await (supabase as any)
           .from("accounts")
           .update({ current_balance: balance })
@@ -91,11 +62,13 @@ export function AccountsTab() {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
       toast.success("Saldos recalculados com sucesso");
     } catch (e: any) {
-      toast.error(e.message || "Erro ao recalcular saldos");
+      toast.error(getUserErrorMessage(e));
     } finally {
       setRecalculating(false);
     }
