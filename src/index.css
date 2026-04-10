@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Always-visible horizontal scrollbar for data tables */
+.scrollbar-always {
+  overflow-x: auto;
+  scrollbar-gutter: stable;
+}
+.scrollbar-always::-webkit-scrollbar {
+  height: 8px;
+}
+.scrollbar-always::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+.scrollbar-always::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 4px;
+}
+.scrollbar-always::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
 All colors MUST be HSL.
 */
