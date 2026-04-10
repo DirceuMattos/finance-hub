@@ -1,36 +1,38 @@
 
 
-## Plano: Gerar lançamento de saldo ao baixar com valor menor
+## Plano: Atualização automática de saldos após baixa de lançamentos
 
-### Comportamento desejado
-Quando o usuário registra a baixa de um lançamento (receita ou despesa) e o valor realizado for menor que o valor previsto, o sistema deve exibir um diálogo perguntando se deseja gerar um novo lançamento "previsto" com o valor da diferença (saldo). Esse novo lançamento herda os mesmos dados do original (descrição, categoria, entidade, conta, tipo, etc.).
+### Contexto
+Os triggers no banco externo já atualizam o `current_balance` das contas automaticamente. O trabalho é exclusivamente frontend: garantir que o cache de `accounts` seja invalidado após mudanças de status, e habilitar a ação de baixa em parcelas de cartão.
 
-### Implementação
+### Alterações
 
-**1. Alterar `PaymentDialog.tsx`**
-- Adicionar um estado interno para controlar um "passo 2" (confirmação de saldo)
-- Após o clique em "Confirmar Baixa", verificar se `valorRealizado < valorPrevisto`
-- Se sim, mostrar um sub-diálogo/alerta perguntando: "O valor realizado é menor que o previsto. Deseja gerar um novo lançamento previsto com o saldo de R$ X?"
-- Se o usuário confirmar, chamar um novo callback `onCreateRemainder`
-- Se não, apenas confirmar a baixa normalmente
+**1. `src/hooks/useTransactions.ts`**
+- Adicionar `queryClient.invalidateQueries({ queryKey: ["accounts"] })` nos callbacks `onSuccess` de `create`, `update` e `remove`
+- Isso garante que o saldo exibido no dashboard e nas telas reflita imediatamente o valor atualizado pelo trigger do banco
 
-**2. Atualizar a interface `PaymentDialogProps`**
-- Adicionar prop `onCreateRemainder: (data: Partial<Transaction>) => void` para que o componente pai crie o lançamento de saldo
+**2. `src/hooks/useCardPurchases.ts`**
+- Adicionar `queryClient.invalidateQueries({ queryKey: ["accounts"] })` nos callbacks `onSuccess` de `create`, `update` e `remove`
 
-**3. Alterar `Lancamentos.tsx`**
-- No uso do `PaymentDialog`, passar o callback `onCreateRemainder` que chama `create.mutate` com os dados do lançamento original, substituindo o valor pelo saldo e status "planned"
+**3. `src/pages/Lancamentos.tsx`**
+- Remover a restrição "Somente leitura" para parcelas de cartão
+- Adicionar botão de "Registrar Baixa" (ícone CheckCircle) para parcelas com status `pending`/`projected`/`open`
+- Ao clicar, atualizar diretamente na tabela `card_installments` o status para `paid`
+- Invalidar caches: `card_installments`, `card_purchases`, `card_billing_projection`, `accounts`, e todas as chaves `dashboard_*`
+
+**4. Criar hook ou função auxiliar para atualizar status de parcelas de cartão**
+- Adicionar uma mutation em `useCardInstallments.ts` (ou criar um novo hook) para fazer `supabase.from("card_installments").update({ status }).eq("id", id).select()`
+- Com invalidação de `accounts`, `card_installments`, `card_billing_projection`, e chaves `dashboard_*`
 
 ### Arquivos modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/components/lancamentos/PaymentDialog.tsx` | Adicionar lógica de detecção de saldo e diálogo de confirmação; nova prop `onCreateRemainder` |
-| `src/pages/Lancamentos.tsx` | Passar `onCreateRemainder` ao `PaymentDialog`, criando novo lançamento com o saldo |
+| `src/hooks/useTransactions.ts` | Invalidar cache de `accounts` em create/update/remove |
+| `src/hooks/useCardPurchases.ts` | Invalidar cache de `accounts` em create/update/remove |
+| `src/hooks/useCardInstallments.ts` | Adicionar mutations de update (status) com invalidação de accounts |
+| `src/pages/Lancamentos.tsx` | Habilitar ação de baixa em parcelas de cartão |
 
-### Fluxo do usuário
-1. Clica em "Registrar Baixa" num lançamento previsto
-2. Informa valor realizado menor que o previsto
-3. Clica "Confirmar Baixa"
-4. Sistema exibe: "O valor realizado (R$ X) é menor que o previsto (R$ Y). Deseja gerar um novo lançamento previsto com o saldo de R$ Z?"
-5. Sim → baixa é registrada + novo lançamento criado / Não → apenas baixa registrada
+### Sem alterações no banco de dados
+Os triggers já existem. O frontend apenas lê `accounts.current_balance`.
 
