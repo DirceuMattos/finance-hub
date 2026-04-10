@@ -29,6 +29,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
       queryClient.invalidateQueries({ queryKey: ["card_installments"] });
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
@@ -49,6 +50,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
       queryClient.invalidateQueries({ queryKey: ["card_installments"] });
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
@@ -67,6 +69,7 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
       queryClient.invalidateQueries({ queryKey: ["card_installments"] });
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });

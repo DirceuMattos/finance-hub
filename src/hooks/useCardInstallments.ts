@@ -1,5 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
+import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { CardInstallment } from "@/types/database";
 
 export interface BillingProjection {
@@ -32,6 +34,36 @@ function getMonthRange(monthStr: string) {
   const endYear = m === 12 ? y + 1 : y;
   const end = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
   return { start, end };
+}
+
+export function useCardInstallmentStatusUpdate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { data, error } = await (supabase as any)
+        .from("card_installments")
+        .update({ status })
+        .eq("id", id)
+        .select();
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["card_installments"] });
+      queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
+      queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
+      toast.success("Parcela atualizada");
+    },
+    onError: (e: any) => toast.error(getUserErrorMessage(e)),
+  });
 }
 
 export function useCardInstallments(filterMonth?: string) {

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload } from "lucide-react";
 import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
-import { useCardInstallments } from "@/hooks/useCardInstallments";
+import { useCardInstallments, useCardInstallmentStatusUpdate } from "@/hooks/useCardInstallments";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
@@ -95,6 +95,7 @@ export default function Lancamentos() {
 
   const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
   const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
+  const updateInstallmentStatus = useCardInstallmentStatusUpdate();
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
@@ -279,7 +280,23 @@ export default function Lancamentos() {
     {
       key: "actions", header: "", render: (r) => {
         if (r.is_card_installment) {
-          return <span className="text-[10px] text-muted-foreground italic">Somente leitura</span>;
+          const realId = r.id.replace("ci_", "");
+          const isPending = r.status === "planned";
+          const isPaid = r.status === "paid";
+          return (
+            <div className="flex gap-0.5">
+              {isPending && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateInstallmentStatus.mutate({ id: realId, status: "paid" })} title="Marcar como pago">
+                  <CheckCircle className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
+                </Button>
+              )}
+              {isPaid && (
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateInstallmentStatus.mutate({ id: realId, status: "projected" })} title="Reverter para previsto">
+                  <Ban className="h-3.5 w-3.5 text-[hsl(var(--warning))]" />
+                </Button>
+              )}
+            </div>
+          );
         }
         const orig = r._original!;
         return (

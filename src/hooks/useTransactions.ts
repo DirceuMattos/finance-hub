@@ -47,6 +47,7 @@ export function useTransactions(filterMonth?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
@@ -67,6 +68,7 @@ export function useTransactions(filterMonth?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
@@ -85,6 +87,7 @@ export function useTransactions(filterMonth?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
