@@ -29,6 +29,10 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
       queryClient.invalidateQueries({ queryKey: ["card_installments"] });
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       toast.success("Compra registrada com sucesso");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
@@ -45,6 +49,10 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
       queryClient.invalidateQueries({ queryKey: ["card_installments"] });
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       toast.success("Compra atualizada");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
@@ -59,6 +67,10 @@ export function useCardPurchases() {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
       queryClient.invalidateQueries({ queryKey: ["card_installments"] });
       queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
       toast.success("Compra excluída");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),

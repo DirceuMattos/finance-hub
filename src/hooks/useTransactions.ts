@@ -46,6 +46,12 @@ export function useTransactions(filterMonth?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
       toast.success("Lançamento criado com sucesso");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
@@ -60,6 +66,12 @@ export function useTransactions(filterMonth?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
       toast.success("Lançamento atualizado");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
@@ -72,6 +84,12 @@ export function useTransactions(filterMonth?: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_patrimony"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard_investments"] });
       toast.success("Lançamento excluído");
     },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
