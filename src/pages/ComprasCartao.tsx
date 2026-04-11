@@ -8,7 +8,7 @@ import { FilterBar } from "@/components/shared/FilterBar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Info, Wrench } from "lucide-react";
 import { useCardInstallments, InstallmentRow } from "@/hooks/useCardInstallments";
 import { useCardPurchases } from "@/hooks/useCardPurchases";
 import { useCards } from "@/hooks/useCards";
@@ -16,6 +16,7 @@ import { useCategories } from "@/hooks/useCategories";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { CardPurchaseForm } from "@/components/cartoes/CardPurchaseForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
+import { useRepairInstallments } from "@/hooks/useRepairInstallments";
 import type { CardPurchase } from "@/types/database";
 
 const today = startOfDay(new Date());
@@ -35,6 +36,7 @@ export default function ComprasCartao() {
   const [filterMonth, setFilterMonth] = useState(currentMonth);
   const { data: installments = [], isLoading: loadingInstallments } = useCardInstallments(filterMonth);
   const { create, update, remove } = useCardPurchases();
+  const repairInstallments = useRepairInstallments();
   const { data: cards = [] } = useCards();
   const { data: categories = [] } = useCategories();
   const { data: entities = [] } = useFinancialEntities();
@@ -147,7 +149,12 @@ export default function ComprasCartao() {
   return (
     <AppLayout>
       <PageHeader title="Compras no Cartão" description="Registre e acompanhe compras parceladas" actions={
-        <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => repairInstallments.mutate()} disabled={repairInstallments.isPending}>
+            <Wrench className="h-4 w-4 mr-1" />{repairInstallments.isPending ? "Reparando..." : "Reparar Parcelas"}
+          </Button>
+          <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>
+        </div>
       } />
 
       <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar compra..." hasActiveFilters={filterMonth !== currentMonth || filterCard !== "all" || filterEntity !== "all"} onClear={() => { setFilterMonth(currentMonth); setFilterCard("all"); setFilterEntity("all"); }}>
