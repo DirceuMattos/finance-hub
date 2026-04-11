@@ -1,42 +1,60 @@
 
 
-## Plano: Corrigir edição de compras no cartão e erro de campos obrigatórios
+## Plano: Corrigir criacao e edicao de compras no cartao
 
-### Diagnóstico
+### Diagnostico
 
-**Problema 1 — Erro de campos obrigatórios**: A função `handleEditPurchase` em `ComprasCartao.tsx` não popula `total_amount`, `category_id`, `notes` e `status` ao montar o objeto de edição. O formulário abre com `total_amount: 0`, que falha na validação (`min(0.01)`), gerando o erro "campos obrigatórios não preenchidos" sem indicar qual campo.
+Identifiquei **duas causas raiz** confirmadas pela analise dos dados de rede e do codigo:
 
-**Problema 2 — Registro desaparece após edição**: A mutação `update` em `useCardPurchases.ts` atualiza apenas a tabela `card_purchases`, mas **não recalcula as parcelas** na tabela `card_installments`. Quando o valor total ou a quantidade de parcelas muda, as parcelas ficam desatualizadas. Além disso, se o `installment_amount` enviado for 0 (porque `total_amount` não foi populado), as parcelas podem ficar com valor 0 e não aparecer nos filtros.
+**Problema 1 -- Erro ao criar nova compra ("Campos obrigatorios")**: O formulario `CardPurchaseForm.tsx` monta o payload com `purchase_date`, `total_amount`, `installment_amount`, etc., mas **nunca calcula nem envia `first_billing_month`**. Este campo e NOT NULL na tabela `card_purchases`, entao o banco retorna erro 23502 que o `errorMessages.ts` traduz como "Campos obrigatorios nao foram preenchidos".
 
-### Alterações
+**Problema 2 -- Registro desaparece apos edicao**: Ao editar uma compra (ex: atualizar valor de previsao de supermercado), o `update` em `useCardPurchases.ts` atualiza o `card_purchases` mas **nao recalcula `first_billing_month`** nem atualiza `billing_month` e `due_date` das parcelas em `card_installments`. O registro editado `15a2742a` tem `first_billing_month: "2025-03-01"` (data corrupta de edicao anterior), e suas parcelas ficam com `due_date` em marco/2025, fora do filtro de abril/2026. Resultado: desaparece da tela.
 
-**1. `src/pages/ComprasCartao.tsx` — Completar dados de edição**
+### Logica de calculo automatico
 
-Na função `handleEditPurchase`, incluir todos os campos necessários:
-- `total_amount` (calcular como `installment_amount × installments_count` se não disponível diretamente na query de installments)
-- `category_id`
-- `notes`
-- `status`
-- `first_billing_month`
+Com base nos dados do cartao (`closing_day`, `due_day`):
 
-Como a query de `card_installments` faz join com `card_purchases` mas não traz `total_amount`, será necessário **buscar a compra completa** via query direta ou ajustar o select do join para incluir `total_amount`.
+```text
+Se purchase_date.dia <= closing_day:
+  first_billing_month = mesmo mes da compra
+Senao:
+  first_billing_month = proximo mes
 
-**2. `src/hooks/useCardInstallments.ts` — Expandir campos no join**
+due_date de cada parcela = first_billing_month + (N-1) meses, dia = due_day
+billing_month de cada parcela = first_billing_month + (N-1) meses
+```
 
-Adicionar `total_amount`, `installment_amount`, `notes`, `category_id`, `status` ao select do join com `card_purchases` para que esses dados estejam disponíveis na edição.
+### Alteracoes
 
-**3. `src/hooks/useCardPurchases.ts` — Recalcular parcelas na edição**
+**1. `src/components/cartoes/CardPurchaseForm.tsx` -- Calcular `first_billing_month` automaticamente**
 
-Na mutação `update`, após atualizar `card_purchases`, recalcular o `amount` de cada parcela (`card_installments`) vinculada àquela compra com o novo `installment_amount`.
+No `handleSubmit`, apos montar o payload, buscar o `closing_day` e `due_day` do cartao selecionado (ja disponivel via prop `cards`), e calcular:
+- `first_billing_month` com base em `purchase_date` e `closing_day`
+- Incluir no payload enviado ao `onSubmit`
+
+**2. `src/hooks/useCardPurchases.ts` -- Recalcular parcelas na edicao**
+
+Na mutacao `update`, apos atualizar `card_purchases`:
+- Buscar o cartao correspondente para obter `closing_day` e `due_day`
+- Recalcular `first_billing_month` se `purchase_date` foi alterado
+- Atualizar `billing_month` e `due_date` de cada parcela em `card_installments` (nao apenas `amount`)
+- Na mutacao `create`, garantir que `first_billing_month` esta presente no payload
+
+**3. `src/hooks/useRepairInstallments.ts` -- Expandir reparo para corrigir datas**
+
+Alem de corrigir `amount`, o reparo tambem deve recalcular `billing_month` e `due_date` das parcelas com base em `first_billing_month`, `due_day` do cartao e `installment_number`. Isso corrige registros legados corrompidos.
+
+**4. `src/hooks/useCardPurchases.ts` -- Na mutacao create, incluir `first_billing_month`**
+
+Garantir que o `first_billing_month` calculado no formulario seja passado para o insert. Tambem filtrar campos de join (`cards`, `categories`, `financial_entities`) do payload antes de enviar.
 
 ### Arquivos modificados
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---------|-----------|
-| `src/hooks/useCardInstallments.ts` | Expandir select do join para incluir `total_amount`, `installment_amount`, `notes`, `category_id`, `status` |
-| `src/pages/ComprasCartao.tsx` | Completar `handleEditPurchase` com todos os campos |
-| `src/hooks/useCardPurchases.ts` | Na mutação update, recalcular `amount` das parcelas vinculadas |
-| `src/hooks/useCardInstallments.ts` (tipo) | Atualizar interface `InstallmentRow` com os novos campos |
+| `src/components/cartoes/CardPurchaseForm.tsx` | Calcular `first_billing_month` no `handleSubmit` usando `closing_day` do cartao |
+| `src/hooks/useCardPurchases.ts` | Na `update`, recalcular `first_billing_month` + atualizar `billing_month`/`due_date` das parcelas. Na `create`, garantir payload completo |
+| `src/hooks/useRepairInstallments.ts` | Expandir para corrigir `billing_month` e `due_date` das parcelas alem de `amount` |
 
-### Sem alterações no banco de dados
+### Sem alteracoes no banco de dados
 
