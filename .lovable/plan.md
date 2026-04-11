@@ -1,48 +1,42 @@
 
 
-## Plano: Correção dos saldos no Dashboard e Recálculo de Contas
+## Plano: Corrigir edição de compras no cartão e erro de campos obrigatórios
 
 ### Diagnóstico
 
-Após análise detalhada do código, identifiquei três problemas raiz:
+**Problema 1 — Erro de campos obrigatórios**: A função `handleEditPurchase` em `ComprasCartao.tsx` não popula `total_amount`, `category_id`, `notes` e `status` ao montar o objeto de edição. O formulário abre com `total_amount: 0`, que falha na validação (`min(0.01)`), gerando o erro "campos obrigatórios não preenchidos" sem indicar qual campo.
 
-1. **Dashboard depende de views do banco externo (`vw_monthly_cashflow_*`)** que podem estar com lógica incorreta ou desatualizada. O `useDashboardData.ts` lê diretamente dessas views para obter receitas, despesas, saldo projetado e valores de cartão. Se as views estão erradas, tudo no Dashboard fica errado.
-
-2. **O hook `useMonthlyCashflow` (usado no Fluxo Mensal) soma TODAS as parcelas de cartão como `projected_card_amount`**, sem distinguir se estão pagas ou previstas. Isso infla o comprometimento de cartão.
-
-3. **O botão Recalcular Saldos considera apenas `transactions`**, o que é correto se pagamentos de fatura de cartão são registrados como transações de despesa. Porém, não há log ou transparência para o usuário verificar o cálculo.
+**Problema 2 — Registro desaparece após edição**: A mutação `update` em `useCardPurchases.ts` atualiza apenas a tabela `card_purchases`, mas **não recalcula as parcelas** na tabela `card_installments`. Quando o valor total ou a quantidade de parcelas muda, as parcelas ficam desatualizadas. Além disso, se o `installment_amount` enviado for 0 (porque `total_amount` não foi populado), as parcelas podem ficar com valor 0 e não aparecer nos filtros.
 
 ### Alterações
 
-**1. `src/hooks/useDashboardData.ts` — Eliminar dependência das views**
+**1. `src/pages/ComprasCartao.tsx` — Completar dados de edição**
 
-Substituir a leitura das views `vw_monthly_cashflow_*` por cálculo direto no frontend (mesmo padrão do `useMonthlyCashflow`), garantindo que:
-- Receitas pagas = transações `income` + `status = paid` no mês
-- Receitas previstas = transações `income` + `status = planned` no mês
-- Despesas pagas = transações `expense` + `status = paid` no mês
-- Despesas previstas = transações `expense` + `status = planned` no mês
-- Cartão previsto = parcelas `card_installments` com `status != paid` no mês
-- Cartão pago = parcelas com `status = paid` no mês (informativo)
-- Saldo projetado = (receitas pagas + previstas) - (despesas pagas + previstas) - cartão previsto
-- Semáforo calculado com base no saldo projetado vs reserva mínima
+Na função `handleEditPurchase`, incluir todos os campos necessários:
+- `total_amount` (calcular como `installment_amount × installments_count` se não disponível diretamente na query de installments)
+- `category_id`
+- `notes`
+- `status`
+- `first_billing_month`
 
-**2. `src/hooks/useMonthlyCashflow.ts` — Separar cartão pago vs previsto**
+Como a query de `card_installments` faz join com `card_purchases` mas não traz `total_amount`, será necessário **buscar a compra completa** via query direta ou ajustar o select do join para incluir `total_amount`.
 
-Corrigir para que `projected_card_amount` conte apenas parcelas **não pagas** (previstas/pendentes), e adicionar campo `card_paid_amount` para parcelas já pagas.
+**2. `src/hooks/useCardInstallments.ts` — Expandir campos no join**
 
-**3. `src/components/configuracoes/AccountsTab.tsx` — Adicionar log de recálculo**
+Adicionar `total_amount`, `installment_amount`, `notes`, `category_id`, `status` ao select do join com `card_purchases` para que esses dados estejam disponíveis na edição.
 
-Após recalcular, exibir toast detalhado com o resumo: número de contas processadas e o total de transações consideradas, para que o usuário possa validar.
+**3. `src/hooks/useCardPurchases.ts` — Recalcular parcelas na edição**
+
+Na mutação `update`, após atualizar `card_purchases`, recalcular o `amount` de cada parcela (`card_installments`) vinculada àquela compra com o novo `installment_amount`.
 
 ### Arquivos modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useDashboardData.ts` | Substituir leitura de views por cálculo direto de `transactions` + `card_installments` |
-| `src/hooks/useMonthlyCashflow.ts` | Separar parcelas pagas vs previstas no cálculo de cartão |
-| `src/components/configuracoes/AccountsTab.tsx` | Toast com resumo do recálculo |
+| `src/hooks/useCardInstallments.ts` | Expandir select do join para incluir `total_amount`, `installment_amount`, `notes`, `category_id`, `status` |
+| `src/pages/ComprasCartao.tsx` | Completar `handleEditPurchase` com todos os campos |
+| `src/hooks/useCardPurchases.ts` | Na mutação update, recalcular `amount` das parcelas vinculadas |
+| `src/hooks/useCardInstallments.ts` (tipo) | Atualizar interface `InstallmentRow` com os novos campos |
 
 ### Sem alterações no banco de dados
-
-Todo o trabalho é exclusivamente frontend. As tabelas `transactions` e `card_installments` já contêm os dados necessários.
 
