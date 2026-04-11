@@ -56,7 +56,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
     if (watchCardId && watchCardId !== "") {
       const card = cards.find(c => c.id === watchCardId);
       if (card?.financial_entity_id) {
-        form.setValue("financial_entity_id", card.financial_entity_id);
+        form.setValue("financial_entity_id", card.financial_entity_id, { shouldValidate: true });
       }
     }
   }, [watchCardId, cards, form]);
