@@ -45,6 +45,15 @@ export function useCardPurchases() {
       const { data: updated, error } = await (supabase as any).from("card_purchases").update(rest).eq("id", id).select();
       if (error) throw error;
       if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
+
+      // Recalculate installment amounts if installment_amount changed
+      if (rest.installment_amount != null) {
+        const { error: instError } = await (supabase as any)
+          .from("card_installments")
+          .update({ amount: rest.installment_amount })
+          .eq("card_purchase_id", id);
+        if (instError) throw instError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["card_purchases"] });

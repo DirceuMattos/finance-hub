@@ -118,7 +118,6 @@ export default function ComprasCartao() {
 
   // Build a purchase map from installments for editing
   const handleEditPurchase = (purchaseId: string) => {
-    // Find any installment with this purchase to get purchase data
     const inst = installments.find(i => i.card_purchase_id === purchaseId);
     if (!inst?.card_purchases) return;
     const p = inst.card_purchases;
@@ -130,7 +129,12 @@ export default function ComprasCartao() {
       purchase_date: p.purchase_date,
       payee: p.payee,
       installments_count: p.installments_count,
-      // Fill other fields as needed
+      total_amount: p.total_amount ?? (p.installment_amount * p.installments_count),
+      installment_amount: p.installment_amount,
+      category_id: p.category_id,
+      notes: p.notes,
+      status: p.status,
+      first_billing_month: p.first_billing_month,
     } as any);
     setFormOpen(true);
   };

@@ -21,6 +21,12 @@ export type InstallmentRow = CardInstallment & {
     payee: string | null;
     installments_count: number;
     financial_entity_id: string;
+    total_amount: number;
+    installment_amount: number;
+    notes: string | null;
+    category_id: string | null;
+    status: string;
+    first_billing_month: string;
     cards?: { name: string };
     categories?: { name: string } | null;
     financial_entities?: { name: string; entity_type?: string };
@@ -72,7 +78,7 @@ export function useCardInstallments(filterMonth?: string) {
     queryFn: async () => {
       let query = (supabase as any)
         .from("card_installments")
-        .select("*, card_purchases(description, card_id, purchase_date, payee, installments_count, financial_entity_id, cards(name), categories(name), financial_entities(name, entity_type))")
+        .select("*, card_purchases(description, card_id, purchase_date, payee, installments_count, financial_entity_id, total_amount, installment_amount, notes, category_id, status, first_billing_month, cards(name), categories(name), financial_entities(name, entity_type))")
         .order("due_date", { ascending: true })
         .order("installment_number");
 
