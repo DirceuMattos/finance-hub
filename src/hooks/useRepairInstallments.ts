@@ -8,6 +8,8 @@ export function useRepairInstallments() {
 
   return useMutation({
     mutationFn: async () => {
+      const currentMonth = format(new Date(), "yyyy-MM") + "-01";
+
       // Fetch all purchases with card info
       const { data: purchases, error: pErr } = await (supabase as any)
         .from("card_purchases")
