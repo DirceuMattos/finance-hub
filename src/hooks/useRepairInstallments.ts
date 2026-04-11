@@ -46,8 +46,10 @@ export function useRepairInstallments() {
         // Fix installments
         const { data: insts } = await (supabase as any)
           .from("card_installments")
-          .select("id, amount, installment_number, billing_month, due_date")
-          .eq("card_purchase_id", p.id);
+          .select("id, amount, installment_number, billing_month, due_date, status")
+          .eq("card_purchase_id", p.id)
+          .gte("billing_month", currentMonth)
+          .neq("status", "paid");
 
         for (const inst of (insts || [])) {
           const updates: any = {};
