@@ -114,13 +114,16 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.setError("amount", { message: "Valor inválido" });
       return;
     }
+    const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
     const payload: any = {
-      ...data,
-      category_id: data.category_id || null,
-      account_id: data.account_id || null,
+      description: data.description,
+      transaction_type: data.transaction_type,
+      status: data.status,
+      financial_entity_id: data.financial_entity_id,
+      category_id: cleanId(data.category_id),
+      account_id: cleanId(data.account_id),
       payee: data.payee || null,
       notes: data.notes || null,
-      center_cost: data.center_cost || null,
       amount: parsedAmount,
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
