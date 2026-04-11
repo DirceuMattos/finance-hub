@@ -56,7 +56,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
     if (watchCardId && watchCardId !== "") {
       const card = cards.find(c => c.id === watchCardId);
       if (card?.financial_entity_id) {
-        form.setValue("financial_entity_id", card.financial_entity_id);
+        form.setValue("financial_entity_id", card.financial_entity_id, { shouldValidate: true });
       }
     }
   }, [watchCardId, cards, form]);
@@ -92,7 +92,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
   const handleSubmit = (data: FormData) => {
     const payload: any = {
       ...data,
-      category_id: data.category_id || null,
+      category_id: (data.category_id && data.category_id !== "none") ? data.category_id : null,
       payee: data.payee || null,
       notes: data.notes || null,
       purchase_date: format(data.purchase_date, "yyyy-MM-dd"),
