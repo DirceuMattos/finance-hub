@@ -92,7 +92,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
   const handleSubmit = (data: FormData) => {
     const payload: any = {
       ...data,
-      category_id: data.category_id || null,
+      category_id: (data.category_id && data.category_id !== "none") ? data.category_id : null,
       payee: data.payee || null,
       notes: data.notes || null,
       purchase_date: format(data.purchase_date, "yyyy-MM-dd"),
