@@ -90,6 +90,23 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
   const businessEntities = entities.filter(e => e.is_active && e.entity_type === "business");
 
   const handleSubmit = (data: FormData) => {
+    const card = cards.find(c => c.id === data.card_id);
+    const closingDay = card?.closing_day ?? 1;
+    const purchaseDate = data.purchase_date;
+    const purchaseDay = purchaseDate.getDate();
+
+    // Calculate first_billing_month
+    let billingYear = purchaseDate.getFullYear();
+    let billingMonth = purchaseDate.getMonth(); // 0-indexed
+    if (purchaseDay > closingDay) {
+      billingMonth += 1;
+      if (billingMonth > 11) {
+        billingMonth = 0;
+        billingYear += 1;
+      }
+    }
+    const firstBillingMonth = `${billingYear}-${String(billingMonth + 1).padStart(2, "0")}-01`;
+
     const payload: any = {
       ...data,
       category_id: (data.category_id && data.category_id !== "none") ? data.category_id : null,
@@ -97,6 +114,7 @@ export function CardPurchaseForm({ open, onOpenChange, purchase, cards, categori
       notes: data.notes || null,
       purchase_date: format(data.purchase_date, "yyyy-MM-dd"),
       installment_amount: data.total_amount / data.installments_count,
+      first_billing_month: firstBillingMonth,
     };
     onSubmit(purchase ? { id: purchase.id, ...payload } : payload);
   };

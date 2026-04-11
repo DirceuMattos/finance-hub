@@ -4,8 +4,45 @@ import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
 import type { CardPurchase } from "@/types/database";
 
+function calcFirstBillingMonth(purchaseDate: string, closingDay: number): string {
+  const [y, m, d] = purchaseDate.split("-").map(Number);
+  let billingYear = y;
+  let billingMonth = m; // 1-indexed
+  if (d > closingDay) {
+    billingMonth += 1;
+    if (billingMonth > 12) {
+      billingMonth = 1;
+      billingYear += 1;
+    }
+  }
+  return `${billingYear}-${String(billingMonth).padStart(2, "0")}-01`;
+}
+
+function calcInstallmentDates(firstBillingMonth: string, dueDay: number, installmentNumber: number) {
+  const [y, m] = firstBillingMonth.split("-").map(Number);
+  const offsetMonths = installmentNumber - 1;
+  let newMonth = m + offsetMonths;
+  let newYear = y;
+  while (newMonth > 12) { newMonth -= 12; newYear += 1; }
+  const billingMonth = `${newYear}-${String(newMonth).padStart(2, "0")}-01`;
+  const maxDay = new Date(newYear, newMonth, 0).getDate();
+  const actualDueDay = Math.min(dueDay, maxDay);
+  const dueDate = `${newYear}-${String(newMonth).padStart(2, "0")}-${String(actualDueDay).padStart(2, "0")}`;
+  return { billingMonth, dueDate };
+}
+
+const INVALIDATE_KEYS = [
+  "card_purchases", "card_installments", "card_billing_projection",
+  "accounts", "dashboard_monthly_flow_view", "dashboard_account_balances_split",
+  "dashboard_expenses_category", "dashboard_cashflow_chart",
+];
+
 export function useCardPurchases() {
   const queryClient = useQueryClient();
+
+  const invalidateAll = () => {
+    INVALIDATE_KEYS.forEach(k => queryClient.invalidateQueries({ queryKey: [k] }));
+  };
 
   const query = useQuery({
     queryKey: ["card_purchases"],
@@ -25,47 +62,52 @@ export function useCardPurchases() {
       const { error } = await (supabase as any).from("card_purchases").insert(rest);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
-      queryClient.invalidateQueries({ queryKey: ["card_installments"] });
-      queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
-      toast.success("Compra registrada com sucesso");
-    },
+    onSuccess: () => { invalidateAll(); toast.success("Compra registrada com sucesso"); },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
   const update = useMutation({
     mutationFn: async ({ id, ...data }: Partial<CardPurchase> & { id: string }) => {
       const { cards, categories, financial_entities, ...rest } = data as any;
+
+      // Fetch the card to get closing_day and due_day
+      let cardData: any = null;
+      if (rest.card_id) {
+        const { data: cd } = await (supabase as any).from("cards").select("closing_day, due_day").eq("id", rest.card_id).single();
+        cardData = cd;
+      }
+
+      // Recalculate first_billing_month if purchase_date is present
+      if (rest.purchase_date && cardData) {
+        rest.first_billing_month = calcFirstBillingMonth(rest.purchase_date, cardData.closing_day);
+      }
+
       const { data: updated, error } = await (supabase as any).from("card_purchases").update(rest).eq("id", id).select();
       if (error) throw error;
       if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
 
-      // Recalculate installment amounts if installment_amount changed
-      if (rest.installment_amount != null) {
-        const { error: instError } = await (supabase as any)
-          .from("card_installments")
-          .update({ amount: rest.installment_amount })
-          .eq("card_purchase_id", id);
-        if (instError) throw instError;
+      const purchase = updated[0];
+
+      // Recalculate all installments: amount, billing_month, due_date
+      const { data: installments } = await (supabase as any)
+        .from("card_installments")
+        .select("id, installment_number")
+        .eq("card_purchase_id", id);
+
+      if (installments && installments.length > 0 && cardData) {
+        const firstBilling = purchase.first_billing_month;
+        const installmentAmount = purchase.installment_amount ?? (purchase.total_amount / purchase.installments_count);
+
+        for (const inst of installments) {
+          const { billingMonth, dueDate } = calcInstallmentDates(firstBilling, cardData.due_day, inst.installment_number);
+          await (supabase as any)
+            .from("card_installments")
+            .update({ amount: installmentAmount, billing_month: billingMonth, due_date: dueDate })
+            .eq("id", inst.id);
+        }
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
-      queryClient.invalidateQueries({ queryKey: ["card_installments"] });
-      queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
-      toast.success("Compra atualizada");
-    },
+    onSuccess: () => { invalidateAll(); toast.success("Compra atualizada"); },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
@@ -74,17 +116,7 @@ export function useCardPurchases() {
       const { error } = await (supabase as any).from("card_purchases").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["card_purchases"] });
-      queryClient.invalidateQueries({ queryKey: ["card_installments"] });
-      queryClient.invalidateQueries({ queryKey: ["card_billing_projection"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
-      toast.success("Compra excluída");
-    },
+    onSuccess: () => { invalidateAll(); toast.success("Compra excluída"); },
     onError: (e: any) => toast.error(getUserErrorMessage(e)),
   });
 
