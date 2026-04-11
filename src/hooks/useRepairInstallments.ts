@@ -1,12 +1,15 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 export function useRepairInstallments() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async () => {
+      const currentMonth = format(new Date(), "yyyy-MM") + "-01";
+
       // Fetch all purchases with card info
       const { data: purchases, error: pErr } = await (supabase as any)
         .from("card_purchases")
@@ -43,8 +46,10 @@ export function useRepairInstallments() {
         // Fix installments
         const { data: insts } = await (supabase as any)
           .from("card_installments")
-          .select("id, amount, installment_number, billing_month, due_date")
-          .eq("card_purchase_id", p.id);
+          .select("id, amount, installment_number, billing_month, due_date, status")
+          .eq("card_purchase_id", p.id)
+          .gte("billing_month", currentMonth)
+          .neq("status", "paid");
 
         for (const inst of (insts || [])) {
           const updates: any = {};
