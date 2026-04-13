@@ -1,26 +1,38 @@
 
 
-## Plano: Limpar data de pagamento em lançamentos previstos
+## Plano: Limpar datas de pagamento incorretas e permitir limpeza manual
 
 ### Problema
+1. Existem lançamentos com status diferente de "paid" que possuem `payment_date` preenchida indevidamente
+2. O formulário de edição não permite limpar (remover) uma data de pagamento já preenchida — o campo DateField só permite selecionar uma nova data, não há botão para apagar
+3. O sistema nunca deve preencher `payment_date` automaticamente
 
-Ao editar um lançamento com status "planned" (previsto), o formulário permite que `payment_date` seja enviado ao banco. Isso ocorre porque o `handleSubmit` não valida a regra de negócio: lançamentos previstos não devem ter data de pagamento.
+### Alterações
 
-### Alteração
+**1. `src/components/lancamentos/TransactionForm.tsx`** — Adicionar botão "Limpar" no DateField
 
-**`src/components/lancamentos/TransactionForm.tsx`** — No `handleSubmit`, forçar `payment_date: null` quando `status === "planned"` ou `status === "projected"`:
+No componente `DateField`, quando houver valor preenchido, exibir um pequeno botão (ícone ✕) ao lado para permitir que o usuário limpe a data manualmente, chamando `field.onChange(null)`.
+
+Além disso, ao carregar um lançamento para edição (`useEffect`), forçar `payment_date: null` quando o status não for `"paid"`, garantindo que datas erradas não apareçam no formulário:
 
 ```typescript
-payment_date: (data.status === "paid") && data.payment_date
-  ? format(data.payment_date, "yyyy-MM-dd")
+payment_date: (transaction.status === "paid" && transaction.payment_date)
+  ? parseDateFromString(transaction.payment_date)
   : null,
 ```
 
-Isso garante que apenas lançamentos com status "paid" (realizado) persistam a data de pagamento. Para os demais status (`planned`, `cancelled`, `projected`), o campo será sempre `null` independentemente do que estiver no formulário.
+**2. Limpeza em massa via SQL** — Executar uma migração para limpar os registros existentes:
 
-### Arquivo modificado
+```sql
+UPDATE transactions
+SET payment_date = NULL, updated_at = now()
+WHERE status != 'paid' AND payment_date IS NOT NULL;
+```
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/lancamentos/TransactionForm.tsx` | Forçar `payment_date = null` quando status não for `paid` |
+### Resumo
+
+| Item | Alteração |
+|------|-----------|
+| `TransactionForm.tsx` | Botão limpar no DateField + forçar `payment_date = null` para status != paid na carga |
+| Migração SQL | Limpar `payment_date` de todos os lançamentos com status diferente de "paid" |
 
