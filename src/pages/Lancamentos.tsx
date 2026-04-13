@@ -319,6 +319,55 @@ export default function Lancamentos() {
     update.mutate({ id, status: "cancelled" } as any);
   };
 
+  const ensureSavedRecordVisible = (item: Partial<Transaction>) => {
+    let adjusted = false;
+
+    if (search && item.description && !item.description.toLowerCase().includes(search.toLowerCase())) {
+      setSearch("");
+      adjusted = true;
+    }
+
+    if (filterSource === "card") {
+      setFilterSource("transactions");
+      adjusted = true;
+    }
+
+    const recordMonth = item.due_date?.slice(0, 7) || item.competence_date?.slice(0, 7);
+    if (filterMonth !== "all" && recordMonth && filterMonth !== recordMonth) {
+      setFilterMonth(recordMonth);
+      adjusted = true;
+    }
+
+    if (filterStatus !== "all" && item.status && filterStatus !== item.status) {
+      setFilterStatus("all");
+      adjusted = true;
+    }
+
+    if (filterTypeTab !== "all" && item.transaction_type && filterTypeTab !== item.transaction_type) {
+      setFilterTypeTab("all");
+      adjusted = true;
+    }
+
+    if (filterEntity !== "all" && filterEntity !== "all_personal" && filterEntity !== "all_business" && item.financial_entity_id && filterEntity !== item.financial_entity_id) {
+      setFilterEntity("all");
+      adjusted = true;
+    }
+
+    if (filterAccount !== "all" && item.account_id !== filterAccount) {
+      setFilterAccount("all");
+      adjusted = true;
+    }
+
+    if (filterCategory !== "all" && item.category_id !== filterCategory) {
+      setFilterCategory("all");
+      adjusted = true;
+    }
+
+    if (adjusted) {
+      toast.info("Ajustei os filtros para exibir o lançamento salvo.");
+    }
+  };
+
   const handleRepeatLast = () => {
     if (lastSavedRef.current) {
       const last = { ...lastSavedRef.current };
@@ -340,6 +389,7 @@ export default function Lancamentos() {
     mutation.mutate(d as any, {
       onSuccess: () => {
         lastSavedRef.current = d as Transaction;
+        ensureSavedRecordVisible(d);
         setFormOpen(false);
         setEditing(null);
       },
