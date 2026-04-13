@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useCategories } from "@/hooks/useCategories";
+import { useCards } from "@/hooks/useCards";
 import type { Transaction, FinancialEntity, Account, Category } from "@/types/database";
 
 const schema = z.object({
@@ -49,6 +50,7 @@ interface Props {
 
 export function TransactionForm({ open, onOpenChange, transaction, entities, accounts, categories, onSubmit, loading }: Props) {
   const { create: createCategory } = useCategories();
+  const { data: cardsList = [] } = useCards();
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
 
@@ -317,8 +319,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                 <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
-                  <SelectItem value="Cartões de Crédito - Pessoal">BRA Pessoal</SelectItem>
-                  <SelectItem value="Cartões de Crédito - Prof.">Nu Infotkt</SelectItem>
+                  {cardsList.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormControl>

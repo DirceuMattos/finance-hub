@@ -78,9 +78,15 @@ export default function FluxoMensal() {
   }, [rawData, selectedYear]);
 
   const totals = useMemo(() => {
-    const income = data.reduce((s, r) => s + (r.income_paid || 0), 0);
-    const expense = data.reduce((s, r) => s + (r.expense_paid || 0), 0);
-    return { income, expense, result: income - expense };
+    const income_paid = data.reduce((s, r) => s + (r.income_paid || 0), 0);
+    const income_planned = data.reduce((s, r) => s + (r.income_planned || 0), 0);
+    const expense_paid = data.reduce((s, r) => s + (r.expense_paid || 0), 0);
+    const expense_planned = data.reduce((s, r) => s + (r.expense_planned || 0), 0);
+    const card_projected = data.reduce((s, r) => s + (r.projected_card_amount || 0), 0);
+    const card_paid = data.reduce((s, r) => s + (r.card_paid_amount || 0), 0);
+    const totalIncome = income_paid + income_planned;
+    const totalExpense = expense_paid + expense_planned + card_projected + card_paid;
+    return { income_paid, income_planned, expense_paid, expense_planned, card_projected, card_paid, totalIncome, totalExpense, result: totalIncome - totalExpense };
   }, [data]);
 
   const selectedYearLabel = selectedYear === "all" ? "Todos os anos" : selectedYear;
@@ -165,15 +171,41 @@ export default function FluxoMensal() {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Receitas</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Receita Realizada</CardTitle>
             <TrendingUp className="h-4 w-4 text-[hsl(152,60%,40%)]" />
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-[hsl(152,60%,40%)]">{fmt(totals.income)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Ano filtrado: {selectedYearLabel}</p>
+            <p className="text-xl font-bold text-[hsl(152,60%,40%)]">{fmt(totals.income_paid)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Receita Prevista</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-bold text-muted-foreground">{fmt(totals.income_planned)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Despesa Realizada</CardTitle>
+            <TrendingDown className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-bold text-destructive">{fmt(totals.expense_paid)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Despesa Prevista</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-xl font-bold text-muted-foreground">{fmt(totals.expense_planned)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -182,18 +214,8 @@ export default function FluxoMensal() {
             <Scale className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <p className={`text-2xl font-bold ${totals.result < 0 ? "text-destructive" : "text-foreground"}`}>{fmt(totals.result)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Receitas realizadas menos despesas realizadas</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Despesas</CardTitle>
-            <TrendingDown className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-destructive">{fmt(totals.expense)}</p>
-            <p className="mt-1 text-xs text-muted-foreground">Ano filtrado: {selectedYearLabel}</p>
+            <p className={`text-xl font-bold ${totals.result < 0 ? "text-destructive" : "text-foreground"}`}>{fmt(totals.result)}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">{selectedYearLabel}</p>
           </CardContent>
         </Card>
       </div>
