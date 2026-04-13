@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Landmark, TrendingUp, TrendingDown, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { usePatrimonySnapshots, usePatrimonyEvolution, usePatrimonyCrud, PatrimonySnapshot } from "@/hooks/usePatrimony";
+import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { PatrimonyForm } from "@/components/patrimonio/PatrimonyForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
@@ -37,7 +38,11 @@ export default function Patrimonio() {
   const [view, setView] = useState<ViewType>("all");
   const { data: snapshots = [], isLoading: loadingSnapshots } = usePatrimonySnapshots();
   const { data: evolution = [] } = usePatrimonyEvolution();
+  const { data: entities = [] } = useFinancialEntities();
   const { create, update, remove } = usePatrimonyCrud();
+
+  const personalIds = useMemo(() => entities.filter(e => e.entity_type === "personal").map(e => e.id), [entities]);
+  const businessIds = useMemo(() => entities.filter(e => e.entity_type === "business").map(e => e.id), [entities]);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingSnapshot, setEditingSnapshot] = useState<PatrimonySnapshot | null>(null);
@@ -52,8 +57,8 @@ export default function Patrimonio() {
   const activeMonth = selectedMonth || months[0] || "";
 
   const filterByEntity = <T extends { financial_entity_id: string }>(data: T[]) => {
-    if (view === "personal") return data.filter((d) => d.financial_entity_id === PERSONAL_ENTITY_ID);
-    if (view === "business") return data.filter((d) => d.financial_entity_id === BUSINESS_ENTITY_ID);
+    if (view === "personal") return data.filter((d) => personalIds.includes(d.financial_entity_id));
+    if (view === "business") return data.filter((d) => businessIds.includes(d.financial_entity_id));
     return data;
   };
 
@@ -136,7 +141,7 @@ export default function Patrimonio() {
       key: "entity", header: "Entidade", sortable: true,
       sortValue: (r) => r.financial_entities?.name || "",
       render: (r) => (
-        <Badge variant={r.financial_entity_id === PERSONAL_ENTITY_ID ? "default" : "secondary"} className="text-[10px]">
+        <Badge variant={personalIds.includes(r.financial_entity_id) ? "default" : "secondary"} className="text-[10px]">
           {r.financial_entities?.name || "—"}
         </Badge>
       ),
