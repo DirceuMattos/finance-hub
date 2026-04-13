@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { format } from "date-fns";
-import { CalendarIcon, PlusCircle } from "lucide-react";
+import { CalendarIcon, PlusCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FormDrawer } from "@/components/shared/FormDrawer";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
@@ -86,7 +86,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         due_date: transaction.due_date
           ? (() => { const [y, m, d] = transaction.due_date.split('-').map(Number); return new Date(y, m - 1, d); })()
           : null,
-        payment_date: transaction.payment_date
+        payment_date: (transaction.status === "paid" && transaction.payment_date)
           ? (() => { const [y, m, d] = transaction.payment_date.split('-').map(Number); return new Date(y, m - 1, d); })()
           : null,
         status: transaction.status,
@@ -151,19 +151,26 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     <FormField control={form.control} name={name} render={({ field }) => (
       <FormItem className="flex flex-col">
         <FormLabel>{label}</FormLabel>
-        <Popover>
-          <PopoverTrigger asChild>
-            <FormControl>
-              <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
-                {field.value ? format(field.value, "dd/MM/yyyy") : <span>Selecione...</span>}
-                <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-              </Button>
-            </FormControl>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus className={cn("p-3 pointer-events-auto")} />
-          </PopoverContent>
-        </Popover>
+        <div className="flex gap-1 items-center">
+          <Popover>
+            <PopoverTrigger asChild>
+              <FormControl>
+                <Button variant="outline" className={cn("w-full pl-3 text-left font-normal", !field.value && "text-muted-foreground")}>
+                  {field.value ? format(field.value, "dd/MM/yyyy") : <span>Selecione...</span>}
+                  <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                </Button>
+              </FormControl>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={field.value ?? undefined} onSelect={field.onChange} initialFocus className={cn("p-3 pointer-events-auto")} />
+            </PopoverContent>
+          </Popover>
+          {field.value && (
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => field.onChange(null)} title="Limpar data">
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <FormMessage />
       </FormItem>
     )} />
