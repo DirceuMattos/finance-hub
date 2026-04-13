@@ -53,7 +53,11 @@ export default function Cartoes() {
   }, [entities]);
 
   const filtered = cards.filter((c) => {
-    if (!c.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      const searchable = [c.name, c.issuer_bank, c.financial_entities?.name].filter(Boolean).join(" ").toLowerCase();
+      if (!searchable.includes(s)) return false;
+    }
     if (view !== "all") {
       const type = entityMap.get(c.financial_entity_id);
       if (type !== view) return false;

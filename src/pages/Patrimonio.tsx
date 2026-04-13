@@ -30,8 +30,8 @@ const fmtMonth = (m: string) => {
 
 type ViewType = "all" | "personal" | "business";
 
-const PERSONAL_ENTITY_ID = "d3570d76-4e1e-4f3f-9b47-b71c1d8a884b";
-const BUSINESS_ENTITY_ID = "750b0ab2-09b4-44eb-9309-78c4b4d2dab0";
+// Dynamic entity filtering using entities data
+
 
 export default function Patrimonio() {
   const [view, setView] = useState<ViewType>("all");

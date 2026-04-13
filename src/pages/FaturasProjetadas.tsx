@@ -27,6 +27,7 @@ interface BillingRow {
 export default function FaturasProjetadas() {
   const { projections, isLoading } = useCardInvoiceProjections();
   const [filterCard, setFilterCard] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
   const [includePast, setIncludePast] = useState(false);
 
@@ -41,14 +42,14 @@ export default function FaturasProjetadas() {
   const rows = useMemo(() => {
     return projections
       .filter((p) => includePast || p.billing_month >= currentMonth)
-      .map((p): BillingRow => ({
+      .map((p: any): BillingRow => ({
         key: `${p.card_name}_${p.billing_month}`,
         card_name: p.card_name,
         billing_month: p.billing_month,
         due_date: p.due_date,
         total_amount: p.total_amount,
-        paid_amount: p.status === "paid" ? p.total_amount : 0,
-        planned_amount: p.status === "planned" ? p.total_amount : 0,
+        paid_amount: p.paid_amount ?? (p.status === "paid" ? p.total_amount : 0),
+        planned_amount: p.planned_amount ?? (p.status === "planned" ? p.total_amount : 0),
         count: p.invoices_count,
       }));
   }, [projections, currentMonth, includePast]);
@@ -56,10 +57,18 @@ export default function FaturasProjetadas() {
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       if (filterCard !== "all" && r.card_name !== filterCard) return false;
-      if (search && !r.card_name.toLowerCase().includes(search.toLowerCase())) return false;
+      const searchLower = search.toLowerCase();
+      if (search && !r.card_name.toLowerCase().includes(searchLower) && !fmtMonth(r.billing_month).toLowerCase().includes(searchLower)) return false;
+      if (filterStatus !== "all") {
+        const hasPaid = r.paid_amount > 0;
+        const hasPlanned = r.planned_amount > 0;
+        if (filterStatus === "paid" && !(hasPaid && !hasPlanned)) return false;
+        if (filterStatus === "planned" && !(hasPlanned && !hasPaid)) return false;
+        if (filterStatus === "partial" && !(hasPaid && hasPlanned)) return false;
+      }
       return true;
     });
-  }, [rows, filterCard, search]);
+  }, [rows, filterCard, filterStatus, search]);
 
   const fmt = (v: number) =>
     new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -106,12 +115,21 @@ export default function FaturasProjetadas() {
     <AppLayout>
       <PageHeader title="Faturas Projetadas" description="Previsão de faturas dos cartões de crédito" />
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar..." hasActiveFilters={filterCard !== "all" || includePast} onClear={() => { setFilterCard("all"); setIncludePast(false); }}>
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar..." hasActiveFilters={filterCard !== "all" || filterStatus !== "all" || includePast} onClear={() => { setFilterCard("all"); setFilterStatus("all"); setIncludePast(false); }}>
         <Select value={filterCard} onValueChange={setFilterCard}>
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos cartões</SelectItem>
             {cardNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="paid">Pago</SelectItem>
+            <SelectItem value="planned">Previsto</SelectItem>
+            <SelectItem value="partial">Parcial</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2">

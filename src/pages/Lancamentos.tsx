@@ -197,7 +197,12 @@ export default function Lancamentos() {
 
   const filtered = useMemo(() => {
     return allRows.filter((t) => {
-      if (search && !t.description.toLowerCase().includes(search.toLowerCase())) return false;
+      if (search) {
+        const s = search.toLowerCase();
+        const fmtVal = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount);
+        const searchable = [t.description, t.payee, t.category_name, t.entity_name, t.account_name, fmtVal, String(t.amount)].filter(Boolean).join(" ").toLowerCase();
+        if (!searchable.includes(s)) return false;
+      }
       if (filterEntity === "all_personal") {
         if (t.entity_type !== "personal") return false;
       } else if (filterEntity === "all_business") {

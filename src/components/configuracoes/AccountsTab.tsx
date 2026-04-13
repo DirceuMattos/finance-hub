@@ -80,7 +80,11 @@ export function AccountsTab() {
     }
   };
 
-  const filtered = data.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = data.filter((a) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return [a.name, a.bank_name, typeLabels[a.account_type] || a.account_type, a.financial_entities?.name].filter(Boolean).join(" ").toLowerCase().includes(s);
+  });
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
