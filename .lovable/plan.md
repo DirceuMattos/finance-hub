@@ -1,23 +1,26 @@
 
 
-## Plano: Limitar reparo de parcelas ao mês atual e futuros
+## Plano: Limpar data de pagamento em lançamentos previstos
+
+### Problema
+
+Ao editar um lançamento com status "planned" (previsto), o formulário permite que `payment_date` seja enviado ao banco. Isso ocorre porque o `handleSubmit` não valida a regra de negócio: lançamentos previstos não devem ter data de pagamento.
 
 ### Alteração
 
-**`src/hooks/useRepairInstallments.ts`**: Adicionar filtro na query de `card_installments` para considerar apenas parcelas com `billing_month >= mês atual` (formato `YYYY-MM-01`). Parcelas antigas já pagas não serão processadas.
+**`src/components/lancamentos/TransactionForm.tsx`** — No `handleSubmit`, forçar `payment_date: null` quando `status === "planned"` ou `status === "projected"`:
 
-Na query de compras (`card_purchases`), filtrar apenas compras que possuam parcelas no período relevante, ou aplicar o filtro diretamente nas parcelas de cada compra durante o loop de correção.
+```typescript
+payment_date: (data.status === "paid") && data.payment_date
+  ? format(data.payment_date, "yyyy-MM-dd")
+  : null,
+```
 
-### Detalhes técnicos
-
-- Calcular `currentMonth = format(new Date(), "yyyy-MM") + "-01"`
-- Na query de `card_installments` dentro do loop, adicionar `.gte("billing_month", currentMonth)`
-- Alternativamente, ao buscar as compras, filtrar por `first_billing_month` ou aplicar o filtro no nível das parcelas individuais
-- Parcelas com status `paid` também serão excluídas do reparo via `.neq("status", "paid")`
+Isso garante que apenas lançamentos com status "paid" (realizado) persistam a data de pagamento. Para os demais status (`planned`, `cancelled`, `projected`), o campo será sempre `null` independentemente do que estiver no formulário.
 
 ### Arquivo modificado
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/hooks/useRepairInstallments.ts` | Filtrar parcelas por `billing_month >= mês atual` e `status != paid` |
+| `src/components/lancamentos/TransactionForm.tsx` | Forçar `payment_date = null` quando status não for `paid` |
 
