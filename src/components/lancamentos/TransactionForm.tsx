@@ -127,7 +127,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       amount: parsedAmount,
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
-      payment_date: data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
+      payment_date: (data.status === "paid") && data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
       installment_number: data.installment_number || 1,
       installment_total: data.installment_total || 1,
     };
