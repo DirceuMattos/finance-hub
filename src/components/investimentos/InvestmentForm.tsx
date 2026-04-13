@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FormDrawer } from "@/components/shared/FormDrawer";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,7 @@ const schema = z.object({
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
   closing_value: z.coerce.number(),
+  has_quick_liquidity: z.boolean().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -40,6 +42,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
       financial_entity_id: "",
       opening_value: 0,
       closing_value: 0,
+      has_quick_liquidity: false,
     },
   });
 
@@ -68,6 +71,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
         financial_entity_id: snapshot.financial_entity_id,
         opening_value: snapshot.opening_value,
         closing_value: snapshot.closing_value,
+        has_quick_liquidity: (snapshot as any).has_quick_liquidity ?? false,
       });
     } else {
       form.reset({
@@ -76,6 +80,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
         financial_entity_id: "",
         opening_value: 0,
         closing_value: 0,
+        has_quick_liquidity: false,
       });
     }
   }, [snapshot, open]);
@@ -151,6 +156,18 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
               </FormItem>
             )} />
           </div>
+
+          <FormField control={form.control} name="has_quick_liquidity" render={({ field }) => (
+            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3">
+              <FormControl>
+                <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+              </FormControl>
+              <div className="space-y-1 leading-none">
+                <FormLabel>Liquidez Rápida</FormLabel>
+                <p className="text-xs text-muted-foreground">Marque se este investimento pode ser resgatado rapidamente</p>
+              </div>
+            </FormItem>
+          )} />
 
           <Button type="submit" className="w-full" disabled={loading}>Salvar</Button>
         </form>

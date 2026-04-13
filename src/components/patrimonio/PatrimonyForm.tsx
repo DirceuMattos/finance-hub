@@ -90,7 +90,12 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
   }, [snapshot, open]);
 
   const handleSubmit = (data: FormData) => {
-    onSubmit(snapshot ? { id: snapshot.id, ...data } : data);
+    const payload = { ...data };
+    // Normalize reference_month to yyyy-MM-dd for the database
+    if (payload.reference_month && payload.reference_month.length === 7) {
+      payload.reference_month = `${payload.reference_month}-01`;
+    }
+    onSubmit(snapshot ? { id: snapshot.id, ...payload } : payload);
   };
 
   return (

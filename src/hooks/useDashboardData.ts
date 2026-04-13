@@ -155,10 +155,10 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         }
       }
 
-      // Projected balance: total income - total expenses - projected card
+      // Projected balance: total income - total expenses - all card amounts
       const totalIncome = income_paid + income_planned;
       const totalExpense = expense_paid + expense_planned;
-      const projected_balance = totalIncome - totalExpense - projected_card_amount;
+      const projected_balance = totalIncome - totalExpense - projected_card_amount - card_paid_amount;
 
       // Potential containment = planned expenses that could be cut
       const potential_containment = expense_planned;

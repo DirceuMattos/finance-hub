@@ -179,7 +179,7 @@ export function useCardInvoiceProjections() {
   const { data: invoices = [], ...rest } = useCardInvoiceTransactionsQuery();
 
   const projections = useMemo(() => {
-    const grouped = new Map<string, CardInvoiceProjection>();
+    const grouped = new Map<string, CardInvoiceProjection & { paid_amount: number; planned_amount: number }>();
 
     invoices.forEach((inv) => {
       const month = inv.competence_date.substring(0, 7);
@@ -189,8 +189,19 @@ export function useCardInvoiceProjections() {
       if (existing) {
         existing.total_amount += inv.amount;
         existing.invoices_count += 1;
-        if (inv.status === "planned") existing.status = "planned";
+        if (inv.status === "paid") {
+          existing.paid_amount += inv.amount;
+        } else {
+          existing.planned_amount += inv.amount;
+        }
+        // Status: if any planned, mark as mixed
+        if (existing.paid_amount > 0 && existing.planned_amount > 0) {
+          existing.status = "partial";
+        } else if (existing.planned_amount > 0) {
+          existing.status = "planned";
+        }
       } else {
+        const isPaid = inv.status === "paid";
         grouped.set(key, {
           card_name: inv.card_name,
           billing_month: month,
@@ -198,6 +209,8 @@ export function useCardInvoiceProjections() {
           total_amount: inv.amount,
           invoices_count: 1,
           status: inv.status,
+          paid_amount: isPaid ? inv.amount : 0,
+          planned_amount: isPaid ? 0 : inv.amount,
         });
       }
     });

@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { PieChart, TrendingUp, Wallet, Percent, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
+import { PieChart, TrendingUp, Wallet, Percent, Plus, Pencil, Trash2, AlertTriangle, Zap } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend } from "recharts";
 import {
   useInvestmentSnapshots,
@@ -161,6 +161,15 @@ export default function Investimentos() {
           {r.financial_entities?.name || "—"}
         </Badge>
       ),
+    },
+    {
+      key: "liquidity",
+      header: "Liquidez",
+      render: (r) => (r as any).has_quick_liquidity ? (
+        <Badge className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30 gap-1 text-[10px]">
+          <Zap className="h-3 w-3" />Rápida
+        </Badge>
+      ) : <span className="text-muted-foreground text-xs">—</span>,
     },
     {
       key: "opening_value",

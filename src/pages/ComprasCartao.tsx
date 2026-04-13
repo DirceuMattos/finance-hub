@@ -44,6 +44,7 @@ export default function ComprasCartao() {
   const [search, setSearch] = useState("");
   const [filterCard, setFilterCard] = useState("all");
   const [filterEntity, setFilterEntity] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CardPurchase | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -72,12 +73,28 @@ export default function ComprasCartao() {
   const filtered = useMemo(() => {
     return installments.filter((inst) => {
       const desc = inst.card_purchases?.description || "";
-      if (search && !desc.toLowerCase().includes(search.toLowerCase())) return false;
+      const payee = inst.card_purchases?.payee || "";
+      const cardName = inst.card_purchases?.cards?.name || "";
+      const catName = inst.card_purchases?.categories?.name || "";
+      const entityName = inst.card_purchases?.financial_entities?.name || "";
+      const searchLower = search.toLowerCase();
+      if (search && ![desc, payee, cardName, catName, entityName].some(f => f.toLowerCase().includes(searchLower))) return false;
       if (filterCard !== "all" && inst.card_purchases?.card_id !== filterCard) return false;
       if (filterEntity !== "all" && inst.card_purchases?.financial_entity_id !== filterEntity) return false;
+      if (filterStatus !== "all") {
+        const s = inst.status;
+        const dueDate = inst.due_date;
+        if (filterStatus === "paid" && s !== "paid") return false;
+        if (filterStatus === "cancelled" && s !== "cancelled") return false;
+        if (filterStatus === "open" && (s === "paid" || s === "cancelled")) return false;
+        if (filterStatus === "overdue") {
+          if (s === "paid" || s === "cancelled") return false;
+          if (!dueDate || !isBefore(parseISO(dueDate), today)) return false;
+        }
+      }
       return true;
     });
-  }, [installments, search, filterCard, filterEntity]);
+  }, [installments, search, filterCard, filterEntity, filterStatus]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
@@ -157,7 +174,7 @@ export default function ComprasCartao() {
         </div>
       } />
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar compra..." hasActiveFilters={filterMonth !== currentMonth || filterCard !== "all" || filterEntity !== "all"} onClear={() => { setFilterMonth(currentMonth); setFilterCard("all"); setFilterEntity("all"); }}>
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar compra..." hasActiveFilters={filterMonth !== currentMonth || filterCard !== "all" || filterEntity !== "all" || filterStatus !== "all"} onClear={() => { setFilterMonth(currentMonth); setFilterCard("all"); setFilterEntity("all"); setFilterStatus("all"); }}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
@@ -173,6 +190,16 @@ export default function ComprasCartao() {
           <SelectContent>
             <SelectItem value="all">Todos cartões</SelectItem>
             {cards.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterStatus} onValueChange={setFilterStatus}>
+          <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos status</SelectItem>
+            <SelectItem value="open">Aberta</SelectItem>
+            <SelectItem value="paid">Paga</SelectItem>
+            <SelectItem value="overdue">Vencida</SelectItem>
+            <SelectItem value="cancelled">Cancelada</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterEntity} onValueChange={setFilterEntity}>
