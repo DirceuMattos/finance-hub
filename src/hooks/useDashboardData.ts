@@ -326,6 +326,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
       return entries;
     },
+    enabled: entitiesQuery.isFetched,
   });
 
   // --- Patrimony total ---
@@ -425,6 +426,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
       return { total, byClass };
     },
+    enabled: entitiesQuery.isFetched,
   });
 
   const balances = accountBalances.data ?? { total: 0, personal: 0, business: 0, filtered: 0 };
