@@ -1,75 +1,65 @@
 
 
-## Plano: Restringir policies RLS "always true" sem quebrar o sistema
+## Análise
 
-### Avaliação do warning
+### Comportamento atual
+- **Lançamentos (`transactions`)**: o `TransactionForm` apenas salva **1 linha** com `installment_number` e `installment_total` como metadados informativos. **Não há geração de parcelas N+1…N**. Isso é um bug funcional — o usuário esperaria ver as 5 parcelas listadas.
+- **Compras no Cartão (`card_purchases` + `card_installments`)**: este módulo **já funciona corretamente** — informando 5 parcelas, ele cria 1 registro pai em `card_purchases` e 5 filhos em `card_installments`, com `billing_month`/`due_date` calculados automaticamente. Aparecem na tela de Lançamentos via a "visão unificada" (mem://features/unified-transactions-view).
+- **Recorrências**: serve para lançamentos **fixos repetitivos** (aluguel, salário) — frequência mensal/anual sem fim definido. Não é o lugar correto para parcelamento finito.
 
-O linter aponta 6 policies em 2 tabelas globais de configuração no banco externo (mesmas tabelas existem no Cloud do Lovable, mas o app só usa o externo):
+### Diagnóstico
+| Caso | Hoje | Deveria ser |
+|---|---|---|
+| Compra parcelada **no cartão de crédito** | Usuário tenta lançar em "Lançamentos" → só 1 parcela | Usar **Compras no Cartão** (já gera as N parcelas) |
+| Compra/despesa parcelada **fora de cartão** (boleto, financiamento) | Só 1 parcela é gravada | Gerar N transactions com vencimentos sequenciais |
 
-| Tabela | Policies INSERT/UPDATE/DELETE com `true` |
-|---|---|
-| `investment_classes` | insert, update, delete |
-| `system_parameters` | insert, update, delete |
+## Correção proposta
 
-Hoje qualquer usuário autenticado (incluindo um usuário comum) pode criar, alterar ou excluir classes de investimento e parâmetros globais do sistema. Isso é risco real: um usuário não-admin poderia, por exemplo, alterar `system_parameters` que controlam regras de cálculo (taxa de juros, dia de fechamento de cartão padrão etc.) e impactar todos os outros usuários.
+### 1) Geração automática de parcelas em `Lançamentos` (parcelamento sem cartão)
 
-### Por que SELECT continua liberado
+**Arquivo:** `src/components/lancamentos/TransactionForm.tsx`
+- Reformular os campos: substituir "Parcela Nº / Total Parcelas" por um único toggle **"Parcelar?"** + input **"Número de parcelas"** (default 1).
+- Quando `parcelas > 1`: o valor digitado é o **valor total**, dividido igualmente entre as parcelas (com ajuste de centavos na última).
+- Adicionar input opcional **"Periodicidade"** (mensal — default).
 
-Leitura dessas tabelas é necessária para todos os usuários autenticados (formulários de investimento, regras de negócio carregadas pelo frontend). Mantemos `SELECT USING (true)` — o linter já ignora esse caso.
+**Arquivo:** `src/hooks/useTransactions.ts`
+- Estender o `create` para aceitar `installments_count` e, quando > 1, gerar **N inserts** em uma única chamada `.insert([...])`:
+  - `installment_number = 1..N`, `installment_total = N`
+  - `description` recebe sufixo `(i/N)`
+  - `due_date` e `competence_date` somam `i-1` meses (preservando o dia, com fallback para último dia válido — usar o helper já existente em `useCardPurchases`)
+  - `amount` = total/N (última parcela ajusta resíduo de arredondamento)
+  - `status = 'planned'` em todas (nunca auto-paid)
+  - `payment_date = null`
 
-### Correção proposta — restringir mutações a administradores
+### 2) Bloqueio inteligente para evitar duplicidade com cartão
 
-O sistema já tem o conceito de admin via `users.is_admin` (vide `mem://auth/admin-provisioning`). Vou:
+No `TransactionForm`, se o usuário selecionar um **Cartão de Crédito** (campo `center_cost`) **e** marcar `parcelas > 1`, exibir aviso e desabilitar o submit, sugerindo usar a tela **Compras no Cartão** (link direto). Motivo: parcelamento de cartão tem regras de fechamento/vencimento próprias que `transactions` não modela.
 
-1. Criar uma função `SECURITY DEFINER` no banco externo:
-```sql
-CREATE OR REPLACE FUNCTION public.is_admin(_user_id uuid)
-RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
-  SELECT COALESCE((SELECT is_admin FROM public.users WHERE id = _user_id), false)
-$$;
-```
+### 3) Visualização
 
-2. Substituir as 6 policies "always true" para exigir admin:
-```sql
--- investment_classes
-DROP POLICY auth_insert_investment_classes ON public.investment_classes;
-DROP POLICY auth_update_investment_classes ON public.investment_classes;
-DROP POLICY auth_delete_investment_classes ON public.investment_classes;
+Como a tela de Lançamentos já consolida `transactions` (mem://features/unified-transactions-view), as N parcelas aparecerão automaticamente quando o filtro de mês incluir cada vencimento. Sem mudança em queries.
 
-CREATE POLICY admin_insert_investment_classes ON public.investment_classes
-  FOR INSERT TO authenticated WITH CHECK (public.is_admin(auth.uid()));
-CREATE POLICY admin_update_investment_classes ON public.investment_classes
-  FOR UPDATE TO authenticated USING (public.is_admin(auth.uid())) WITH CHECK (public.is_admin(auth.uid()));
-CREATE POLICY admin_delete_investment_classes ON public.investment_classes
-  FOR DELETE TO authenticated USING (public.is_admin(auth.uid()));
+### 4) Edição/exclusão de parcelas geradas
 
--- system_parameters (mesmo padrão)
-```
+- **Excluir**: oferecer no `DeleteDialog` opção "Excluir só esta" / "Excluir todas as parcelas futuras" (agrupando por `description` base + `payee` + `installment_total`). Implementação simples via filtro `installment_total > 1` + match por descrição-base.
+- **Editar**: edição segue individual (cada parcela é independente), igual hoje.
 
-### Avaliação de impacto — não quebra o sistema
+### Resposta direta à sua pergunta
 
-| Fluxo | Tela | Quem usa hoje | Impacto |
-|---|---|---|---|
-| CRUD de Classes de Investimento | `Configuracoes → Classes de Investimento` | Admin (página é em Configurações, restrita) | Sem impacto — o usuário admin continua operando |
-| CRUD de Parâmetros do Sistema | `Configuracoes → Parâmetros` | Admin | Sem impacto |
-| Leitura em `InvestmentForm`, regras de cartão etc. | Todas | Todos os autenticados | Sem impacto — SELECT continua aberto |
+> "Isto deve ser feito em recorrências?"
 
-Risco zero para usuários comuns, pois eles não acessam essas telas. Caso algum usuário não-admin tente mutar via DevTools, passará a receber 403 (correto).
+**Não.** Recorrências = pagamentos fixos sem fim (aluguel, assinaturas). Parcelamento finito é função de Lançamentos. Para **cartão de crédito**, use **Compras no Cartão** (já funciona). Para **outros parcelamentos** (financiamento, boleto), vamos corrigir o Lançamentos para gerar as N parcelas.
 
-### Onde aplicar
+### Arquivos alterados
 
-Como o app usa o **Supabase externo**, a migração precisa rodar **lá**, no SQL Editor do projeto externo. Vou entregar o SQL pronto para você colar (mesmo padrão das correções anteriores).
-
-### Arquivos/passos
-
-1. Entregar bloco SQL único (DROP + CREATE para as 6 policies + função `is_admin`) para você executar no Supabase externo.
-2. Nenhuma alteração no frontend — os hooks `useInvestmentClassesCrud` e `useSystemParameters` continuam funcionando para o admin; para não-admins as telas já não são acessadas.
-3. Após aplicar, marcar o finding `SUPA_rls_policy_always_true` como corrigido no painel.
+1. `src/components/lancamentos/TransactionForm.tsx` — UI de parcelamento + bloqueio quando há cartão
+2. `src/hooks/useTransactions.ts` — geração de N inserts com datas sequenciais
+3. `src/components/configuracoes/DeleteDialog.tsx` — opção "excluir todas as parcelas" (opcional, posso fazer em segunda fase)
 
 ### Riscos
-
 | Risco | Mitigação |
 |---|---|
-| Nenhum usuário ainda marcado como `is_admin` no externo | Verificar com `SELECT id, email, is_admin FROM users WHERE is_admin=true;` antes de aplicar |
-| Edge function `manage-users` usa service role e não é afetada | OK |
+| Edição de uma parcela "quebrar" o grupo | Cada parcela é independente; aviso sutil no rodapé do form ao editar parcela N de M |
+| Usuário esperar parcelar no cartão pela tela de Lançamentos | Mensagem clara redirecionando para Compras no Cartão |
+| Resíduo de centavos na divisão | Última parcela absorve diferença |
 
