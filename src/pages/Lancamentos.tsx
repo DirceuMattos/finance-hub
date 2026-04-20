@@ -32,6 +32,7 @@ interface UnifiedRow {
   description: string;
   transaction_type: string;
   amount: number;
+  raw_amount?: number;
   competence_date: string;
   due_date: string | null;
   payment_date: string | null;
@@ -49,6 +50,10 @@ interface UnifiedRow {
   category_id?: string | null;
   financial_entity_id?: string;
   account_id?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   is_card_installment: boolean;
   _original?: Transaction;
 }
@@ -152,6 +157,7 @@ export default function Lancamentos() {
       description: inst.card_purchases?.description || "Compra cartão",
       transaction_type: "expense",
       amount: inst.amount,
+      raw_amount: inst.amount,
       competence_date: inst.billing_month,
       due_date: inst.due_date,
       payment_date: null,
@@ -166,6 +172,8 @@ export default function Lancamentos() {
       installment_total: inst.card_purchases?.installments_count || null,
       card_name: (inst.card_purchases as any)?.cards?.name || null,
       financial_entity_id: inst.card_purchases?.financial_entity_id,
+      created_at: (inst as any).created_at || null,
+      updated_at: (inst as any).updated_at || null,
       is_card_installment: true,
     }));
   }, [cardInstallments]);
@@ -177,6 +185,7 @@ export default function Lancamentos() {
       description: t.description,
       transaction_type: t.transaction_type,
       amount: t.amount,
+      raw_amount: t.amount,
       competence_date: t.competence_date,
       due_date: t.due_date,
       payment_date: (t as any).payment_date,
@@ -194,6 +203,10 @@ export default function Lancamentos() {
       category_id: t.category_id,
       financial_entity_id: t.financial_entity_id,
       account_id: t.account_id,
+      source_type: t.source_type,
+      source_id: t.source_id,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
       is_card_installment: false,
       _original: t,
     }));
