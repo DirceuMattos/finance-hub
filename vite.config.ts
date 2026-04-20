@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"],
     alias: [
       {
-        find: "@/integrations/supabase/client",
+        find: /^@\/integrations\/supabase\/client$/,
         replacement: path.resolve(__dirname, "./src/lib/supabase-client-proxy.ts"),
       },
       {
