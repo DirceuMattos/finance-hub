@@ -8,7 +8,6 @@ import Dashboard from "./pages/Dashboard";
 import Lancamentos from "./pages/Lancamentos";
 import Recorrencias from "./pages/Recorrencias";
 import Cartoes from "./pages/Cartoes";
-import ComprasCartao from "./pages/ComprasCartao";
 import FaturasProjetadas from "./pages/FaturasProjetadas";
 import FluxoMensal from "./pages/FluxoMensal";
 import Configuracoes from "./pages/Configuracoes";
@@ -37,7 +36,6 @@ const App = () => (
           <Route path="/lancamentos" element={<ProtectedRoute><Lancamentos /></ProtectedRoute>} />
           <Route path="/recorrencias" element={<ProtectedRoute><Recorrencias /></ProtectedRoute>} />
           <Route path="/cartoes" element={<ProtectedRoute><Cartoes /></ProtectedRoute>} />
-          <Route path="/compras-cartao" element={<ProtectedRoute><ComprasCartao /></ProtectedRoute>} />
           <Route path="/faturas-projetadas" element={<ProtectedRoute><FaturasProjetadas /></ProtectedRoute>} />
           <Route path="/fluxo-mensal" element={<ProtectedRoute><FluxoMensal /></ProtectedRoute>} />
           <Route path="/patrimonio" element={<ProtectedRoute><Patrimonio /></ProtectedRoute>} />

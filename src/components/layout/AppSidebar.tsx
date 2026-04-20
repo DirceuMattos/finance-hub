@@ -3,7 +3,6 @@ import {
   ArrowRightLeft,
   Repeat,
   CreditCard,
-  ShoppingCart,
   FileText,
   CalendarRange,
   Landmark,
@@ -49,7 +48,6 @@ const navGroups = [
     label: "Cartões",
     items: [
       { title: "Cartões", url: "/cartoes", icon: CreditCard },
-      { title: "Compras no Cartão", url: "/compras-cartao", icon: ShoppingCart },
       { title: "Faturas Projetadas", url: "/faturas-projetadas", icon: FileText },
     ],
   },
