@@ -15,13 +15,31 @@ function getMonthRange(monthStr: string) {
 
 export function useTransactions(filterMonth?: string) {
   const queryClient = useQueryClient();
+  const editableFields = [
+    "description",
+    "transaction_type",
+    "category_id",
+    "financial_entity_id",
+    "account_id",
+    "amount",
+    "competence_date",
+    "due_date",
+    "payment_date",
+    "status",
+    "payee",
+    "notes",
+    "payment_method",
+    "installment_number",
+    "installment_total",
+    "center_cost",
+  ] as const;
 
   const query = useQuery({
     queryKey: ["transactions", filterMonth],
     queryFn: async () => {
       let q = (supabase as any)
         .from("transactions")
-        .select("*, categories(name), financial_entities(name, entity_type), accounts(name)")
+        .select("id, description, transaction_type, category_id, financial_entity_id, account_id, amount, competence_date, due_date, payment_date, status, installment_number, installment_total, payment_method, source_type, source_id, payee, tags, notes, created_at, updated_at, center_cost, categories(name), financial_entities(name, entity_type), accounts(name)")
         .order("competence_date", { ascending: false });
 
       if (filterMonth && filterMonth !== "all") {
@@ -108,8 +126,10 @@ export function useTransactions(filterMonth?: string) {
 
   const update = useMutation({
     mutationFn: async ({ id, ...data }: Partial<Transaction> & { id: string }) => {
-      const { categories, financial_entities, accounts, ...rest } = data as any;
-      const { data: updated, error } = await (supabase as any).from("transactions").update(rest).eq("id", id).select();
+      const sanitized = Object.fromEntries(
+        Object.entries(data as Record<string, unknown>).filter(([key, value]) => editableFields.includes(key as (typeof editableFields)[number]) && value !== undefined)
+      );
+      const { data: updated, error } = await (supabase as any).from("transactions").update(sanitized).eq("id", id).select();
       if (error) throw error;
       if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
