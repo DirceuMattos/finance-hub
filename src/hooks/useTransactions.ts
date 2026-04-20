@@ -40,9 +40,56 @@ export function useTransactions(filterMonth?: string) {
   });
 
   const create = useMutation({
-    mutationFn: async (item: Partial<Transaction>) => {
-      const { categories, financial_entities, accounts, ...rest } = item as any;
-      const { error } = await (supabase as any).from("transactions").insert(rest);
+    mutationFn: async (item: Partial<Transaction> & { installments_count?: number }) => {
+      const { categories, financial_entities, accounts, installments_count, ...rest } = item as any;
+      const N = Math.max(1, Math.floor(Number(installments_count) || 1));
+
+      if (N <= 1) {
+        const { error } = await (supabase as any).from("transactions").insert(rest);
+        if (error) throw error;
+        return;
+      }
+
+      // Generate N installments
+      const totalAmount = Number(rest.amount) || 0;
+      const baseCents = Math.floor((totalAmount * 100) / N);
+      const remainderCents = Math.round(totalAmount * 100) - baseCents * N;
+      const baseDescription = String(rest.description || "").replace(/\s*\(\d+\/\d+\)\s*$/, "");
+
+      const addMonthsKeepDay = (isoDate: string, monthsToAdd: number): string => {
+        const [y, m, d] = isoDate.split("-").map(Number);
+        const target = new Date(y, m - 1 + monthsToAdd, 1);
+        const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+        const day = Math.min(d, lastDay);
+        const yy = target.getFullYear();
+        const mm = String(target.getMonth() + 1).padStart(2, "0");
+        const dd = String(day).padStart(2, "0");
+        return `${yy}-${mm}-${dd}`;
+      };
+
+      const rows = Array.from({ length: N }, (_, i) => {
+        const installmentNumber = i + 1;
+        const isLast = installmentNumber === N;
+        const cents = baseCents + (isLast ? remainderCents : 0);
+        const amount = Number((cents / 100).toFixed(2));
+
+        const due = rest.due_date ? addMonthsKeepDay(rest.due_date, i) : null;
+        const competence = rest.competence_date ? addMonthsKeepDay(rest.competence_date, i) : null;
+
+        return {
+          ...rest,
+          description: `${baseDescription} (${installmentNumber}/${N})`,
+          amount,
+          installment_number: installmentNumber,
+          installment_total: N,
+          due_date: due,
+          competence_date: competence,
+          status: "planned",
+          payment_date: null,
+        };
+      });
+
+      const { error } = await (supabase as any).from("transactions").insert(rows);
       if (error) throw error;
     },
     onSuccess: () => {
