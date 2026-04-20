@@ -33,6 +33,7 @@ const schema = z.object({
   center_cost: z.string().optional().nullable(),
   installment_number: z.coerce.number().min(1).optional().nullable(),
   installment_total: z.coerce.number().min(1).optional().nullable(),
+  installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -60,9 +61,15 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
       status: "planned", payee: "", notes: "", center_cost: "",
-      installment_number: 1, installment_total: 1,
+      installment_number: 1, installment_total: 1, installments_count: 1,
     },
   });
+
+  const watchInstallmentsCount = form.watch("installments_count");
+  const watchCenterCost = form.watch("center_cost");
+  const isInstallmentMulti = !transaction && Number(watchInstallmentsCount) > 1;
+  const hasCardSelected = !!watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "";
+  const blockedByCardInstallments = isInstallmentMulti && hasCardSelected;
 
   const watchAccountId = form.watch("account_id");
 
@@ -97,13 +104,14 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         center_cost: (transaction as any).center_cost || "",
         installment_number: transaction.installment_number ?? 1,
         installment_total: transaction.installment_total ?? 1,
+        installments_count: 1,
       });
     } else {
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
         status: "planned", payee: "", notes: "", center_cost: "",
-        installment_number: 1, installment_total: 1,
+        installment_number: 1, installment_total: 1, installments_count: 1,
       });
     }
     setCreatingCategory(false);
@@ -117,10 +125,21 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       return;
     }
     const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
+    const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
+    const isMulti = !transaction && installmentsCount > 1;
+    const cardSelected = !!data.center_cost && data.center_cost !== "none" && data.center_cost !== "";
+
+    if (isMulti && cardSelected) {
+      form.setError("installments_count", {
+        message: "Para parcelar no cartão, use o módulo Compras no Cartão.",
+      });
+      return;
+    }
+
     const payload: any = {
       description: data.description,
       transaction_type: data.transaction_type,
-      status: data.status,
+      status: isMulti ? "planned" : data.status,
       financial_entity_id: data.financial_entity_id,
       category_id: cleanId(data.category_id),
       account_id: cleanId(data.account_id),
@@ -129,10 +148,11 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       amount: parsedAmount,
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
-      payment_date: (data.status === "paid") && data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
-      installment_number: data.installment_number || 1,
-      installment_total: data.installment_total || 1,
+      payment_date: (data.status === "paid") && data.payment_date && !isMulti ? format(data.payment_date, "yyyy-MM-dd") : null,
+      installment_number: isMulti ? 1 : (data.installment_number || 1),
+      installment_total: isMulti ? installmentsCount : (data.installment_total || 1),
     };
+    if (isMulti) payload.installments_count = installmentsCount;
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
   };
 
@@ -289,15 +309,44 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="text" inputMode="decimal" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
-          {/* Parcela */}
-          <div className="grid grid-cols-2 gap-3">
-            <FormField control={form.control} name="installment_number" render={({ field }) => (
-              <FormItem><FormLabel>Parcela Nº</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="installment_total" render={({ field }) => (
-              <FormItem><FormLabel>Total Parcelas</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
-            )} />
-          </div>
+          {/* Parcelamento — apenas em criação */}
+          {!transaction ? (
+            <div className="rounded-md border p-3 space-y-2">
+              <FormField control={form.control} name="installments_count" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parcelar em quantas vezes?</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={360}
+                      {...field}
+                      value={field.value ?? 1}
+                      onChange={(e) => field.onChange(e.target.value === "" ? 1 : Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <span className="text-xs text-muted-foreground">
+                    Use 1 para lançamento único. Para mais de 1, o valor informado é o <strong>total</strong> e será dividido igualmente, com vencimentos mensais a partir da data informada.
+                  </span>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              {blockedByCardInstallments && (
+                <div className="text-xs text-destructive">
+                  Parcelamento em cartão de crédito deve ser feito no módulo <strong>Compras no Cartão</strong>, que gerencia faturas e fechamentos automaticamente. Remova o cartão selecionado abaixo ou reduza para 1 parcela.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={form.control} name="installment_number" render={({ field }) => (
+                <FormItem><FormLabel>Parcela Nº</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="installment_total" render={({ field }) => (
+                <FormItem><FormLabel>Total Parcelas</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
+              )} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <FormField control={form.control} name="competence_date" render={({ field }) => (
@@ -335,7 +384,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <FormItem><FormLabel>Observações</FormLabel><FormControl><Textarea rows={3} {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
 
-          <Button type="submit" className="w-full" disabled={loading}>Salvar</Button>
+          <Button type="submit" className="w-full" disabled={loading || blockedByCardInstallments}>Salvar</Button>
         </form>
       </Form>
     </FormDrawer>
