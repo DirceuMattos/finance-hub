@@ -118,6 +118,7 @@ export default function Lancamentos() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deletingInstallment, setDeletingInstallment] = useState<string | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -310,6 +311,9 @@ export default function Lancamentos() {
           const isPaid = r.status === "paid";
           return (
             <div className="flex gap-0.5">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePromoteInstallment(r)} title="Editar (migra para lançamento unificado)">
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
               {isPending && (
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateInstallmentStatus.mutate({ id: realId, status: "paid" })} title="Marcar como pago">
                   <CheckCircle className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
@@ -320,6 +324,9 @@ export default function Lancamentos() {
                   <Ban className="h-3.5 w-3.5 text-[hsl(var(--warning))]" />
                 </Button>
               )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeletingInstallment(realId)} title="Excluir parcela legada">
+                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              </Button>
             </div>
           );
         }
@@ -342,6 +349,34 @@ export default function Lancamentos() {
 
   const handleCancel = (id: string) => {
     update.mutate({ id, status: "cancelled" } as any);
+  };
+
+  // Promove uma parcela legada (card_installments) abrindo o TransactionForm
+  // pré-preenchido. Ao salvar (handleSubmit), também cancela a parcela origem
+  // para evitar duplicidade nas Faturas Projetadas.
+  const promotingInstallmentRef = useRef<string | null>(null);
+  const handlePromoteInstallment = (r: UnifiedRow) => {
+    const realId = r.id.replace("ci_", "");
+    promotingInstallmentRef.current = realId;
+    const draft: Partial<Transaction> = {
+      description: r.description,
+      transaction_type: "expense",
+      amount: r.amount,
+      competence_date: r.competence_date,
+      due_date: r.due_date,
+      status: r.status === "paid" ? "paid" : "planned",
+      payment_date: null,
+      category_id: r.category_id ?? null,
+      financial_entity_id: r.financial_entity_id,
+      account_id: null,
+      payee: r.payee ?? null,
+      notes: r.notes ?? null,
+      installment_number: r.installment_number,
+      installment_total: r.installment_total,
+      center_cost: r.card_name ?? undefined,
+    } as any;
+    setEditing(draft as Transaction);
+    setFormOpen(true);
   };
 
   const ensureSavedRecordVisible = (item: Partial<Transaction>) => {
@@ -415,6 +450,12 @@ export default function Lancamentos() {
       onSuccess: () => {
         lastSavedRef.current = d as Transaction;
         ensureSavedRecordVisible(d);
+        // Se estávamos promovendo uma parcela legada, cancela a origem para evitar duplicidade.
+        const promotingId = promotingInstallmentRef.current;
+        if (promotingId && !d.id) {
+          updateInstallmentStatus.mutate({ id: promotingId, status: "cancelled" });
+          promotingInstallmentRef.current = null;
+        }
         setFormOpen(false);
         setEditing(null);
       },
@@ -628,6 +669,20 @@ export default function Lancamentos() {
       />
 
       <DeleteDialog open={!!deleting} onOpenChange={() => setDeleting(null)} onConfirm={() => { if (deleting) remove.mutate(deleting, { onSuccess: () => setDeleting(null) }); }} loading={remove.isPending} />
+
+      <DeleteDialog
+        open={!!deletingInstallment}
+        onOpenChange={() => setDeletingInstallment(null)}
+        onConfirm={() => {
+          if (deletingInstallment) {
+            updateInstallmentStatus.mutate(
+              { id: deletingInstallment, status: "cancelled" },
+              { onSuccess: () => setDeletingInstallment(null) }
+            );
+          }
+        }}
+        loading={updateInstallmentStatus.isPending}
+      />
 
       <CsvImportDialog
         open={importOpen}

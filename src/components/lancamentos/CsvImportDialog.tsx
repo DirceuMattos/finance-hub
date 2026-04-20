@@ -154,7 +154,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         toast.warning(`Colunas não encontradas no CSV: ${missingCols.join(", ")}. Verifique os cabeçalhos.`);
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      // Importações sempre entram como previstas (sem auto-baixa).
 
       const parsed: ParsedRow[] = [];
       for (let i = 1; i < lines.length; i++) {
@@ -215,8 +215,9 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         const entityId = entityName ? entMap.get(entityName.toLowerCase()) || null : null;
         if (entityName && !entityId) errors.push(`Entidade não encontrada: "${entityName}"`);
 
-        const status = dueDate && dueDate <= today ? "paid" : "planned";
-        const paymentDate = status === "paid" ? dueDate : null;
+        // Importações sempre entram como previstas; baixa é manual.
+        const status = "planned";
+        const paymentDate = null;
 
         parsed.push({
           lineNumber: i + 1,
