@@ -118,6 +118,7 @@ export default function Lancamentos() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deletingInstallment, setDeletingInstallment] = useState<string | null>(null);
   const [settling, setSettling] = useState<Transaction | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
