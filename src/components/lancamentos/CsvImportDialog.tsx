@@ -154,7 +154,7 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         toast.warning(`Colunas não encontradas no CSV: ${missingCols.join(", ")}. Verifique os cabeçalhos.`);
       }
 
-      const today = new Date().toISOString().slice(0, 10);
+      // Importações sempre entram como previstas (sem auto-baixa).
 
       const parsed: ParsedRow[] = [];
       for (let i = 1; i < lines.length; i++) {
