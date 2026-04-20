@@ -88,9 +88,9 @@ export default function FaturasProjetadas() {
       return <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Pago</Badge>;
     }
     if (row.planned_amount > 0 && row.paid_amount === 0) {
-      return <Badge variant="outline" className="border-amber-500 text-amber-600 dark:text-amber-400">Previsto</Badge>;
+      return <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Previsto</Badge>;
     }
-    return <Badge variant="outline" className="border-blue-500 text-blue-600 dark:text-blue-400">Parcial</Badge>;
+    return <Badge variant="outline" className="border-primary text-primary">Parcial</Badge>;
   };
 
   const monthlyTotals = useMemo(() => {
@@ -105,8 +105,8 @@ export default function FaturasProjetadas() {
     { key: "billing_month", header: "Mês", render: (r) => <Badge variant="outline">{fmtMonth(r.billing_month)}</Badge> },
     { key: "card_name", header: "Cartão" },
     { key: "total_amount", header: "Total da Fatura", render: (r) => <span className={`font-semibold ${r.total_amount < 0 ? "text-destructive" : ""}`}>{fmt(r.total_amount)}</span> },
-    { key: "paid_amount", header: "Pago", render: (r) => <span className="text-emerald-600 dark:text-emerald-400">{fmt(r.paid_amount)}</span> },
-    { key: "planned_amount", header: "Previsto", render: (r) => <span className="text-amber-600 dark:text-amber-400">{fmt(r.planned_amount)}</span> },
+    { key: "paid_amount", header: "Pago", render: (r) => <span className="text-[hsl(var(--success))]">{fmt(r.paid_amount)}</span> },
+    { key: "planned_amount", header: "Previsto", render: (r) => <span className="text-[hsl(var(--warning))]">{fmt(r.planned_amount)}</span> },
     { key: "status", header: "Status", render: (r) => statusBadge(r) },
     { key: "due_date", header: "Vencimento", render: (r) => r.due_date ? format(new Date(r.due_date), "dd/MM/yyyy") : "—" },
   ];
