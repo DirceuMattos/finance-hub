@@ -670,6 +670,20 @@ export default function Lancamentos() {
 
       <DeleteDialog open={!!deleting} onOpenChange={() => setDeleting(null)} onConfirm={() => { if (deleting) remove.mutate(deleting, { onSuccess: () => setDeleting(null) }); }} loading={remove.isPending} />
 
+      <DeleteDialog
+        open={!!deletingInstallment}
+        onOpenChange={() => setDeletingInstallment(null)}
+        onConfirm={() => {
+          if (deletingInstallment) {
+            updateInstallmentStatus.mutate(
+              { id: deletingInstallment, status: "cancelled" },
+              { onSuccess: () => setDeletingInstallment(null) }
+            );
+          }
+        }}
+        loading={updateInstallmentStatus.isPending}
+      />
+
       <CsvImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
