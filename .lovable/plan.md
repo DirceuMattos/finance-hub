@@ -1,64 +1,123 @@
 
+## Plano: Provar a origem do valor exibido e corrigir o caminho responsável
 
-## Plano: Limpeza dos dados herdados + blindagem contra payment_date futura
+### Objetivo
+Eliminar a ambiguidade entre:
+1. valor realmente salvo no banco,
+2. valor retornado pela API,
+3. valor renderizado na tabela de Lançamentos,
+4. impacto em Dashboard e saldos.
 
-### Diagnóstico final
+### Leitura atual do problema
+- O caso do INSS precisa ser tratado como **bug funcional até prova em contrário**, porque a interface está induzindo leitura incorreta do histórico.
+- Hoje a tela de Lançamentos mistura:
+  - dados vindos de `transactions`
+  - dados vindos de `card_installments`
+  - filtros e ordenação locais
+- O fluxo de baixa passa por `PaymentDialog` e `useTransactions.update`.
+- A query atual de `useTransactions` busca corretamente linha a linha por `id`, então a suspeita principal não é update em massa no hook, e sim:
+  - dado herdado salvo errado no banco, ou
+  - caminho de exibição/normalização na tela mascarando o histórico.
 
-- **Sem bug de código.** O parser monetário já está corrigido; updates são isolados por ID.
-- **Dado herdado problemático:** lote criado em 07/abr/2026 02:44 inseriu 7 SIMPLES NACIONAL futuros (out/2025 → abr/2026) já como `paid` com valor chutado 1572,01 e `payment_date` = `due_date`. O mesmo padrão existe para INSS jan/2026 e fev/2026.
-- **Violação de regra:** transações com `status='paid'` e `payment_date > hoje` no momento da criação contradizem `mem://logic/transaction-status-full-mapping` e o core "Never auto-fill payment_date".
+### Implementação proposta
 
-### Passo 1 — Reverter lançamentos futuros indevidamente "paid" (correção de dados)
+#### Passo 1 — Instrumentar a origem do valor exibido na tela de Lançamentos
+**Arquivos:**  
+- `src/pages/Lancamentos.tsx`
+- `src/hooks/useTransactions.ts`
 
-Lançamentos com `due_date > CURRENT_DATE` que estejam `paid` desde a criação devem voltar para `planned` com `payment_date = NULL`, para você dar baixa de verdade no mês correto com o valor real.
+Adicionar uma camada temporária de diagnóstico visual para cada linha de transação comum:
+- exibir `id` curto em tooltip ou texto secundário
+- exibir um indicador de origem do valor:
+  - `valor_raw_db`
+  - `payment_date`
+  - `updated_at`
+- garantir que a tabela renderize exatamente `t.amount` vindo da query, sem transformação intermediária fora do formatter monetário.
 
-Candidatos identificados nesta consulta (a partir de hoje 20/abr/2026):
+Objetivo: separar “valor salvo” de “valor percebido”.
 
-| ID | Descrição | Vencimento | Valor atual |
-|---|---|---|---|
+#### Passo 2 — Trazer metadados suficientes da tabela `transactions`
+**Arquivo:** `src/hooks/useTransactions.ts`
 
-Nenhum no recorte atual está com `due_date > hoje` ainda como `paid` — os mais futuros (mai → dez/2026) já estão corretamente `planned`. Os de abr/2026 (`ce22fb01` INSS 550 e `d2e494f7` SIMPLES 1572,01) tiveram baixa real hoje (updated_at 20/abr), então **estão corretos**.
+Ampliar o `select` para incluir explicitamente os campos usados no diagnóstico da linha:
+- `id`
+- `amount`
+- `status`
+- `payment_date`
+- `created_at`
+- `updated_at`
+- `source_type`
+- `source_id`
 
-**Conclusão do Passo 1:** nenhuma reversão de dados é necessária neste momento. Os dados estão consistentes a partir de hoje.
+Isso permite auditar na própria UI se a linha de fev/2026 e mar/2026 está vindo com 550 do backend ou se a distorção acontece só no render.
 
-### Passo 2 — Blindagem preventiva no código (impedir nova ocorrência)
+#### Passo 3 — Revisar a montagem da visão unificada
+**Arquivo:** `src/pages/Lancamentos.tsx`
 
-**Arquivo:** `src/components/lancamentos/TransactionForm.tsx` e `src/components/lancamentos/CsvImportDialog.tsx`
+Auditar e ajustar o mapeamento `txRows` / `cardRows` para evitar qualquer confusão entre:
+- `amount` de transação comum
+- `amount` de parcela de cartão
+- `payment_date` nulo em cartão
+- `card_name` e outros campos derivados
 
-Adicionar validação no submit:
+Aplicar correção se houver qualquer sobrescrita indireta no objeto `UnifiedRow`.
 
-```ts
-if (status === "paid" && payment_date && new Date(payment_date) > new Date()) {
-  toast.error("Não é permitido marcar como Realizado com data de pagamento futura");
-  return;
-}
-```
+#### Passo 4 — Bloquear definitivamente qualquer baixa que altere mais do que o necessário
+**Arquivo:** `src/hooks/useTransactions.ts`
 
-Isso impede que importações CSV ou edições manuais voltem a gerar o padrão problemático observado.
+Restringir o update de baixa a um payload mínimo controlado por whitelist, para que nenhuma chamada futura consiga mandar campos indevidos:
+- `status`
+- `payment_date`
+- `amount`
+- campos explicitamente editáveis do formulário
 
-### Passo 3 — Validação adicional na importação CSV
+Isso não resolve exibição por si só, mas elimina risco de regressão silenciosa.
 
-**Arquivo:** `src/components/lancamentos/CsvImportDialog.tsx`
+#### Passo 5 — Validar o fluxo de baixa no `PaymentDialog`
+**Arquivo:** `src/components/lancamentos/PaymentDialog.tsx`
 
-Ao parsear cada linha do CSV, se `status='paid'` mas a linha não trouxer `payment_date` explícita OU trouxer `payment_date` futura, forçar `status='planned'` e `payment_date=NULL`. Logar aviso resumido ao final ("X linhas convertidas para Previsto por terem data futura").
+Revisar o submit da baixa para garantir:
+- envio apenas do `id` da linha aberta
+- uso do valor digitado apenas para aquela transação
+- nenhuma propagação para outras linhas
+- consistência do campo `amount` no parse do input
 
-### Passo 4 — Mensagem ao usuário
+Se necessário, substituir o `parseFloat(amount)` por parser monetário único e consistente com o formulário principal.
 
-Confirmar com você que **não havia bug de software** alterando valores antigos: o que viu foi consequência de uma importação inicial que pré-preencheu vários meses futuros com valor estimado idêntico. A blindagem dos Passos 2 e 3 evita repetição.
+#### Passo 6 — Corrigir a percepção na UI quando houver histórico com mesmo valor salvo
+**Arquivo:** `src/pages/Lancamentos.tsx`
 
-### Arquivos alterados
+Se a investigação mostrar que fev/2026 e mar/2026 realmente já estão 550 no banco, a tela deve deixar isso explícito para não parecer “valor copiado da baixa de hoje”:
+- mostrar `updated_at`/“última alteração”
+- opcionalmente destacar registros alterados hoje
+- evitar que o usuário conclua que a baixa corrente reescreveu o passado
 
-1. `src/components/lancamentos/TransactionForm.tsx` — guarda `paid + payment_date futura`.
-2. `src/components/lancamentos/CsvImportDialog.tsx` — guarda na importação + log de conversões.
+Isso não muda dado, mas corrige o problema de confiabilidade visual.
 
-### Riscos
+### Se o diagnóstico confirmar problema de dados, não só de front
+Então o trabalho continua com uma segunda etapa:
+- identificar exatamente quais lançamentos históricos foram criados com valor indevido
+- corrigir esses registros de forma dirigida
+- recalcular saldos depois
 
-| Risco | Mitigação |
-|---|---|
-| Usuário precisar marcar pagamento adiantado legítimo (ex.: pagou hoje algo que vence amanhã) | A regra bloqueia apenas `payment_date > hoje`, não `due_date > hoje`. Pagar hoje algo que vence amanhã continua permitido (payment_date = hoje). |
-| CSVs antigos quebrarem ao reimportar | Conversão silenciosa para `planned`, com log informativo ao usuário ao final |
+Como você apontou corretamente: se o valor correto não aparece, o sistema está errado — seja no banco, seja no front. Este plano fecha os dois lados.
 
-### Próximo passo concreto
+### Arquivos previstos
+1. `src/hooks/useTransactions.ts`
+2. `src/pages/Lancamentos.tsx`
+3. `src/components/lancamentos/PaymentDialog.tsx`
 
-Aprovar Passos 2 e 3 (mudança em 2 arquivos, sem mexer em dados). Se preferir não blindar agora e apenas ter o diagnóstico, basta dizer "encerrar" que não toco em código.
+### Resultado esperado
+- cada linha da tela passa a refletir inequivocamente o valor vindo do backend;
+- a baixa do mês atual não poderá mais parecer reescrever meses anteriores;
+- se houver dado histórico salvo errado, ele ficará identificado de forma objetiva para correção posterior;
+- Dashboard e saldos passam a poder ser auditados com confiança a partir da mesma origem de dados.
 
+### Validação após implementar
+1. Abrir Lançamentos com filtro `Realizado`.
+2. Comparar INSS fev/2026, mar/2026 e abr/2026.
+3. Registrar uma nova baixa.
+4. Confirmar que:
+   - apenas a linha aberta muda,
+   - os meses anteriores mantêm o valor já salvo,
+   - a UI mostra claramente a origem e a última alteração do valor.
