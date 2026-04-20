@@ -351,6 +351,34 @@ export default function Lancamentos() {
     update.mutate({ id, status: "cancelled" } as any);
   };
 
+  // Promove uma parcela legada (card_installments) abrindo o TransactionForm
+  // pré-preenchido. Ao salvar (handleSubmit), também cancela a parcela origem
+  // para evitar duplicidade nas Faturas Projetadas.
+  const promotingInstallmentRef = useRef<string | null>(null);
+  const handlePromoteInstallment = (r: UnifiedRow) => {
+    const realId = r.id.replace("ci_", "");
+    promotingInstallmentRef.current = realId;
+    const draft: Partial<Transaction> = {
+      description: r.description,
+      transaction_type: "expense",
+      amount: r.amount,
+      competence_date: r.competence_date,
+      due_date: r.due_date,
+      status: r.status === "paid" ? "paid" : "planned",
+      payment_date: null,
+      category_id: r.category_id ?? null,
+      financial_entity_id: r.financial_entity_id,
+      account_id: null,
+      payee: r.payee ?? null,
+      notes: r.notes ?? null,
+      installment_number: r.installment_number,
+      installment_total: r.installment_total,
+      center_cost: r.card_name ?? undefined,
+    } as any;
+    setEditing(draft as Transaction);
+    setFormOpen(true);
+  };
+
   const ensureSavedRecordVisible = (item: Partial<Transaction>) => {
     let adjusted = false;
 
