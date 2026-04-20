@@ -1,104 +1,51 @@
 
 
-## Plano: Pacote final de ajustes e correções
+## Plano: Unificação de Lançamentos e Remoção do módulo Compras no Cartão
 
----
+### Estratégia geral
 
-### Classificação dos itens
+Remover o módulo **Compras no Cartão** como interface operacional, mantendo a base de dados (`card_purchases`, `card_installments`) intacta para preservar a lógica de **Cartões** e **Faturas Projetadas**, que continuam alimentadas tanto por essas tabelas quanto pelo `center_cost` em `transactions`. Toda criação/edição/baixa/cancelamento passa a ocorrer no módulo **Lançamentos**, com lançamentos de cartão sendo lançamentos comuns enriquecidos com cartão + parcela.
 
-| # | Item | Tipo | Exige ajuste no banco? |
-|---|------|------|----------------------|
-| 1 | Dashboard — valores incorretos | Frontend (cálculo) | Não |
-| 2 | Fluxo Mensal — totais incorretos | Frontend (cálculo) | Não |
-| 3 | Faturas Projetadas — valores faltando | Frontend (lógica de agregação) | Não |
-| 4 | Saldo atual das contas | Backend (function SQL) + Frontend | Sim — revisão da function `recalculate_account_balances` |
-| 5 | Campo cartão no TransactionForm | Frontend (formulário) | Não |
-| 6 | Datas de vencimento em Compras no Cartão | Frontend (cálculo de parcelas) | Não |
-| 7 | Filtro por status + ordenação em Compras no Cartão | Frontend (UI) | Não |
-| 8 | Filtro por status em Faturas Projetadas | Frontend (UI) | Não |
-| 9 | Categorias do Patrimônio | Frontend (query) | Não |
-| 10 | Transporte de saldos abertura/fechamento Patrimônio | Frontend (lógica) | Não |
-| 11 | Flag de liquidez em Investimentos | Frontend (UI) + Backend (coluna) | Sim — adicionar coluna `has_quick_liquidity` em `investment_snapshots` |
-| 12 | Busca global por módulo | Frontend (filtro) | Não |
+### Decisão importante de compatibilidade
 
----
+A visão unificada de Lançamentos hoje **mescla** registros de `transactions` + `card_installments` (parcelas de compras antigas). Para evitar duplicidade e permitir edição completa, vou:
 
-### Ordem recomendada de execução
+- **Manter** a exibição de parcelas legadas (`card_installments`) na listagem como linhas read-only com badge "Cartão (legado)" e ações de baixa/reverter já existentes.
+- **Novos lançamentos** de cartão: criados como `transactions` comuns, com `center_cost = nome do cartão` e `installment_number/total` preenchidos. Estes alimentam as Faturas Projetadas via Source 1 (`useCardInvoiceTransactionsQuery` já lê `center_cost`).
+- Não há duplicidade porque cada parcela legada continua única na sua origem; o usuário simplesmente para de criar novos via "Compras no Cartão".
 
-**Fase 1 — Base de dados (itens 4, 11)**
-- Item 4: Revisar a function `recalculate_account_balances` para usar `opening_balance` + receitas pagas - despesas pagas - parcelas pagas (a function atual não soma `opening_balance`)
-- Item 11: Migração para adicionar coluna `has_quick_liquidity boolean default false` em `investment_snapshots`
+### Alterações
 
-**Fase 2 — Cálculos e consistência (itens 1, 2, 3)**
-- Item 1: No `useDashboardData`, o `projected_balance` deve incluir `card_paid_amount` na dedução total e o cálculo do semáforo deve considerar a reserva mínima corretamente
-- Item 2: No `useMonthlyCashflow`, os totais do resumo (`totals`) consideram apenas `income_paid` e `expense_paid`, ignorando previstos. Corrigir para somar ambos (ou separar em 4 cards: receita prevista, receita realizada, despesa prevista, despesa realizada)
-- Item 3: Na `useCardInvoiceProjections`, a agregação por chave `card_name_month` une paid + planned na mesma linha, o que mascara os valores individuais. Revisar para que `paid_amount` e `planned_amount` sejam calculados separadamente dentro de cada grupo
+| # | Arquivo | Alteração |
+|---|---------|-----------|
+| 1 | `src/App.tsx` | Remover import de `ComprasCartao` e a rota `/compras-cartao`. |
+| 2 | `src/components/layout/AppSidebar.tsx` | Remover item "Compras no Cartão" do grupo "Cartões". |
+| 3 | `src/pages/ComprasCartao.tsx` | **Deletar** o arquivo. |
+| 4 | `src/components/cartoes/CardPurchaseForm.tsx` | **Deletar** o arquivo (não usado fora do módulo removido). |
+| 5 | `src/components/lancamentos/TransactionForm.tsx` | (a) Renomear visualmente o campo "Cartão de Crédito" para deixar claro que vincula o lançamento a um cartão (não apenas pagamento de fatura). (b) Quando `center_cost` estiver preenchido, exibir hint "Este lançamento será incluído na fatura do cartão selecionado". (c) Garantir que `installment_number/installment_total` continuem editáveis (já estão). |
+| 6 | `src/pages/Lancamentos.tsx` | (a) Adicionar **filtro por cartão** (Select com cartões ativos, filtrando `center_cost === card.name` ou parcela legada com `cards.name`). (b) Adicionar **filtro Parcelado / Não parcelado** (`installment_total > 1`). (c) Coluna "Cartão" exibindo `center_cost` ou nome do cartão da parcela. (d) Estender busca global para incluir `center_cost` e número de parcela `X/Y`. (e) Renomear badge das parcelas legadas para "Cartão (legado)". |
+| 7 | `src/hooks/useCardInvoiceTransactions.ts` | Nenhuma mudança — Source 1 (`transactions.center_cost`) e Source 2 (`card_installments`) continuam alimentando Faturas Projetadas. Novos lançamentos de cartão entram automaticamente via Source 1. |
+| 8 | `src/lib/cardInvoiceRules.ts` | Revisar `CARD_INVOICE_CENTER_COSTS` para aceitar dinamicamente qualquer nome de cartão cadastrado (não apenas a lista hardcoded), ou ajustar `useCardInvoiceTransactionsQuery` para incluir transações cujo `center_cost` corresponda a qualquer cartão ativo (via join client-side com `useCards()`). |
 
-**Fase 3 — Módulos de cartão (itens 5, 6, 7, 8)**
-- Item 5: No `TransactionForm.tsx`, substituir as opções hardcoded do campo `center_cost` por uma lista dinâmica usando `useCards()`, listando todos os cartões cadastrados
-- Item 6: No `useCardPurchases`, validar que `calcInstallmentDates` está usando corretamente `due_day` do cartão (a lógica já existe — verificar se o cartão é carregado antes da criação)
-- Item 7: Em `ComprasCartao.tsx`, adicionar `filterStatus` com opções "Todas", "Aberta", "Paga", "Vencida", "Cancelada" e garantir que a DataTable respeite a ordenação por `due_date` (já tem `defaultSortKey="due_date"`)
-- Item 8: Em `FaturasProjetadas.tsx`, adicionar filtro por status ("Todos", "Pago", "Previsto", "Parcial")
+### Itens fora do escopo (preservados)
+- Tabelas `card_purchases` / `card_installments` no banco — mantidas.
+- Hooks `useCardPurchases`, `useCardInstallments`, `useRepairInstallments` — mantidos (ainda usados por Lançamentos para exibir parcelas legadas e pelo Cartões/Faturas).
+- Páginas `Cartoes.tsx` e `FaturasProjetadas.tsx` — sem alterações funcionais.
 
-**Fase 4 — Patrimônio e Investimentos (itens 9, 10, 11-UI)**
-- Item 9: O `PatrimonyForm` já usa `useAssetCategories()` que busca `asset_categories` com `is_active=true`. Se o select mostra vazio, a tabela `asset_categories` pode estar sem dados — verificar e, se necessário, usar `supabase as any` para o import correto do client
-- Item 10: No `PatrimonyForm`, o auto-preenchimento de `opening_value` já existe via `usePreviousPatrimonyClosingValue`. Revisar se o transporte está funcionando quando o `reference_month` é enviado no formato correto (`yyyy-MM-dd` vs `yyyy-MM`)
-- Item 11 (UI): Adicionar coluna/badge "Liquidez Rápida" na tabela de Investimentos e checkbox no formulário
-
-**Fase 5 — Busca global (item 12)**
-- Em cada página com `FilterBar`, expandir o filtro de `search` para buscar em todos os campos visíveis:
-  - **Lançamentos**: descrição, favorecido, categoria, entidade, conta, valor formatado
-  - **Compras no Cartão**: descrição, favorecido, cartão, categoria, entidade
-  - **Faturas Projetadas**: cartão, mês formatado
-  - **Cartões**: nome, banco emissor, entidade
-  - **Patrimônio**: item, categoria, entidade
-  - **Investimentos**: classe, entidade
-  - **Contas**: nome, banco, tipo, entidade
-  - **Configurações (Categorias, Entidades, etc.)**: nome e campos relevantes
-
----
-
-### Riscos de quebrar comportamento atual
+### Riscos e mitigações
 
 | Risco | Mitigação |
 |-------|-----------|
-| Alterar `recalculate_account_balances` pode gerar saldos diferentes dos atuais | Recalcular após deploy e validar com o usuário |
-| Expandir busca pode causar lentidão se houver muitos registros | Busca apenas nos dados já carregados em memória (filtro client-side), sem impacto de performance significativo |
-| Mudar cálculo do Dashboard pode alterar semáforo de risco | Valores ficarão mais precisos — melhoria, não regressão |
-| Adicionar coluna `has_quick_liquidity` exige migração | Coluna com default `false` é não-destrutiva |
-| Substituir campo `center_cost` hardcoded por lista dinâmica de cartões muda o valor salvo | Manter compatibilidade: salvar como `card_id` ou manter o padrão de `center_cost` com mapeamento dinâmico |
+| Lançamentos novos com `center_cost` não aparecerem em Faturas Projetadas se o nome não estiver em `CARD_INVOICE_CENTER_COSTS` | Item 8: tornar a verificação dinâmica via lista de cartões cadastrados |
+| Usuário tentar editar parcelas legadas em Lançamentos | Manter parcelas como linhas com ações limitadas (baixa/reverter) e badge "legado"; documentar visualmente |
+| Quebra de links/bookmarks para `/compras-cartao` | Rota cai no `NotFound` (comportamento aceitável conforme PRD) |
+| Duplicidade visual em Lançamentos se uma compra parcelada legada também tiver `transaction` correspondente | Já tratado pela deduplicação por `id` em `useCardInvoiceTransactionsQuery`; em Lançamentos, parcelas e transactions não compartilham IDs |
 
----
-
-### Detalhes técnicos por arquivo
-
-**Arquivos modificados:**
-
-| Arquivo | Alterações |
-|---------|-----------|
-| `src/hooks/useDashboardData.ts` | Incluir `card_paid_amount` no cálculo, revisar semáforo |
-| `src/hooks/useMonthlyCashflow.ts` | Totais separados para previsto e realizado |
-| `src/hooks/useCardInvoiceTransactions.ts` | Separar `paid_amount` e `planned_amount` na projeção |
-| `src/pages/FluxoMensal.tsx` | Exibir 4 totais (receita/despesa x prevista/realizada) no resumo |
-| `src/pages/FaturasProjetadas.tsx` | Adicionar filtro por status |
-| `src/pages/ComprasCartao.tsx` | Adicionar filtro por status |
-| `src/components/lancamentos/TransactionForm.tsx` | Campo cartão dinâmico via `useCards()` |
-| `src/components/patrimonio/PatrimonyForm.tsx` | Corrigir formato de `reference_month` para query de abertura |
-| `src/pages/Investimentos.tsx` | Badge de liquidez rápida |
-| `src/components/investimentos/InvestmentForm.tsx` | Checkbox de liquidez |
-| `src/components/configuracoes/AccountsTab.tsx` | Busca expandida |
-| `src/pages/Lancamentos.tsx` | Busca em todos os campos |
-| Todos os módulos com FilterBar | Busca multi-campo |
-
-**Migração SQL:**
-
-```sql
--- Corrigir recalculate_account_balances para incluir opening_balance
-CREATE OR REPLACE FUNCTION public.recalculate_account_balances() ...
-  new_balance := acc.opening_balance + income - expenses - card_paid;
-
--- Adicionar flag de liquidez
-ALTER TABLE investment_snapshots 
-  ADD COLUMN IF NOT EXISTS has_quick_liquidity boolean NOT NULL DEFAULT false;
-```
+### Critérios de aceite mapeados
+- ✅ Menu/rota/tela "Compras no Cartão" removidos (itens 1, 2, 3)
+- ✅ Lançamentos de cartão operáveis em Lançamentos (item 5, 6 — campo cartão + parcela já editáveis)
+- ✅ Filtro por cartão e busca por dados de cartão (item 6)
+- ✅ Parcelamento exibido como X/Y (já existe via `InstallmentBadge`)
+- ✅ Faturas Projetadas continuam consistentes (item 8 — fonte dinâmica)
+- ✅ Sem duplicidade (deduplicação existente preservada)
 
