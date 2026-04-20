@@ -259,7 +259,7 @@ export default function Lancamentos() {
               <span>{r.description}</span>
               <InstallmentBadge number={r.installment_number} total={r.installment_total} />
               <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
-                <CreditCard className="h-3 w-3" />Cartão
+                <CreditCard className="h-3 w-3" />Cartão (legado)
               </Badge>
             </div>
           );
@@ -298,6 +298,7 @@ export default function Lancamentos() {
       },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.account_name || "", render: (r) => r.account_name || "—" },
+    { key: "card", header: "Cartão", sortable: true, sortValue: (r) => r.card_name || "", render: (r) => r.card_name ? <Badge variant="outline" className="text-[10px] gap-1"><CreditCard className="h-3 w-3" />{r.card_name}</Badge> : "—" },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : "text-foreground"}>{fmt(r.amount)}</span> },
     { key: "status", header: "Status", sortable: true, sortValue: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
     { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => r.payment_date || "", render: (r) => fmtDate(r.payment_date) },
