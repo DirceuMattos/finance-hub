@@ -65,6 +65,7 @@ export interface Transaction {
   description: string;
   notes: string | null;
   transaction_type: string;
+  card_id?: string | null;
   category_id: string | null;
   financial_entity_id: string;
   account_id: string | null;

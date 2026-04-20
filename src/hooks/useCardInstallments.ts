@@ -82,10 +82,10 @@ export function useCardInstallments(filterMonth?: string) {
         .order("due_date", { ascending: true })
         .order("installment_number");
 
-      // Server-side filter by due_date month
+      // Server-side filter by billing_month (financial competence)
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        query = query.gte("due_date", start).lt("due_date", end);
+        query = query.gte("billing_month", start).lt("billing_month", end);
       } else {
         // No month filter: limit to avoid truncation
         query = query.limit(5000);

@@ -48,6 +48,7 @@ interface UnifiedRow {
   installment_total: number | null;
   center_cost?: string;
   card_name?: string | null;
+  card_id?: string | null;
   category_id?: string | null;
   financial_entity_id?: string;
   account_id?: string | null;
@@ -172,6 +173,7 @@ export default function Lancamentos() {
       installment_number: inst.installment_number,
       installment_total: inst.card_purchases?.installments_count || null,
       card_name: (inst.card_purchases as any)?.cards?.name || null,
+      card_id: inst.card_purchases?.card_id || null,
       financial_entity_id: inst.card_purchases?.financial_entity_id,
       created_at: (inst as any).created_at || null,
       updated_at: (inst as any).updated_at || null,
@@ -200,7 +202,8 @@ export default function Lancamentos() {
       installment_number: t.installment_number,
       installment_total: t.installment_total,
       center_cost: (t as any).center_cost,
-      card_name: (t as any).center_cost || null,
+      card_name: cardsList.find((card) => card.id === t.card_id)?.name || (t as any).center_cost || null,
+      card_id: t.card_id || null,
       category_id: t.category_id,
       financial_entity_id: t.financial_entity_id,
       account_id: t.account_id,
@@ -211,7 +214,7 @@ export default function Lancamentos() {
       is_card_installment: false,
       _original: t,
     }));
-  }, [data]);
+  }, [data, cardsList]);
 
   // Merge and filter
   const allRows = useMemo(() => {
@@ -414,7 +417,7 @@ export default function Lancamentos() {
       notes: r.notes ?? null,
       installment_number: r.installment_number,
       installment_total: r.installment_total,
-      center_cost: r.card_name ?? undefined,
+      card_id: r.card_id ?? null,
     } as any;
     setEditing(draft as Transaction);
     setFormOpen(true);

@@ -20,6 +20,7 @@ import type { Transaction, FinancialEntity, Account, Category } from "@/types/da
 const schema = z.object({
   description: z.string().min(1, "Descrição é obrigatória").max(200),
   transaction_type: z.string().min(1, "Tipo é obrigatório"),
+  card_id: z.string().optional().nullable(),
   category_id: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   account_id: z.string().optional().nullable(),
@@ -30,7 +31,6 @@ const schema = z.object({
   status: z.string().min(1, "Status é obrigatório"),
   payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
-  center_cost: z.string().optional().nullable(),
   installment_number: z.coerce.number().min(1).optional().nullable(),
   installment_total: z.coerce.number().min(1).optional().nullable(),
   installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
@@ -60,16 +60,17 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-      status: "planned", payee: "", notes: "", center_cost: "",
+      status: "planned", payee: "", notes: "", card_id: "",
       installment_number: 1, installment_total: 1, installments_count: 1,
     },
   });
 
   const watchInstallmentsCount = form.watch("installments_count");
-  const watchCenterCost = form.watch("center_cost");
+  const watchCardId = form.watch("card_id");
   const isInstallmentMulti = !transaction && Number(watchInstallmentsCount) > 1;
-  const hasCardSelected = !!watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "";
+  const hasCardSelected = !!watchCardId && watchCardId !== "none" && watchCardId !== "";
   const blockedByCardInstallments = isInstallmentMulti && hasCardSelected;
+  const selectedCard = cardsList.find((card) => card.id === watchCardId);
 
   const watchAccountId = form.watch("account_id");
 
@@ -84,9 +85,11 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
 
   useEffect(() => {
     if (transaction) {
+      const legacyCardId = cardsList.find((card) => card.name === (transaction as any).center_cost)?.id || "";
       form.reset({
         description: transaction.description,
         transaction_type: transaction.transaction_type,
+        card_id: transaction.card_id || legacyCardId,
         category_id: transaction.category_id || "",
         financial_entity_id: transaction.financial_entity_id,
         account_id: transaction.account_id || "",
@@ -101,7 +104,6 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         status: transaction.status,
         payee: (transaction as any).payee || "",
         notes: transaction.notes || "",
-        center_cost: (transaction as any).center_cost || "",
         installment_number: transaction.installment_number ?? 1,
         installment_total: transaction.installment_total ?? 1,
         installments_count: 1,
@@ -110,13 +112,13 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-        status: "planned", payee: "", notes: "", center_cost: "",
+        status: "planned", payee: "", notes: "", card_id: "",
         installment_number: 1, installment_total: 1, installments_count: 1,
       });
     }
     setCreatingCategory(false);
     setNewCategoryName("");
-  }, [transaction, open]);
+  }, [transaction, open, cardsList, form]);
 
   const parseAmountInput = (raw: unknown): number => {
     if (raw == null) return NaN;
@@ -152,7 +154,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
     const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
     const isMulti = !transaction && installmentsCount > 1;
-    const cardSelected = !!data.center_cost && data.center_cost !== "none" && data.center_cost !== "";
+    const cardSelected = !!data.card_id && data.card_id !== "none" && data.card_id !== "";
 
     if (isMulti && cardSelected) {
       form.setError("installments_count", {
@@ -177,6 +179,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       description: data.description,
       transaction_type: data.transaction_type,
       status: isMulti ? "planned" : data.status,
+      card_id: cleanId(data.card_id),
       financial_entity_id: data.financial_entity_id,
       category_id: cleanId(data.category_id),
       account_id: cleanId(data.account_id),
@@ -399,20 +402,20 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <DateField name="payment_date" label="Pagamento" />
           </div>
 
-          <FormField control={form.control} name="center_cost" render={({ field }) => (
-            <FormItem><FormLabel>Cartão de Crédito (vincula à fatura)</FormLabel><FormControl>
+          <FormField control={form.control} name="card_id" render={({ field }) => (
+            <FormItem><FormLabel>Cartão de Crédito</FormLabel><FormControl>
               <Select onValueChange={field.onChange} value={field.value || ""}>
                 <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
-                  {cardsList.filter((c: any) => c.is_active !== false).map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  {cardsList.filter((c: any) => c.is_active !== false).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormControl>
             {field.value && field.value !== "none" ? (
-              <span className="text-xs text-primary">Este lançamento será incluído na fatura do cartão <strong>{field.value}</strong>.</span>
+              <span className="text-xs text-primary">Cartão selecionado: <strong>{selectedCard?.name || "Cartão"}</strong>.</span>
             ) : (
-              <span className="text-xs text-muted-foreground">Selecione um cartão se este lançamento deve compor a fatura.</span>
+              <span className="text-xs text-muted-foreground">Selecione um cartão apenas para identificar o meio de pagamento desta transação.</span>
             )}
             </FormItem>
           )} />
