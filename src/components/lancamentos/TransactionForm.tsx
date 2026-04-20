@@ -309,15 +309,44 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="text" inputMode="decimal" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
-          {/* Parcela */}
-          <div className="grid grid-cols-2 gap-3">
-            <FormField control={form.control} name="installment_number" render={({ field }) => (
-              <FormItem><FormLabel>Parcela Nº</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <FormField control={form.control} name="installment_total" render={({ field }) => (
-              <FormItem><FormLabel>Total Parcelas</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
-            )} />
-          </div>
+          {/* Parcelamento — apenas em criação */}
+          {!transaction ? (
+            <div className="rounded-md border p-3 space-y-2">
+              <FormField control={form.control} name="installments_count" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parcelar em quantas vezes?</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={360}
+                      {...field}
+                      value={field.value ?? 1}
+                      onChange={(e) => field.onChange(e.target.value === "" ? 1 : Number(e.target.value))}
+                    />
+                  </FormControl>
+                  <span className="text-xs text-muted-foreground">
+                    Use 1 para lançamento único. Para mais de 1, o valor informado é o <strong>total</strong> e será dividido igualmente, com vencimentos mensais a partir da data informada.
+                  </span>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              {blockedByCardInstallments && (
+                <div className="text-xs text-destructive">
+                  Parcelamento em cartão de crédito deve ser feito no módulo <strong>Compras no Cartão</strong>, que gerencia faturas e fechamentos automaticamente. Remova o cartão selecionado abaixo ou reduza para 1 parcela.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <FormField control={form.control} name="installment_number" render={({ field }) => (
+                <FormItem><FormLabel>Parcela Nº</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="installment_total" render={({ field }) => (
+                <FormItem><FormLabel>Total Parcelas</FormLabel><FormControl><Input type="number" min={1} {...field} value={field.value ?? 1} /></FormControl><FormMessage /></FormItem>
+              )} />
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <FormField control={form.control} name="competence_date" render={({ field }) => (
