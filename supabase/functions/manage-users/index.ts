@@ -6,16 +6,21 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const EXT_URL = "https://tabjmrdsadodghvqoqcp.supabase.co";
-
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Authenticate caller — accept any valid Bearer token
-    // The token comes from the external Supabase project where users log in
+    const projectUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!projectUrl || !serviceRoleKey) {
+      return new Response(JSON.stringify({ error: "Backend de autenticação não configurado" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
@@ -24,21 +29,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Validate the token against the external Supabase
-    const extServiceKey = Deno.env.get("EXT_SUPABASE_SERVICE_ROLE_KEY");
-    if (!extServiceKey) {
-      return new Response(
-        JSON.stringify({ error: "Chave de serviço externa não configurada" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const extUserClient = createClient(EXT_URL, extServiceKey, {
+    const authClient = createClient(projectUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await extUserClient.auth.getUser(token);
+    const { data: userData, error: userError } = await authClient.auth.getUser(token);
     if (userError || !userData?.user) {
       return new Response(JSON.stringify({ error: "Não autorizado" }), {
         status: 401,
@@ -55,8 +51,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Build admin client for external Supabase (reuse extServiceKey)
-    const extAdmin = createClient(EXT_URL, extServiceKey, {
+    const authAdmin = createClient(projectUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
@@ -66,7 +61,7 @@ Deno.serve(async (req) => {
 
     // LIST users
     if (method === "GET" || action === "list") {
-      const { data, error } = await extAdmin.auth.admin.listUsers({ perPage: 100 });
+      const { data, error } = await authAdmin.auth.admin.listUsers({ perPage: 100 });
       if (error) throw error;
       const users = (data.users ?? []).map((u: any) => ({
         id: u.id,
@@ -91,7 +86,7 @@ Deno.serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        const { data, error } = await extAdmin.auth.admin.createUser({
+        const { data, error } = await authAdmin.auth.admin.createUser({
           email,
           password,
           email_confirm: true,
@@ -111,7 +106,7 @@ Deno.serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        const { error } = await extAdmin.auth.admin.deleteUser(userId);
+        const { error } = await authAdmin.auth.admin.deleteUser(userId);
         if (error) throw error;
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
