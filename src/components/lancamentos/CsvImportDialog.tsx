@@ -270,20 +270,33 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
     if (validRows.length === 0) return;
     setImporting(true);
     try {
-      const payload = validRows.map(r => ({
-        competence_date: r.competence_date,
-        transaction_type: r.transaction_type,
-        description: r.description,
-        payee: r.payee || null,
-        amount: r.amount,
-        due_date: r.due_date,
-        notes: r.notes || null,
-        account_id: r.account_id,
-        category_id: r.category_id,
-        financial_entity_id: r.financial_entity_id,
-        status: r.status,
-        payment_date: r.payment_date,
-      }));
+      // Blindagem: nunca importar como paid com payment_date futura.
+      // Converte silenciosamente para planned + payment_date=NULL e loga aviso.
+      const todayStr = new Date().toISOString().slice(0, 10);
+      let convertedFuture = 0;
+      const payload = validRows.map(r => {
+        let status = r.status;
+        let payment_date = r.payment_date;
+        if (status === "paid" && (!payment_date || payment_date > todayStr)) {
+          status = "planned";
+          payment_date = null;
+          convertedFuture++;
+        }
+        return {
+          competence_date: r.competence_date,
+          transaction_type: r.transaction_type,
+          description: r.description,
+          payee: r.payee || null,
+          amount: r.amount,
+          due_date: r.due_date,
+          notes: r.notes || null,
+          account_id: r.account_id,
+          category_id: r.category_id,
+          financial_entity_id: r.financial_entity_id,
+          status,
+          payment_date,
+        };
+      });
 
       const batchSize = 100;
       for (let i = 0; i < payload.length; i += batchSize) {
@@ -293,6 +306,9 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
       }
 
       toast.success(`${validRows.length} lançamento(s) importado(s) com sucesso!`);
+      if (convertedFuture > 0) {
+        toast.warning(`${convertedFuture} linha(s) convertida(s) para Previsto por terem data de pagamento futura ou ausente.`);
+      }
       if (errorRows.length > 0) toast.warning(`${errorRows.length} linha(s) com erro foram ignoradas.`);
       onSuccess();
       reset();
