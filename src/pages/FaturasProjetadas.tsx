@@ -157,7 +157,7 @@ export default function FaturasProjetadas() {
 
       <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
         <Info className="h-3 w-3" />
-        Dados baseados em lançamentos marcados com center_cost de cartão de crédito.
+        A competência das faturas é calculada pelo billing_month; o vencimento é exibido separadamente.
       </p>
     </AppLayout>
   );

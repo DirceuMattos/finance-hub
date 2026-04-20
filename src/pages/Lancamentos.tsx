@@ -214,7 +214,7 @@ export default function Lancamentos() {
       is_card_installment: false,
       _original: t,
     }));
-  }, [data]);
+  }, [data, cardsList]);
 
   // Merge and filter
   const allRows = useMemo(() => {

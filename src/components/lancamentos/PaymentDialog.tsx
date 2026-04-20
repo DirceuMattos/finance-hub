@@ -77,6 +77,7 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
     onCreateRemainder?.({
       description: transaction.description,
       transaction_type: transaction.transaction_type,
+      card_id: transaction.card_id,
       category_id: transaction.category_id,
       financial_entity_id: transaction.financial_entity_id,
       account_id: transaction.account_id,
