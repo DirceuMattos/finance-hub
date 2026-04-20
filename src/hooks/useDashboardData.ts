@@ -76,7 +76,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
       return { total, personal, business, filtered };
     },
-    enabled: entities.length > 0,
+    enabled: entitiesQuery.isFetched,
   });
 
   // --- Monthly cashflow calculated directly from transactions + card_installments ---
@@ -158,7 +158,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       // Projected balance: total income - total expenses - all card amounts
       const totalIncome = income_paid + income_planned;
       const totalExpense = expense_paid + expense_planned;
-      const projected_balance = totalIncome - totalExpense - projected_card_amount - card_paid_amount;
+      const projected_balance = totalIncome - totalExpense - projected_card_amount;
 
       // Potential containment = planned expenses that could be cut
       const potential_containment = expense_planned;
@@ -197,6 +197,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         traffic_light,
       };
     },
+    enabled: entitiesQuery.isFetched,
   });
 
   const flow = monthlyFlow.data;
@@ -267,6 +268,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .sort((a, b) => b.total - a.total)
         .slice(0, 8);
     },
+    enabled: entitiesQuery.isFetched,
   });
 
   // --- Cashflow chart (12 months, calculated directly) ---
@@ -359,6 +361,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
       return { total, byCategory, latestMonth };
     },
+    enabled: entitiesQuery.isFetched,
   });
 
   // --- Patrimony evolution ---
