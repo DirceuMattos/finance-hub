@@ -215,8 +215,9 @@ export function CsvImportDialog({ open, onOpenChange, onSuccess }: CsvImportDial
         const entityId = entityName ? entMap.get(entityName.toLowerCase()) || null : null;
         if (entityName && !entityId) errors.push(`Entidade não encontrada: "${entityName}"`);
 
-        const status = dueDate && dueDate <= today ? "paid" : "planned";
-        const paymentDate = status === "paid" ? dueDate : null;
+        // Importações sempre entram como previstas; baixa é manual.
+        const status = "planned";
+        const paymentDate = null;
 
         parsed.push({
           lineNumber: i + 1,
