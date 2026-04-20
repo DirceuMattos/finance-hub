@@ -384,7 +384,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <FormItem><FormLabel>Observações</FormLabel><FormControl><Textarea rows={3} {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
 
-          <Button type="submit" className="w-full" disabled={loading}>Salvar</Button>
+          <Button type="submit" className="w-full" disabled={loading || blockedByCardInstallments}>Salvar</Button>
         </form>
       </Form>
     </FormDrawer>
