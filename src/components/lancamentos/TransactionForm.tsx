@@ -314,16 +314,20 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
           </div>
 
           <FormField control={form.control} name="center_cost" render={({ field }) => (
-            <FormItem><FormLabel>Cartão de Crédito</FormLabel><FormControl>
+            <FormItem><FormLabel>Cartão de Crédito (vincula à fatura)</FormLabel><FormControl>
               <Select onValueChange={field.onChange} value={field.value || ""}>
                 <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhum</SelectItem>
-                  {cardsList.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                  {cardsList.filter((c: any) => c.is_active !== false).map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </FormControl>
-            <span className="text-xs text-muted-foreground">Selecione se este lançamento é pagamento de fatura de cartão</span>
+            {field.value && field.value !== "none" ? (
+              <span className="text-xs text-primary">Este lançamento será incluído na fatura do cartão <strong>{field.value}</strong>.</span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Selecione um cartão se este lançamento deve compor a fatura.</span>
+            )}
             </FormItem>
           )} />
 

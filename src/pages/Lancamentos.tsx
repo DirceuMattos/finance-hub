@@ -18,6 +18,7 @@ import { useCardInstallments, useCardInstallmentStatusUpdate } from "@/hooks/use
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
+import { useCards } from "@/hooks/useCards";
 import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { PaymentDialog } from "@/components/lancamentos/PaymentDialog";
@@ -40,9 +41,11 @@ interface UnifiedRow {
   entity_type: string | null;
   account_name: string | null;
   payee: string | null;
+  notes?: string | null;
   installment_number: number | null;
   installment_total: number | null;
   center_cost?: string;
+  card_name?: string | null;
   category_id?: string | null;
   financial_entity_id?: string;
   account_id?: string | null;
@@ -99,6 +102,7 @@ export default function Lancamentos() {
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
+  const { data: cardsList = [] } = useCards();
 
   const [search, setSearch] = useState("");
   const [filterEntity, setFilterEntity] = useState("all");
@@ -107,6 +111,8 @@ export default function Lancamentos() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeTab, setFilterTypeTab] = useState("all");
   const [filterCardInvoice, setFilterCardInvoice] = useState("all");
+  const [filterCard, setFilterCard] = useState("all"); // by specific card name
+  const [filterInstallment, setFilterInstallment] = useState("all"); // all | yes | no
   const [filterSource, setFilterSource] = useState("all"); // all | transactions | card
 
   const [formOpen, setFormOpen] = useState(false);
@@ -154,8 +160,10 @@ export default function Lancamentos() {
       entity_type: (inst.card_purchases?.financial_entities as any)?.entity_type || null,
       account_name: null,
       payee: inst.card_purchases?.payee || null,
+      notes: inst.card_purchases?.notes || null,
       installment_number: inst.installment_number,
       installment_total: inst.card_purchases?.installments_count || null,
+      card_name: (inst.card_purchases as any)?.cards?.name || null,
       financial_entity_id: inst.card_purchases?.financial_entity_id,
       is_card_installment: true,
     }));
@@ -177,9 +185,11 @@ export default function Lancamentos() {
       entity_type: (t.financial_entities as any)?.entity_type || null,
       account_name: t.accounts?.name || null,
       payee: (t as any).payee || null,
+      notes: (t as any).notes || null,
       installment_number: t.installment_number,
       installment_total: t.installment_total,
       center_cost: (t as any).center_cost,
+      card_name: (t as any).center_cost || null,
       category_id: t.category_id,
       financial_entity_id: t.financial_entity_id,
       account_id: t.account_id,
@@ -200,7 +210,13 @@ export default function Lancamentos() {
       if (search) {
         const s = search.toLowerCase();
         const fmtVal = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount);
-        const searchable = [t.description, t.payee, t.category_name, t.entity_name, t.account_name, fmtVal, String(t.amount)].filter(Boolean).join(" ").toLowerCase();
+        const installmentStr = (t.installment_total && t.installment_total > 1)
+          ? `${t.installment_number ?? 1}/${t.installment_total}`
+          : "";
+        const searchable = [
+          t.description, t.payee, t.category_name, t.entity_name, t.account_name,
+          t.center_cost, t.card_name, t.notes, installmentStr, fmtVal, String(t.amount),
+        ].filter(Boolean).join(" ").toLowerCase();
         if (!searchable.includes(s)) return false;
       }
       if (filterEntity === "all_personal") {
@@ -212,6 +228,9 @@ export default function Lancamentos() {
       if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
+      if (filterCard !== "all" && t.card_name !== filterCard) return false;
+      if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
+      if (filterInstallment === "no" && ((t.installment_total ?? 1) > 1)) return false;
       if (!t.is_card_installment) {
         const isCCInvoice = isCardInvoiceByCenterCost(t.center_cost) || isCardInvoice(t.category_name || "");
         if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
@@ -222,7 +241,7 @@ export default function Lancamentos() {
       // Month filtering is now done server-side in the hooks
       return true;
     });
-  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
+  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment, filterMonth]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
@@ -240,7 +259,7 @@ export default function Lancamentos() {
               <span>{r.description}</span>
               <InstallmentBadge number={r.installment_number} total={r.installment_total} />
               <Badge variant="outline" className="text-xs border-primary text-primary gap-1">
-                <CreditCard className="h-3 w-3" />Cartão
+                <CreditCard className="h-3 w-3" />Cartão (legado)
               </Badge>
             </div>
           );
@@ -279,6 +298,7 @@ export default function Lancamentos() {
       },
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.account_name || "", render: (r) => r.account_name || "—" },
+    { key: "card", header: "Cartão", sortable: true, sortValue: (r) => r.card_name || "", render: (r) => r.card_name ? <Badge variant="outline" className="text-[10px] gap-1"><CreditCard className="h-3 w-3" />{r.card_name}</Badge> : "—" },
     { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : "text-foreground"}>{fmt(r.amount)}</span> },
     { key: "status", header: "Status", sortable: true, sortValue: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
     { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => r.payment_date || "", render: (r) => fmtDate(r.payment_date) },
@@ -476,7 +496,7 @@ export default function Lancamentos() {
         </div>
       )}
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento..." hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all"} onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); }}>
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar por descrição, cartão, parcela, valor, observação..." hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all"} onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); }}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
@@ -544,6 +564,23 @@ export default function Lancamentos() {
           <SelectContent>
             <SelectItem value="all">Todas categorias</SelectItem>
             {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterCard} onValueChange={setFilterCard}>
+          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos cartões</SelectItem>
+            {cardsList.filter((c: any) => c.is_active !== false).map(c => (
+              <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterInstallment} onValueChange={setFilterInstallment}>
+          <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Parcelado" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="yes">Parcelado</SelectItem>
+            <SelectItem value="no">Não parcelado</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
