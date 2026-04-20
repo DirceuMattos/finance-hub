@@ -73,7 +73,7 @@ export default function Relatorios() {
 
   const loadRecurrences = async () => {
     if (recLoaded) return;
-    const { supabase } = await import("@/lib/supabaseClient");
+    const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await (supabase as any).from("recurrences").select("*").order("description");
     setRecurrences(data || []);
     setRecLoaded(true);

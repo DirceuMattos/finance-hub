@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
 import { subMonths, format } from "date-fns";
@@ -40,7 +40,7 @@ export function useAssetCategories() {
   return useQuery({
     queryKey: ["asset_categories"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("asset_categories")
         .select("*")
         .eq("is_active", true)
@@ -55,7 +55,7 @@ export function usePatrimonySnapshots(month?: string) {
   return useQuery({
     queryKey: ["patrimony_snapshots", month],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("patrimony_snapshots")
         .select("*, asset_categories(name, asset_type), financial_entities(name)")
         .order("item_name");
@@ -73,7 +73,7 @@ export function usePatrimonyEvolution() {
   return useQuery({
     queryKey: ["vw_patrimony_evolution"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("vw_patrimony_evolution")
         .select("*")
         .order("reference_month");
@@ -127,7 +127,7 @@ export function usePreviousPatrimonyClosingValue(month?: string, itemName?: stri
     enabled: !!month && !!itemName && !!financialEntityId && month.length >= 7,
     queryFn: async () => {
       const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("patrimony_snapshots" as any)
         .select("closing_value")
         .eq("reference_month", prevMonth)

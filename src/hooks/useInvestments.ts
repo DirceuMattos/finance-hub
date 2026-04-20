@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
 import { subMonths, addMonths, format, parseISO } from "date-fns";
@@ -27,7 +27,7 @@ export function useInvestmentClasses() {
   return useQuery({
     queryKey: ["investment_classes"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("investment_classes")
         .select("*")
         .eq("is_active", true)
@@ -42,7 +42,7 @@ export function useInvestmentSnapshots(month?: string) {
   return useQuery({
     queryKey: ["investment_snapshots", month],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from("investment_snapshots")
         .select("*, investment_classes(name), financial_entities(name)")
         .order("closing_value", { ascending: false });
@@ -79,7 +79,7 @@ export function usePreviousClosingValue(month?: string, investmentClassId?: stri
     enabled: !!month && !!investmentClassId && !!financialEntityId && month.length >= 7,
     queryFn: async () => {
       const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("investment_snapshots" as any)
         .select("closing_value")
         .eq("reference_month", prevMonth)
