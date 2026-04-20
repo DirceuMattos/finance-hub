@@ -43,7 +43,17 @@ function useCardInvoiceTransactionsQuery() {
   return useQuery({
     queryKey: ["card_invoice_transactions"],
     queryFn: async () => {
-      // Source 1: transactions by center_cost
+      // Load active cards to allow dynamic center_cost matching (any card name)
+      const { data: cardsData } = await (supabase as any)
+        .from("cards")
+        .select("name, financial_entities(entity_type)");
+      const cardEntityMap = new Map<string, "personal" | "business" | null>();
+      (cardsData || []).forEach((c: any) => {
+        const t = c?.financial_entities?.entity_type;
+        cardEntityMap.set(c.name, t === "personal" || t === "business" ? t : null);
+      });
+
+      // Source 1: transactions by center_cost (legacy hardcoded list + any registered card name)
       const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
         .select("id, description, amount, competence_date, due_date, status, center_cost")
@@ -52,18 +62,26 @@ function useCardInvoiceTransactionsQuery() {
       if (txError) throw txError;
 
       const fromTransactions: CardInvoiceTransaction[] = (txData || [])
-        .filter((t: any) => t.center_cost && CARD_INVOICE_CENTER_COSTS.includes(t.center_cost))
-        .map((t: any): CardInvoiceTransaction => ({
-          id: t.id,
-          description: t.description,
-          amount: Math.abs(t.amount),
-          competence_date: t.competence_date,
-          due_date: t.due_date,
-          status: t.status,
-          center_cost: t.center_cost,
-          card_name: CENTER_COST_CARD_MAP[t.center_cost] || t.center_cost,
-          entity_type: CENTER_COST_ENTITY_MAP[t.center_cost] || null,
-        }));
+        .filter((t: any) => {
+          if (!t.center_cost) return false;
+          return CARD_INVOICE_CENTER_COSTS.includes(t.center_cost) || cardEntityMap.has(t.center_cost);
+        })
+        .map((t: any): CardInvoiceTransaction => {
+          const mappedCard = CENTER_COST_CARD_MAP[t.center_cost];
+          const mappedEntity = CENTER_COST_ENTITY_MAP[t.center_cost];
+          const dynamicEntity = cardEntityMap.get(t.center_cost) ?? null;
+          return {
+            id: t.id,
+            description: t.description,
+            amount: Math.abs(t.amount),
+            competence_date: t.competence_date,
+            due_date: t.due_date,
+            status: t.status,
+            center_cost: t.center_cost,
+            card_name: mappedCard || t.center_cost,
+            entity_type: mappedEntity || dynamicEntity,
+          };
+        });
 
       // Source 2: card_installments from card_purchases
       let fromInstallments: CardInvoiceTransaction[] = [];
