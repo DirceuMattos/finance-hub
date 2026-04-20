@@ -18,6 +18,7 @@ import { useCardInstallments, useCardInstallmentStatusUpdate } from "@/hooks/use
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
+import { useCards } from "@/hooks/useCards";
 import { TransactionForm } from "@/components/lancamentos/TransactionForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { PaymentDialog } from "@/components/lancamentos/PaymentDialog";
@@ -40,9 +41,11 @@ interface UnifiedRow {
   entity_type: string | null;
   account_name: string | null;
   payee: string | null;
+  notes?: string | null;
   installment_number: number | null;
   installment_total: number | null;
   center_cost?: string;
+  card_name?: string | null;
   category_id?: string | null;
   financial_entity_id?: string;
   account_id?: string | null;
@@ -99,6 +102,7 @@ export default function Lancamentos() {
   const { data: entities = [] } = useFinancialEntities();
   const { data: accounts = [] } = useAccounts();
   const { data: categories = [] } = useCategories();
+  const { data: cardsList = [] } = useCards();
 
   const [search, setSearch] = useState("");
   const [filterEntity, setFilterEntity] = useState("all");
@@ -107,6 +111,8 @@ export default function Lancamentos() {
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeTab, setFilterTypeTab] = useState("all");
   const [filterCardInvoice, setFilterCardInvoice] = useState("all");
+  const [filterCard, setFilterCard] = useState("all"); // by specific card name
+  const [filterInstallment, setFilterInstallment] = useState("all"); // all | yes | no
   const [filterSource, setFilterSource] = useState("all"); // all | transactions | card
 
   const [formOpen, setFormOpen] = useState(false);
