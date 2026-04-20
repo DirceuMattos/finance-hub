@@ -310,6 +310,9 @@ export default function Lancamentos() {
           const isPaid = r.status === "paid";
           return (
             <div className="flex gap-0.5">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePromoteInstallment(r)} title="Editar (migra para lançamento unificado)">
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
               {isPending && (
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => updateInstallmentStatus.mutate({ id: realId, status: "paid" })} title="Marcar como pago">
                   <CheckCircle className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
@@ -320,6 +323,9 @@ export default function Lancamentos() {
                   <Ban className="h-3.5 w-3.5 text-[hsl(var(--warning))]" />
                 </Button>
               )}
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeletingInstallment(realId)} title="Excluir parcela legada">
+                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              </Button>
             </div>
           );
         }
