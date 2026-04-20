@@ -118,8 +118,33 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     setNewCategoryName("");
   }, [transaction, open]);
 
+  const parseAmountInput = (raw: unknown): number => {
+    if (raw == null) return NaN;
+    const s = String(raw).trim().replace(/\s|R\$/gi, "");
+    if (!s) return NaN;
+    const hasComma = s.includes(",");
+    const hasDot = s.includes(".");
+    let normalized: string;
+    if (hasComma && hasDot) {
+      if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+        // pt-BR: "1.234,56"
+        normalized = s.replace(/\./g, "").replace(",", ".");
+      } else {
+        // en-US: "1,234.56"
+        normalized = s.replace(/,/g, "");
+      }
+    } else if (hasComma) {
+      // Só vírgula → decimal pt-BR
+      normalized = s.replace(",", ".");
+    } else {
+      // Só ponto ou nenhum separador → decimal JS / inteiro. NÃO remover ponto.
+      normalized = s;
+    }
+    return parseFloat(normalized);
+  };
+
   const handleSubmit = (data: FormData) => {
-    const parsedAmount = parseFloat(String(data.amount).replace(/\./g, "").replace(",", "."));
+    const parsedAmount = parseAmountInput(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       form.setError("amount", { message: "Valor inválido" });
       return;
