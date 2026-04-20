@@ -17,7 +17,7 @@ export function useAlerts(viewType: ViewType) {
   return useQuery({
     queryKey: ["dashboard-alerts", viewType],
     queryFn: async () => {
-      let query = supabase.from("vw_dashboard_alerts").select("*");
+      let query = (supabase as any).from("vw_dashboard_alerts").select("*");
 
       if (viewType === "personal") {
         query = query.eq("entity_type", "personal");
