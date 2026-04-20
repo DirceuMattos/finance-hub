@@ -1,65 +1,53 @@
 
 
-## Análise
+## Plano: Estancar o bug + diagnóstico + recuperação
 
-### Comportamento atual
-- **Lançamentos (`transactions`)**: o `TransactionForm` apenas salva **1 linha** com `installment_number` e `installment_total` como metadados informativos. **Não há geração de parcelas N+1…N**. Isso é um bug funcional — o usuário esperaria ver as 5 parcelas listadas.
-- **Compras no Cartão (`card_purchases` + `card_installments`)**: este módulo **já funciona corretamente** — informando 5 parcelas, ele cria 1 registro pai em `card_purchases` e 5 filhos em `card_installments`, com `billing_month`/`due_date` calculados automaticamente. Aparecem na tela de Lançamentos via a "visão unificada" (mem://features/unified-transactions-view).
-- **Recorrências**: serve para lançamentos **fixos repetitivos** (aluguel, salário) — frequência mensal/anual sem fim definido. Não é o lugar correto para parcelamento finito.
-
-### Diagnóstico
-| Caso | Hoje | Deveria ser |
-|---|---|---|
-| Compra parcelada **no cartão de crédito** | Usuário tenta lançar em "Lançamentos" → só 1 parcela | Usar **Compras no Cartão** (já gera as N parcelas) |
-| Compra/despesa parcelada **fora de cartão** (boleto, financiamento) | Só 1 parcela é gravada | Gerar N transactions com vencimentos sequenciais |
-
-## Correção proposta
-
-### 1) Geração automática de parcelas em `Lançamentos` (parcelamento sem cartão)
+### Passo 1 — Corrigir parser (estanca o sangramento)
 
 **Arquivo:** `src/components/lancamentos/TransactionForm.tsx`
-- Reformular os campos: substituir "Parcela Nº / Total Parcelas" por um único toggle **"Parcelar?"** + input **"Número de parcelas"** (default 1).
-- Quando `parcelas > 1`: o valor digitado é o **valor total**, dividido igualmente entre as parcelas (com ajuste de centavos na última).
-- Adicionar input opcional **"Periodicidade"** (mensal — default).
 
-**Arquivo:** `src/hooks/useTransactions.ts`
-- Estender o `create` para aceitar `installments_count` e, quando > 1, gerar **N inserts** em uma única chamada `.insert([...])`:
-  - `installment_number = 1..N`, `installment_total = N`
-  - `description` recebe sufixo `(i/N)`
-  - `due_date` e `competence_date` somam `i-1` meses (preservando o dia, com fallback para último dia válido — usar o helper já existente em `useCardPurchases`)
-  - `amount` = total/N (última parcela ajusta resíduo de arredondamento)
-  - `status = 'planned'` em todas (nunca auto-paid)
-  - `payment_date = null`
+Substituir o parser ingênuo por `parseAmountInput` robusto que detecta corretamente formato pt-BR (`1.234,56`), JS (`466.66`), en-US (`1,234.56`) e inteiros — sem nunca remover ponto decimal solitário. Detalhes técnicos no plano anterior já aprovado.
 
-### 2) Bloqueio inteligente para evitar duplicidade com cartão
+### Passo 2 — Query SQL de diagnóstico (read-only)
 
-No `TransactionForm`, se o usuário selecionar um **Cartão de Crédito** (campo `center_cost`) **e** marcar `parcelas > 1`, exibir aviso e desabilitar o submit, sugerindo usar a tela **Compras no Cartão** (link direto). Motivo: parcelamento de cartão tem regras de fechamento/vencimento próprias que `transactions` não modela.
+Entregar SQL para você rodar no SQL Editor do Supabase externo:
 
-### 3) Visualização
+```sql
+-- Lançamentos com valores suspeitos de corrupção 100x
+SELECT id, description, amount, transaction_type, status,
+       competence_date, due_date, updated_at, created_at
+FROM transactions
+WHERE amount >= 10000
+  AND amount = ROUND(amount)            -- valor "redondo" sem centavos
+  AND updated_at > created_at + interval '1 minute'  -- foi editado depois de criado
+ORDER BY updated_at DESC
+LIMIT 200;
+```
 
-Como a tela de Lançamentos já consolida `transactions` (mem://features/unified-transactions-view), as N parcelas aparecerão automaticamente quando o filtro de mês incluir cada vencimento. Sem mudança em queries.
+Critério conservador: valor ≥ R$ 10.000, sem centavos, e que foi editado pós-criação. Você revisa visualmente cada um.
 
-### 4) Edição/exclusão de parcelas geradas
+### Passo 3 — Correção manual pela UI (após Passo 1 estar no ar)
 
-- **Excluir**: oferecer no `DeleteDialog` opção "Excluir só esta" / "Excluir todas as parcelas futuras" (agrupando por `description` base + `payee` + `installment_total`). Implementação simples via filtro `installment_total > 1` + match por descrição-base.
-- **Editar**: edição segue individual (cada parcela é independente), igual hoje.
+Para cada linha suspeita identificada no Passo 2, abrir em Lançamentos, ajustar o valor correto e salvar. Como o parser estará corrigido, salvar não corromperá novamente.
 
-### Resposta direta à sua pergunta
+### Passo 4 — Recalcular saldos
 
-> "Isto deve ser feito em recorrências?"
+Após corrigir os lançamentos: **Configurações → Contas → Recalcular Saldos**. A função `recalculate_account_balances` reprocessa todos os saldos a partir de `transactions.status='paid'` + `card_installments.status='paid'`.
 
-**Não.** Recorrências = pagamentos fixos sem fim (aluguel, assinaturas). Parcelamento finito é função de Lançamentos. Para **cartão de crédito**, use **Compras no Cartão** (já funciona). Para **outros parcelamentos** (financiamento, boleto), vamos corrigir o Lançamentos para gerar as N parcelas.
+### Passo 5 — Validar Dashboard
 
-### Arquivos alterados
+Recarregar Dashboard. Cards de Receita/Despesa Paga, Saldo das Contas, Saldo Projetado e Top Categorias devem refletir os valores corretos. Cache do React Query é invalidado automaticamente nas mutações.
 
-1. `src/components/lancamentos/TransactionForm.tsx` — UI de parcelamento + bloqueio quando há cartão
-2. `src/hooks/useTransactions.ts` — geração de N inserts com datas sequenciais
-3. `src/components/configuracoes/DeleteDialog.tsx` — opção "excluir todas as parcelas" (opcional, posso fazer em segunda fase)
+### Arquivos alterados nesta etapa
+
+- `src/components/lancamentos/TransactionForm.tsx` — único arquivo de código.
+- Nenhuma migração de banco. Nenhum UPDATE em massa.
 
 ### Riscos
+
 | Risco | Mitigação |
 |---|---|
-| Edição de uma parcela "quebrar" o grupo | Cada parcela é independente; aviso sutil no rodapé do form ao editar parcela N de M |
-| Usuário esperar parcelar no cartão pela tela de Lançamentos | Mensagem clara redirecionando para Compras no Cartão |
-| Resíduo de centavos na divisão | Última parcela absorve diferença |
+| Lançamentos corrompidos com valor < R$ 10.000 escaparem do diagnóstico | Posso entregar uma 2ª query mais ampla (ex.: amount entre 1.000 e 10.000 sem centavos) se você quiser revisar mais |
+| Saldo continuar errado mesmo após recalcular | Significa que há `card_installments` corrompidas — escopo separado, posso investigar depois |
+| Você corrigir um valor que na verdade estava certo | Mitigado por revisão manual item a item, sem automação |
 
