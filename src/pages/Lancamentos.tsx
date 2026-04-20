@@ -537,94 +537,130 @@ export default function Lancamentos() {
         </div>
       )}
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar por descrição, cartão, parcela, valor, observação..." hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all"} onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); }}>
-        <Select value={filterMonth} onValueChange={setFilterMonth}>
-          <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
-          <SelectContent>
-            {monthOptions.map(o => (
-              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterSource} onValueChange={setFilterSource}>
-          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Origem" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos (Lanç. + Cartão)</SelectItem>
-            <SelectItem value="transactions">Somente Lançamentos</SelectItem>
-            <SelectItem value="card">Somente Cartão</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterCardInvoice} onValueChange={setFilterCardInvoice}>
-          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Fatura" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="card_invoice">Todas Faturas</SelectItem>
-            <SelectItem value="bra_pessoal">BRA Pessoal</SelectItem>
-            <SelectItem value="nu_infotkt">Nu Infotkt</SelectItem>
-            <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="planned">Previsto</SelectItem>
-            <SelectItem value="paid">Realizado</SelectItem>
-            <SelectItem value="cancelled">Cancelado</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={filterEntity} onValueChange={setFilterEntity}>
-          <SelectTrigger className="h-9 w-[160px] text-xs"><SelectValue placeholder="Entidade" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas entidades</SelectItem>
-            <SelectItem value="all_personal">Todas Pessoais</SelectItem>
-            <SelectItem value="all_business">Todas Empresariais</SelectItem>
-            {personalEntities.length > 0 && (
-              <>
-                <SelectItem value="__personal_header" disabled className="text-xs font-semibold text-muted-foreground">— Pessoais —</SelectItem>
-                {personalEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-              </>
-            )}
-            {businessEntities.length > 0 && (
-              <>
-                <SelectItem value="__business_header" disabled className="text-xs font-semibold text-muted-foreground">— Empresariais —</SelectItem>
-                {businessEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
-              </>
-            )}
-          </SelectContent>
-        </Select>
-        <Select value={filterAccount} onValueChange={setFilterAccount}>
-          <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas contas</SelectItem>
-            {filteredAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterCategory} onValueChange={setFilterCategory}>
-          <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas categorias</SelectItem>
-            {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterCard} onValueChange={setFilterCard}>
-          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos cartões</SelectItem>
-            {cardsList.filter((c: any) => c.is_active !== false).map(c => (
-              <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterInstallment} onValueChange={setFilterInstallment}>
-          <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Parcelado" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos</SelectItem>
-            <SelectItem value="yes">Parcelado</SelectItem>
-            <SelectItem value="no">Não parcelado</SelectItem>
-          </SelectContent>
-        </Select>
-      </FilterBar>
+      <div className="rounded-lg border bg-card p-4 mb-4 space-y-3">
+        <FilterBar
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Buscar por descrição, cartão, parcela, valor, observação..."
+          hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all"}
+          onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); }}
+        />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Mês</label>
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(o => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Origem</label>
+            <Select value={filterSource} onValueChange={setFilterSource}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Origem" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos (Lanç. + Cartão)</SelectItem>
+                <SelectItem value="transactions">Somente Lançamentos</SelectItem>
+                <SelectItem value="card">Somente Cartão</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Fatura</label>
+            <Select value={filterCardInvoice} onValueChange={setFilterCardInvoice}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Fatura" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="card_invoice">Todas Faturas</SelectItem>
+                <SelectItem value="bra_pessoal">BRA Pessoal</SelectItem>
+                <SelectItem value="nu_infotkt">Nu Infotkt</SelectItem>
+                <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Status</label>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos status</SelectItem>
+                <SelectItem value="planned">Previsto</SelectItem>
+                <SelectItem value="paid">Realizado</SelectItem>
+                <SelectItem value="cancelled">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Entidade</label>
+            <Select value={filterEntity} onValueChange={setFilterEntity}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Entidade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas entidades</SelectItem>
+                <SelectItem value="all_personal">Todas Pessoais</SelectItem>
+                <SelectItem value="all_business">Todas Empresariais</SelectItem>
+                {personalEntities.length > 0 && (
+                  <>
+                    <SelectItem value="__personal_header" disabled className="text-xs font-semibold text-muted-foreground">— Pessoais —</SelectItem>
+                    {personalEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  </>
+                )}
+                {businessEntities.length > 0 && (
+                  <>
+                    <SelectItem value="__business_header" disabled className="text-xs font-semibold text-muted-foreground">— Empresariais —</SelectItem>
+                    {businessEntities.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Conta</label>
+            <Select value={filterAccount} onValueChange={setFilterAccount}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas contas</SelectItem>
+                {filteredAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Categoria</label>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas categorias</SelectItem>
+                {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Cartão</label>
+            <Select value={filterCard} onValueChange={setFilterCard}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos cartões</SelectItem>
+                {cardsList.filter((c: any) => c.is_active !== false).map(c => (
+                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Parcelado</label>
+            <Select value={filterInstallment} onValueChange={setFilterInstallment}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Parcelado" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="yes">Parcelado</SelectItem>
+                <SelectItem value="no">Não parcelado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
 
       {/* Batch action bar */}
       {selectedKeys.size > 0 && (
