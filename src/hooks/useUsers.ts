@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase as extSupabase } from "@/integrations/supabase/client";
+import { supabase as extSupabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
 const FUNCTIONS_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
