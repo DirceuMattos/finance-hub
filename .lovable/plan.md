@@ -1,83 +1,68 @@
 
-Objetivo: eliminar o cliente Supabase hardcoded, padronizar toda a aplicação no cliente gerado em `@/integrations/supabase/client`, e expor a página `Alertas` via rota protegida e navegação lateral.
+Objetivo: corrigir os dois bugs em `src/hooks/useDashboardData.ts` sem mexer em banco, alinhando o Dashboard com a lógica já usada no Fluxo Mensal.
 
-### 1. Unificar o cliente Supabase
-Remover o arquivo legado:
-- `src/lib/supabaseClient.ts`
+### 1. Corrigir a race condition das queries dependentes de entidades
+Atualizar as queries que usam `filterIds`, `personalIds` ou `businessIds` para só rodarem depois que `entitiesQuery` terminar.
 
-Substituir todos os imports de:
-- `@/lib/supabaseClient`
+#### Ajustes diretos
+Em `src/hooks/useDashboardData.ts`:
 
-por:
-- `@/integrations/supabase/client`
+- `monthlyFlow`
+  - adicionar `enabled: entitiesQuery.isFetched`
+- `accountBalances`
+  - trocar `enabled: entities.length > 0` por `enabled: entitiesQuery.isFetched`
+- `expensesByCategory`
+  - adicionar `enabled: entitiesQuery.isFetched`
+- `patrimonyData`
+  - adicionar `enabled: entitiesQuery.isFetched`
 
-Isso inclui imports estáticos e dinâmicos. Pelos arquivos encontrados, a troca precisa cobrir ao menos:
-- `src/pages/Login.tsx`
-- `src/pages/ResetPassword.tsx`
-- `src/pages/Relatorios.tsx` (import dinâmico)
-- `src/hooks/useAuth.ts`
-- `src/hooks/useAccounts.ts`
-- `src/hooks/useAlerts.ts`
-- `src/hooks/useCards.ts`
-- `src/hooks/useCardInstallments.ts`
-- `src/hooks/useCardInvoiceTransactions.ts`
-- `src/hooks/useCardPurchases.ts`
-- `src/hooks/useCategories.ts`
+### 2. Corrigir a dupla subtração de cartão no saldo projetado
+Hoje o hook faz:
+
+```ts
+const projected_balance = totalIncome - totalExpense - projected_card_amount - card_paid_amount;
+```
+
+Isso é incorreto para a previsão, porque:
+- `projected_card_amount` já representa apenas parcelas futuras/não pagas
+- `card_paid_amount` é apenas segregação analítica e não deve reduzir o saldo projetado do mês
+
+#### Correção
+Substituir por:
+
+```ts
+const totalExpense = expense_paid + expense_planned;
+const projected_balance = totalIncome - totalExpense - projected_card_amount;
+```
+
+ou equivalente com a mesma regra.
+
+### 3. Alinhar a lógica com a regra existente do projeto
+Manter `card_paid_amount` no retorno da query para análise e depuração, mas sem participar do cálculo do `projected_balance`.
+
+Isso deixa `useDashboardData` consistente com:
+- a memória de negócio de cartão (`projected_card_amount` considera apenas não pagos)
+- a implementação já existente em `src/hooks/useMonthlyCashflow.ts`
+
+### 4. Validação de consistência no próprio hook
+Após a correção, revisar rapidamente os pontos que consomem o resultado dentro do mesmo hook para garantir que nada dependa da lógica antiga:
+- `forecast.projected_balance`
+- `riskData.closingBalance`
+- `riskData.forecastResult`
+- mensagem e semáforo (`traffic_light`)
+
+### 5. Verificação funcional esperada
+Depois da implementação, o comportamento correto deve ser:
+
+- ao abrir o Dashboard nas visões `Pessoal` e `Empresarial`, a primeira carga já vem filtrada corretamente por entidade
+- não há mais um primeiro fetch “consolidado sem querer”
+- o saldo projetado sobe para o valor correto quando existirem parcelas de cartão já pagas, porque elas deixam de ser subtraídas duas vezes
+- os cards de risco e previsão do mês ficam consistentes com o Fluxo Mensal
+
+### Arquivo a alterar
 - `src/hooks/useDashboardData.ts`
-- `src/hooks/useFinancialEntities.ts`
-- `src/hooks/useInvestmentClassesCrud.ts`
-- `src/hooks/useInvestments.ts`
-- `src/hooks/useMonthlyCashflow.ts`
-- `src/hooks/usePatrimony.ts`
-- `src/hooks/useRecurrences.ts`
-- `src/hooks/useRepairInstallments.ts`
-- `src/hooks/useTransactions.ts`
-- `src/hooks/useUsers.ts`
-- `src/components/configuracoes/AccountsTab.tsx`
-
-### 2. Preservar o cliente correto baseado em variáveis de ambiente
-Validar que `src/integrations/supabase/client.ts` continue exatamente no padrão já correto:
-- `import.meta.env.VITE_SUPABASE_URL`
-- `import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY`
-
-Nenhuma mudança estrutural nesse arquivo além de eventual conferência. O objetivo é que ele permaneça como única fonte de verdade.
-
-### 3. Registrar a rota da página Alertas
-Atualizar `src/App.tsx` para:
-- importar `Alertas`
-- adicionar a rota protegida:
-  - `/alertas`
-  - usando `<ProtectedRoute><Alertas /></ProtectedRoute>`
-
-A rota deve ficar no mesmo bloco das demais páginas autenticadas, seguindo o padrão atual do app.
-
-### 4. Adicionar “Alertas” ao menu lateral
-Atualizar `src/components/layout/AppSidebar.tsx` para:
-- importar o ícone `Bell` de `lucide-react`
-- inserir o item:
-  - título: `Alertas`
-  - url: `/alertas`
-  - ícone: `Bell`
-
-Posição solicitada:
-- logo após `Dashboard`, ainda dentro do grupo `Visão Geral`
-
-### 5. Verificações de consistência após a implementação
-Após aplicar as mudanças, validar:
-- não restou nenhum import para `@/lib/supabaseClient`
-- o import dinâmico de `Relatorios.tsx` também foi ajustado
-- `Alertas` aparece no menu lateral
-- `/alertas` abre normalmente quando autenticado
-- fluxo de login/reset/auth continua usando o mesmo cliente unificado
-
-### Arquivos previstos para alteração
-- `src/App.tsx`
-- `src/components/layout/AppSidebar.tsx`
-- todos os arquivos que ainda importam `@/lib/supabaseClient`
-- remoção de `src/lib/supabaseClient.ts`
 
 ### Resultado esperado
-- um único cliente Supabase em todo o projeto
-- nenhuma chave hardcoded no frontend
-- página `Alertas` acessível por URL e pelo menu lateral
-- base de código mais segura e consistente, sem duplicidade de integração
+- sem race condition na primeira renderização das queries dependentes de entidade
+- sem dupla subtração de cartão no cálculo do saldo projetado
+- Dashboard consistente com as regras financeiras já definidas no projeto
