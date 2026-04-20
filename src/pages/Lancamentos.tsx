@@ -210,7 +210,13 @@ export default function Lancamentos() {
       if (search) {
         const s = search.toLowerCase();
         const fmtVal = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(t.amount);
-        const searchable = [t.description, t.payee, t.category_name, t.entity_name, t.account_name, fmtVal, String(t.amount)].filter(Boolean).join(" ").toLowerCase();
+        const installmentStr = (t.installment_total && t.installment_total > 1)
+          ? `${t.installment_number ?? 1}/${t.installment_total}`
+          : "";
+        const searchable = [
+          t.description, t.payee, t.category_name, t.entity_name, t.account_name,
+          t.center_cost, t.card_name, t.notes, installmentStr, fmtVal, String(t.amount),
+        ].filter(Boolean).join(" ").toLowerCase();
         if (!searchable.includes(s)) return false;
       }
       if (filterEntity === "all_personal") {
@@ -222,6 +228,9 @@ export default function Lancamentos() {
       if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
+      if (filterCard !== "all" && t.card_name !== filterCard) return false;
+      if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
+      if (filterInstallment === "no" && ((t.installment_total ?? 1) > 1)) return false;
       if (!t.is_card_installment) {
         const isCCInvoice = isCardInvoiceByCenterCost(t.center_cost) || isCardInvoice(t.category_name || "");
         if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
@@ -232,7 +241,7 @@ export default function Lancamentos() {
       // Month filtering is now done server-side in the hooks
       return true;
     });
-  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterMonth]);
+  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment, filterMonth]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
