@@ -13,7 +13,11 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  optimizeDeps: {
+    include: ["react", "react-dom", "react/jsx-runtime"],
+  },
   resolve: {
+    dedupe: ["react", "react-dom"],
     alias: [
       {
         find: "@/integrations/supabase/client",
