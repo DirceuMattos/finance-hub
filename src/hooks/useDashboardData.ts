@@ -100,16 +100,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       const { data: txData, error: txError } = await txQuery;
       if (txError) throw txError;
 
-      const { data: cardsData } = await (supabase as any)
-        .from("cards")
-        .select("name")
-        .eq("is_active", true);
-
-      const cardCenterCosts = new Set<string>([
-        ...CARD_INVOICE_CENTER_COSTS,
-        ...((cardsData || []) as { name: string }[]).map((card) => card.name).filter(Boolean),
-      ]);
-
       // Fetch card installments for the selected month
       let cardData: any[] = [];
       try {
@@ -153,15 +143,18 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         }
       }
 
+      let card_from_transactions = 0;
+      for (const tx of (txData || []) as any[]) {
+        if (!tx.center_cost) continue;
+        const isCardTx = CARD_INVOICE_CENTER_COSTS.includes(tx.center_cost) || tx.center_cost.trim() !== "";
+        if (isCardTx && CARD_INVOICE_CENTER_COSTS.includes(tx.center_cost)) {
+          card_from_transactions += Math.abs(tx.amount || 0);
+        }
+      }
+
       // Aggregate card installments — only unpaid count as projected
       let projected_card_amount = 0;
       let card_paid_amount = 0;
-
-      for (const tx of (txData || []) as any[]) {
-        const centerCost = tx.center_cost?.trim();
-        if (!centerCost || !cardCenterCosts.has(centerCost)) continue;
-        projected_card_amount += Math.abs(tx.amount || 0);
-      }
 
       for (const inst of cardData) {
         const amt = Math.abs(inst.amount || 0);
@@ -171,6 +164,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
           projected_card_amount += amt;
         }
       }
+
+      projected_card_amount = projected_card_amount + card_from_transactions;
 
       // Projected balance: total income - total expenses - all card amounts
       const totalIncome = income_paid + income_planned;
