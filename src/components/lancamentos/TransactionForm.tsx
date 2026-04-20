@@ -161,6 +161,18 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       return;
     }
 
+    // Blindagem: não permitir status=paid com payment_date futura
+    if (data.status === "paid" && data.payment_date) {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      if (data.payment_date > today) {
+        form.setError("payment_date", {
+          message: "Não é permitido marcar como Realizado com data de pagamento futura.",
+        });
+        return;
+      }
+    }
+
     const payload: any = {
       description: data.description,
       transaction_type: data.transaction_type,
