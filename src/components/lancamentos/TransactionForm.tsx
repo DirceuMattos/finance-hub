@@ -61,9 +61,15 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
       status: "planned", payee: "", notes: "", center_cost: "",
-      installment_number: 1, installment_total: 1,
+      installment_number: 1, installment_total: 1, installments_count: 1,
     },
   });
+
+  const watchInstallmentsCount = form.watch("installments_count");
+  const watchCenterCost = form.watch("center_cost");
+  const isInstallmentMulti = !transaction && Number(watchInstallmentsCount) > 1;
+  const hasCardSelected = !!watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "";
+  const blockedByCardInstallments = isInstallmentMulti && hasCardSelected;
 
   const watchAccountId = form.watch("account_id");
 
