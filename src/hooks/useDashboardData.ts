@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth, parseISO } from "date-fns";
+import { CARD_INVOICE_CENTER_COSTS } from "@/lib/cardInvoiceRules";
 import type { FinancialEntity } from "@/types/database";
 
 type ViewType = "consolidated" | "personal" | "business";
@@ -87,7 +88,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       // Fetch transactions for the selected month
       let txQuery = (supabase as any)
         .from("transactions")
-        .select("amount, transaction_type, status, financial_entity_id")
+        .select("amount, transaction_type, status, financial_entity_id, center_cost")
         .neq("status", "cancelled")
         .gte("competence_date", start)
         .lt("competence_date", end);
@@ -98,6 +99,16 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
       const { data: txData, error: txError } = await txQuery;
       if (txError) throw txError;
+
+      const { data: cardsData } = await (supabase as any)
+        .from("cards")
+        .select("name")
+        .eq("is_active", true);
+
+      const cardCenterCosts = new Set<string>([
+        ...CARD_INVOICE_CENTER_COSTS,
+        ...((cardsData || []) as { name: string }[]).map((card) => card.name).filter(Boolean),
+      ]);
 
       // Fetch card installments for the selected month
       let cardData: any[] = [];
@@ -146,6 +157,12 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       let projected_card_amount = 0;
       let card_paid_amount = 0;
 
+      for (const tx of (txData || []) as any[]) {
+        const centerCost = tx.center_cost?.trim();
+        if (!centerCost || !cardCenterCosts.has(centerCost)) continue;
+        projected_card_amount += Math.abs(tx.amount || 0);
+      }
+
       for (const inst of cardData) {
         const amt = Math.abs(inst.amount || 0);
         if (inst.status === "paid") {
@@ -158,7 +175,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       // Projected balance: total income - total expenses - all card amounts
       const totalIncome = income_paid + income_planned;
       const totalExpense = expense_paid + expense_planned;
-      const projected_balance = totalIncome - totalExpense - projected_card_amount;
+      const projected_balance = totalIncome - totalExpense;
 
       // Potential containment = planned expenses that could be cut
       const potential_containment = expense_planned;
@@ -426,7 +443,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
 
       return { total, byClass };
     },
-    enabled: entitiesQuery.isFetched,
   });
 
   const balances = accountBalances.data ?? { total: 0, personal: 0, business: 0, filtered: 0 };
