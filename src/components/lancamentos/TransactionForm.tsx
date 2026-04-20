@@ -125,10 +125,21 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       return;
     }
     const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
+    const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
+    const isMulti = !transaction && installmentsCount > 1;
+    const cardSelected = !!data.center_cost && data.center_cost !== "none" && data.center_cost !== "";
+
+    if (isMulti && cardSelected) {
+      form.setError("installments_count", {
+        message: "Para parcelar no cartão, use o módulo Compras no Cartão.",
+      });
+      return;
+    }
+
     const payload: any = {
       description: data.description,
       transaction_type: data.transaction_type,
-      status: data.status,
+      status: isMulti ? "planned" : data.status,
       financial_entity_id: data.financial_entity_id,
       category_id: cleanId(data.category_id),
       account_id: cleanId(data.account_id),
@@ -137,10 +148,11 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       amount: parsedAmount,
       competence_date: data.competence_date + "-01",
       due_date: data.due_date ? format(data.due_date, "yyyy-MM-dd") : null,
-      payment_date: (data.status === "paid") && data.payment_date ? format(data.payment_date, "yyyy-MM-dd") : null,
-      installment_number: data.installment_number || 1,
-      installment_total: data.installment_total || 1,
+      payment_date: (data.status === "paid") && data.payment_date && !isMulti ? format(data.payment_date, "yyyy-MM-dd") : null,
+      installment_number: isMulti ? 1 : (data.installment_number || 1),
+      installment_total: isMulti ? installmentsCount : (data.installment_total || 1),
     };
+    if (isMulti) payload.installments_count = installmentsCount;
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
   };
 
