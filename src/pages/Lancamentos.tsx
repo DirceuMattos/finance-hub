@@ -450,6 +450,12 @@ export default function Lancamentos() {
       onSuccess: () => {
         lastSavedRef.current = d as Transaction;
         ensureSavedRecordVisible(d);
+        // Se estávamos promovendo uma parcela legada, cancela a origem para evitar duplicidade.
+        const promotingId = promotingInstallmentRef.current;
+        if (promotingId && !d.id) {
+          updateInstallmentStatus.mutate({ id: promotingId, status: "cancelled" });
+          promotingInstallmentRef.current = null;
+        }
         setFormOpen(false);
         setEditing(null);
       },
