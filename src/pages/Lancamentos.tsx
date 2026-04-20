@@ -7,12 +7,13 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { FilterBar } from "@/components/shared/FilterBar";
+import { StatCard } from "@/components/shared/StatCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload, List, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCardInstallments, useCardInstallmentStatusUpdate } from "@/hooks/useCardInstallments";
@@ -266,6 +267,18 @@ export default function Lancamentos() {
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
   const fmtDateTime = (d?: string | null) => d ? format(parseISO(d), "dd/MM/yyyy HH:mm") : "—";
   const isUpdatedToday = (d?: string | null) => d ? format(parseISO(d), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") : false;
+
+  const listSummary = useMemo(() => {
+    return filtered.reduce(
+      (acc, row) => {
+        acc.count += 1;
+        if (row.transaction_type === "income") acc.income += Math.abs(row.amount || 0);
+        if (row.transaction_type === "expense") acc.expense += Math.abs(row.amount || 0);
+        return acc;
+      },
+      { count: 0, income: 0, expense: 0 }
+    );
+  }, [filtered]);
 
   const columns: Column<UnifiedRow>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
@@ -722,6 +735,29 @@ export default function Lancamentos() {
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedKeys(new Set())}>Limpar seleção</Button>
         </div>
       )}
+
+      <div className="grid gap-3 mb-4 md:grid-cols-3">
+        <StatCard
+          title="Quantidade"
+          value={String(listSummary.count)}
+          icon={List}
+          subLabel="Lançamentos exibidos"
+        />
+        <StatCard
+          title="Receitas"
+          value={fmt(listSummary.income)}
+          icon={ArrowUpCircle}
+          subLabel="Total filtrado em tela"
+          variant="positive"
+        />
+        <StatCard
+          title="Despesas"
+          value={fmt(listSummary.expense)}
+          icon={ArrowDownCircle}
+          subLabel="Total filtrado em tela"
+          variant="negative"
+        />
+      </div>
 
       <DataTable
         columns={columns}
