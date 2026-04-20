@@ -176,7 +176,7 @@ Forneça sua análise conforme as instruções.`;
     });
   } catch (e) {
     console.error("ai-financial-analysis error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Erro desconhecido" }), {
+    return new Response(JSON.stringify({ error: "Erro interno do servidor" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
