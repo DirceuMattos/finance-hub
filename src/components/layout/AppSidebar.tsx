@@ -11,6 +11,7 @@ import {
   LogOut,
   DollarSign,
   FileDown,
+  Bell,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -34,6 +35,7 @@ const navGroups = [
     label: "Visão Geral",
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Alertas", url: "/alertas", icon: Bell },
     ],
   },
   {

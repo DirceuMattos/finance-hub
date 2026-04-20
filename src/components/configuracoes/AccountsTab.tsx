@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/integrations/supabase/client";
 import { getUserErrorMessage } from "@/lib/errorMessages";
 import { toast } from "sonner";
 import { FilterBar } from "@/components/shared/FilterBar";
