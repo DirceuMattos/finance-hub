@@ -17,9 +17,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
-      "@/integrations/supabase/client": [
-        "./src/lib/supabase-client-proxy.ts"
-      ],
       "@/*": [
         "./src/*"
       ]
