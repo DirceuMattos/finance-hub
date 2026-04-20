@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload } from "lucide-react";
 import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -32,6 +33,7 @@ interface UnifiedRow {
   description: string;
   transaction_type: string;
   amount: number;
+  raw_amount?: number;
   competence_date: string;
   due_date: string | null;
   payment_date: string | null;
@@ -49,6 +51,10 @@ interface UnifiedRow {
   category_id?: string | null;
   financial_entity_id?: string;
   account_id?: string | null;
+  source_type?: string | null;
+  source_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
   is_card_installment: boolean;
   _original?: Transaction;
 }
@@ -152,6 +158,7 @@ export default function Lancamentos() {
       description: inst.card_purchases?.description || "Compra cartão",
       transaction_type: "expense",
       amount: inst.amount,
+      raw_amount: inst.amount,
       competence_date: inst.billing_month,
       due_date: inst.due_date,
       payment_date: null,
@@ -166,6 +173,8 @@ export default function Lancamentos() {
       installment_total: inst.card_purchases?.installments_count || null,
       card_name: (inst.card_purchases as any)?.cards?.name || null,
       financial_entity_id: inst.card_purchases?.financial_entity_id,
+      created_at: (inst as any).created_at || null,
+      updated_at: (inst as any).updated_at || null,
       is_card_installment: true,
     }));
   }, [cardInstallments]);
@@ -177,6 +186,7 @@ export default function Lancamentos() {
       description: t.description,
       transaction_type: t.transaction_type,
       amount: t.amount,
+      raw_amount: t.amount,
       competence_date: t.competence_date,
       due_date: t.due_date,
       payment_date: (t as any).payment_date,
@@ -194,6 +204,10 @@ export default function Lancamentos() {
       category_id: t.category_id,
       financial_entity_id: t.financial_entity_id,
       account_id: t.account_id,
+      source_type: t.source_type,
+      source_id: t.source_id,
+      created_at: t.created_at,
+      updated_at: t.updated_at,
       is_card_installment: false,
       _original: t,
     }));
@@ -247,6 +261,8 @@ export default function Lancamentos() {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
+  const fmtDateTime = (d?: string | null) => d ? format(parseISO(d), "dd/MM/yyyy HH:mm") : "—";
+  const isUpdatedToday = (d?: string | null) => d ? format(parseISO(d), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") : false;
 
   const columns: Column<UnifiedRow>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
@@ -254,8 +270,29 @@ export default function Lancamentos() {
     {
       key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase(),
       render: (r) => {
+        const diagnosticContent = !r.is_card_installment ? (
+          <div className="space-y-1 text-xs">
+            <div><span className="text-muted-foreground">ID:</span> {r.id}</div>
+            <div><span className="text-muted-foreground">Valor bruto:</span> {fmt(r.raw_amount ?? r.amount)}</div>
+            <div><span className="text-muted-foreground">Pagamento:</span> {fmtDate(r.payment_date)}</div>
+            <div><span className="text-muted-foreground">Atualizado:</span> {fmtDateTime(r.updated_at)}</div>
+            <div><span className="text-muted-foreground">Origem:</span> {r.source_type || "manual"}</div>
+          </div>
+        ) : null;
+
+        const renderWithDiagnostic = (content: React.ReactNode) => (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="min-w-0 cursor-help">{content}</div>
+              </TooltipTrigger>
+              {diagnosticContent && <TooltipContent side="right" className="max-w-xs">{diagnosticContent}</TooltipContent>}
+            </Tooltip>
+          </TooltipProvider>
+        );
+
         if (r.is_card_installment) {
-          return (
+          return renderWithDiagnostic(
             <div className="flex items-center gap-1.5">
               <span>{r.description}</span>
               <InstallmentBadge number={r.installment_number} total={r.installment_total} />
@@ -268,7 +305,7 @@ export default function Lancamentos() {
         const isCCInvoice = isCardInvoiceByCenterCost(r.center_cost) || isCardInvoice(r.category_name || "");
         if (isCCInvoice) {
           const cardLabel = getCardNameFromCenterCost(r.center_cost) || getCardInvoiceLabel(r.category_name || "");
-          return (
+          return renderWithDiagnostic(
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5">
                 <span>Pagamento de Fatura — {cardLabel || "Cartão"}</span>
@@ -280,10 +317,14 @@ export default function Lancamentos() {
             </div>
           );
         }
-        return (
-          <div className="flex items-center gap-1.5">
-            <span>{r.description}</span>
-            <InstallmentBadge number={r.installment_number} total={r.installment_total} />
+        return renderWithDiagnostic(
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-1.5">
+              <span>{r.description}</span>
+              <InstallmentBadge number={r.installment_number} total={r.installment_total} />
+              {isUpdatedToday(r.updated_at) && <Badge variant="outline" className="text-[10px]">Alterado hoje</Badge>}
+            </div>
+            <span className="text-[10px] text-muted-foreground font-mono">{r.id.slice(0, 8)} · bruto {fmt(r.raw_amount ?? r.amount)} · upd {fmtDateTime(r.updated_at)}</span>
           </div>
         );
       },
@@ -300,7 +341,7 @@ export default function Lancamentos() {
     },
     { key: "account", header: "Conta", sortable: true, sortValue: (r) => r.account_name || "", render: (r) => r.account_name || "—" },
     { key: "card", header: "Cartão", sortable: true, sortValue: (r) => r.card_name || "", render: (r) => r.card_name ? <Badge variant="outline" className="text-[10px] gap-1"><CreditCard className="h-3 w-3" />{r.card_name}</Badge> : "—" },
-    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : "text-foreground"}>{fmt(r.amount)}</span> },
+    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <div className="flex flex-col"><span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : "text-foreground"}>{fmt(r.amount)}</span>{!r.is_card_installment && <span className="text-[10px] text-muted-foreground">DB: {fmt(r.raw_amount ?? r.amount)}</span>}</div> },
     { key: "status", header: "Status", sortable: true, sortValue: (r) => r.status, render: (r) => <StatusBadge status={r.status} /> },
     { key: "payment_date", header: "Pagamento", sortable: true, sortValue: (r) => r.payment_date || "", render: (r) => fmtDate(r.payment_date) },
     {

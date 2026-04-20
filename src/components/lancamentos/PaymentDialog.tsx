@@ -27,6 +27,18 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
   const [showRemainderAlert, setShowRemainderAlert] = useState(false);
   const [pendingConfirmData, setPendingConfirmData] = useState<{ id: string; status: string; payment_date: string; amount: number } | null>(null);
 
+  const parseAmountInput = (raw: unknown): number => {
+    if (raw == null) return NaN;
+    const s = String(raw).trim().replace(/\s|R\$/gi, "");
+    if (!s) return NaN;
+    const hasComma = s.includes(",");
+    const hasDot = s.includes(".");
+    if (hasComma && hasDot) {
+      return parseFloat(s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, ""));
+    }
+    return parseFloat(hasComma ? s.replace(",", ".") : s);
+  };
+
   const handleOpen = (isOpen: boolean) => {
     if (isOpen && transaction) {
       setPaymentDate(new Date());
@@ -37,7 +49,8 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
 
   const handleConfirm = () => {
     if (!transaction || !paymentDate) return;
-    const realizedAmount = parseFloat(amount) || transaction.amount;
+    const parsedAmount = parseAmountInput(amount);
+    const realizedAmount = Number.isFinite(parsedAmount) ? parsedAmount : transaction.amount;
     const confirmData = {
       id: transaction.id,
       status: "paid",
@@ -53,7 +66,9 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
     }
   };
 
-  const remainderAmount = transaction ? transaction.amount - (parseFloat(amount) || 0) : 0;
+  const parsedAmount = parseAmountInput(amount);
+  const effectiveAmount = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  const remainderAmount = transaction ? transaction.amount - effectiveAmount : 0;
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   const handleRemainderYes = () => {
