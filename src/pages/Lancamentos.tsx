@@ -496,7 +496,7 @@ export default function Lancamentos() {
         </div>
       )}
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar lançamento..." hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all"} onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); }}>
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar por descrição, cartão, parcela, valor, observação..." hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all"} onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); }}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
@@ -564,6 +564,23 @@ export default function Lancamentos() {
           <SelectContent>
             <SelectItem value="all">Todas categorias</SelectItem>
             {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={filterCard} onValueChange={setFilterCard}>
+          <SelectTrigger className="h-9 w-[150px] text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos cartões</SelectItem>
+            {cardsList.filter((c: any) => c.is_active !== false).map(c => (
+              <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterInstallment} onValueChange={setFilterInstallment}>
+          <SelectTrigger className="h-9 w-[140px] text-xs"><SelectValue placeholder="Parcelado" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="yes">Parcelado</SelectItem>
+            <SelectItem value="no">Não parcelado</SelectItem>
           </SelectContent>
         </Select>
       </FilterBar>
