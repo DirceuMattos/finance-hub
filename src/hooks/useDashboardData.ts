@@ -153,8 +153,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         income_planned,
         expense_paid,
         expense_planned,
-        projected_card_amount,
-        card_paid_amount,
+        projected_card_amount: 0,
+        card_paid_amount: 0,
         projected_balance,
         potential_containment,
         minimum_reserve,
@@ -175,7 +175,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         p_entity_ids: entityIds,
       });
       if (error) throw error;
-      return Number(data) || 0;
+      const raw = Array.isArray(data) ? data[0] : data;
+      return parseFloat(String(raw ?? 0)) || 0;
     },
   });
 
