@@ -103,8 +103,9 @@ export default function Lancamentos() {
   const [searchParams] = useSearchParams();
   const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
   const [filterMonth, setFilterMonth] = useState(initialMonth);
+  const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
+  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth, filterStatus !== "all" ? filterStatus : undefined);
   const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
   const updateInstallmentStatus = useCardInstallmentStatusUpdate();
   const { data: entities = [] } = useFinancialEntities();
@@ -116,7 +117,6 @@ export default function Lancamentos() {
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterAccount, setFilterAccount] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeTab, setFilterTypeTab] = useState("all");
   const [filterCardInvoice, setFilterCardInvoice] = useState("all");
   const [filterCard, setFilterCard] = useState("all"); // by specific card name
@@ -245,7 +245,8 @@ export default function Lancamentos() {
       } else if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
       if (filterAccount !== "all" && !t.is_card_installment && t.account_id !== filterAccount) return false;
       if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
-      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      // Status filter is applied server-side for transactions; still filter card installments client-side
+      if (filterStatus !== "all" && t.is_card_installment && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
       if (filterCard !== "all" && t.card_name !== filterCard) return false;
       if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
@@ -260,7 +261,7 @@ export default function Lancamentos() {
       // Month filtering is now done server-side in the hooks
       return true;
     });
-  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment, filterMonth]);
+  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";

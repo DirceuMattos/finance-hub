@@ -13,7 +13,7 @@ function getMonthRange(monthStr: string) {
   return { start, end };
 }
 
-export function useTransactions(filterMonth?: string) {
+export function useTransactions(filterMonth?: string, filterStatus?: string) {
   const queryClient = useQueryClient();
   const editableFields = [
     "description",
@@ -36,7 +36,7 @@ export function useTransactions(filterMonth?: string) {
   ] as const;
 
   const query = useQuery({
-    queryKey: ["transactions", filterMonth],
+    queryKey: ["transactions", filterMonth, filterStatus],
     queryFn: async () => {
       let q = (supabase as any)
         .from("transactions")
@@ -49,7 +49,11 @@ export function useTransactions(filterMonth?: string) {
         // This also restores older records previously saved with a shifted due_date.
         q = q.or(`and(due_date.gte.${start},due_date.lt.${end}),and(competence_date.gte.${start},competence_date.lt.${end})`);
       } else {
-        q = q.limit(5000);
+        q = q.limit(500);
+      }
+
+      if (filterStatus && filterStatus !== "all") {
+        q = q.eq("status", filterStatus);
       }
 
       const { data, error } = await q;
