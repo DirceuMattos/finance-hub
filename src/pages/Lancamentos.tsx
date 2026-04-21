@@ -166,9 +166,6 @@ export default function Lancamentos() {
       payment_date: null,
       status: inst.status === "paid" ? "paid"
         : inst.status === "cancelled" ? "cancelled"
-        : inst.status === "projected" ? "planned"
-        : inst.status === "pending" ? "planned"
-        : inst.status === "open" ? "planned"
         : "planned",
       category_name: inst.card_purchases?.categories?.name || null,
       entity_name: inst.card_purchases?.financial_entities?.name || null,
