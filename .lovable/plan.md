@@ -1,46 +1,33 @@
 
-Objetivo: corrigir o card "Comprometimento Cartão" em `src/hooks/useDashboardData.ts` usando uma consulta dedicada para o total mensal de cartões, sem mexer em outros arquivos.
+## Correção de filtros e performance em Lançamentos
 
-### O que será alterado
+Ajustar o hook `src/hooks/useTransactions.ts` e a página `src/pages/Lancamentos.tsx` para resolver três problemas: filtro combinado mês+status retornando vazio, lentidão ao carregar "todos" os meses, e dependência desnecessária no `useMemo`.
 
-1. Manter a query `monthlyFlow` focada no fluxo mensal
-- Preservar nela apenas os cálculos de receitas, despesas, saldo projetado, reserva mínima e risco.
-- Não usar mais o valor calculado ali como fonte principal do total de cartões exibido no dashboard.
+### Alterações
 
-2. Adicionar uma nova query dedicada ao total de cartões do mês
-- Inserir uma `useQuery` logo após `monthlyFlow` com chave:
-  - `["dashboard_card_month_total", start, view]`
-- Essa query ficará com:
-  - `staleTime: 0`
-  - `enabled: entitiesQuery.isFetched`
-- Ela fará duas leituras:
-  - `card_installments` filtrando por `billing_month` entre `start` e `end`
-  - `transactions` filtrando por `competence_date` entre `start` e `end`, ignorando canceladas
-- Em ambas, aplicará o filtro por entidade com `filterIds` quando a visão for pessoal ou empresarial.
+**1. `src/hooks/useTransactions.ts`**
 
-3. Consolidar o total mensal de cartões em uma única métrica
-- Somar os valores absolutos de:
-  - parcelas de cartão vindas de `card_installments`
-  - transações cujo `center_cost` esteja em `CARD_INVOICE_CENTER_COSTS`
-- Retornar um único número da query: o total do mês para o card de comprometimento.
+- Alterar assinatura: `useTransactions(filterMonth?: string, filterStatus?: string)`
+- Atualizar `queryKey` para `["transactions", filterMonth, filterStatus]`
+- Quando `filterStatus` estiver definido e diferente de `"all"`, aplicar `.eq("status", filterStatus)` na query do Supabase (filtro server-side)
+- Quando `filterMonth` for `"all"` ou indefinido:
+  - Reduzir `.limit(5000)` para `.limit(500)`
+  - Manter ordenação por `competence_date` descendente (já é o padrão da query) para priorizar lançamentos mais recentes
 
-4. Passar a usar a nova query no `forecast`
-- Alterar a montagem de `forecast` para que:
-  - `projected_card_amount` use primeiro `cardMonthTotal.data`
-  - mantenha `flow?.projected_card_amount ?? 0` apenas como fallback
+**2. `src/pages/Lancamentos.tsx`**
 
-5. Passar a usar a nova query no `riskData`
-- Alterar `cardPlannedTotal` para usar:
-  - `cardMonthTotal.data ?? flow?.projected_card_amount ?? 0`
-- Assim, o indicador de risco e o card de comprometimento passam a apontar para a mesma fonte consolidada.
+- Passar o filtro de status ao hook: `useTransactions(filterMonth, filterStatus !== "all" ? filterStatus : undefined)`
+- Remover do `useMemo` de `filtered` o trecho que filtra por status no cliente (agora é server-side)
+- Remover `filterMonth` do array de dependências do `useMemo` de `filtered` (filtro já é server-side e não participa da lógica cliente)
 
 ### Resultado esperado
-- O valor de "Comprometimento Cartão" passa a vir de uma query específica e previsível.
-- O cálculo deixa de depender do comportamento interno da query `monthlyFlow`.
-- O total mensal de cartões fica alinhado com a lógica já usada no módulo de cartões, respeitando a separação por visão (Consolidado, Pessoal, Empresarial).
+
+- Combinação "Mês + Status" passa a retornar resultados consistentes, pois ambos os filtros são aplicados no mesmo nível (servidor) sobre o mesmo critério de data já existente.
+- Carregamento da visão "Todos os meses" fica significativamente mais rápido ao limitar a 500 registros mais recentes.
+- `useMemo` de `filtered` não recalcula desnecessariamente ao trocar de mês.
 
 ### Detalhes técnicos
-- Arquivo único: `src/hooks/useDashboardData.ts`
-- Reaproveitar o import já existente de `CARD_INVOICE_CENTER_COSTS`
-- Não alterar `src/hooks/useCardInvoiceTransactions.ts`
-- Não alterar rotas, componentes visuais, banco, hooks adicionais ou outros cálculos fora do escopo solicitado
+
+- Arquivos alterados: somente `src/hooks/useTransactions.ts` e `src/pages/Lancamentos.tsx`.
+- Nenhuma mudança em banco de dados, RLS, rotas, componentes visuais, outros hooks ou cálculos do Dashboard.
+- Resumo da listagem (`listSummary`) continua refletindo o conteúdo de `filtered` exibido em tela, agora já com os filtros aplicados pelo servidor.
