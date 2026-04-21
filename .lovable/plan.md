@@ -1,60 +1,32 @@
 
-## Revisão e ajustes finais em Lançamentos, Dashboard e Recálculo de Saldos
+## Correção do cálculo de comprometimento de cartões no Dashboard
 
-A maior parte das correções solicitadas já está aplicada no código atual. Restam apenas dois ajustes reais (item #2 cosmético e item #4 de lógica) e nenhum outro arquivo será tocado.
+Ajustes pontuais em `src/hooks/useDashboardData.ts` para eliminar dupla contagem de cartões e consolidar o `projected_card_amount` a partir de duas fontes (`card_installments` + `transactions` com `center_cost` de cartão).
 
-### Estado atual (já correto, sem alteração)
-- **#1** `useTransactions` já tem assinatura `(filterMonth?: string)` sem `filterStatus`; filtro de status já é aplicado client-side em `Lancamentos.tsx` (linha 254) para todas as linhas.
-- **#3** `useDashboardData.monthlyFlow` já agrega `card_installments` exatamente como pedido: `paid` → `card_paid_amount`; demais (`projected`/`pending`/`open`) → `projected_card_amount`.
-- **#5** `ensureSavedRecordVisible` já não contém o bloco que resetava `filterStatus`.
+### Alterações em `src/hooks/useDashboardData.ts`
 
-### Alterações a aplicar
+**1. `monthlyFlow` — remover `card_from_transactions`**
+- Remover o loop que soma `card_from_transactions` a partir de `txData`.
+- Remover a linha `projected_card_amount = projected_card_amount + card_from_transactions;`.
+- O `projected_card_amount` retornado por `monthlyFlow` passa a refletir apenas parcelas de `card_installments` com status diferente de `paid`.
 
-**1. `src/pages/Lancamentos.tsx` — simplificar mapeamento de status das parcelas (item #2)**
+**2. `cardMonthTotal` — filtrar apenas parcelas não pagas e somar transações de fatura**
+- Adicionar `.neq("status", "paid")` na query de `card_installments`.
+- Após o loop de installments, fazer segunda query em `transactions` filtrando:
+  - `status` diferente de `paid` e `cancelled`
+  - `competence_date` no intervalo do mês
+  - `center_cost` em `["Cartão de Crédito - Pessoal", "Cartão de Crédito - Prof.", "Cartões de Crédito - Pessoal", "Cartões de Crédito - Prof."]`
+- Aplicar o mesmo filtro de `filterIds` (entity) no loop e somar `Math.abs(amount)` ao `total`.
 
-No bloco `cardRows`, substituir a cascata atual de 5 ramos pela versão enxuta solicitada:
+**3. Import `CARD_INVOICE_CENTER_COSTS`**
+- Após remover o bloco em `monthlyFlow`, o símbolo deixa de ser usado no arquivo. Remover o import de `@/lib/cardInvoiceRules`.
+- A lista de center_costs usada em `cardMonthTotal` será inline (literal no `.in(...)`), conforme spec do usuário.
 
-```ts
-status: inst.status === "paid" ? "paid"
-  : inst.status === "cancelled" ? "cancelled"
-  : "planned",
-```
+### Arquivos alterados
+- Apenas `src/hooks/useDashboardData.ts`.
 
-Comportamento idêntico ao atual (`projected`/`pending`/`open`/qualquer outro caem em `"planned"`), apenas mais legível.
-
-**2. `src/components/configuracoes/AccountsTab.tsx` — substituir RPC por recálculo client-side (item #4)**
-
-Reescrever `handleRecalculate` para, em vez de chamar `rpc("recalculate_account_balances")`:
-- Buscar contas ativas (`id`, `opening_balance`).
-- Para cada conta, buscar transações `paid` (`transaction_type`, `amount`).
-- Calcular `balance = opening_balance + Σ(income) − Σ(expense)` usando valores absolutos.
-- Atualizar `accounts.current_balance` por conta.
-- Ao final, invalidar `["accounts"]` e `["dashboard_account_balances_split"]`, exibir toast com a contagem de contas atualizadas.
-- Manter o estado `recalculating` e o tratamento de erro com `getUserErrorMessage`.
-
-Observação: este recálculo passa a desconsiderar parcelas pagas de cartão (que não têm `account_id` direto), conforme decisão explícita do usuário.
-
-**3. `src/hooks/useTransactions.ts` — recálculo automático por conta após cada mutação (item #4)**
-
-- Manter o helper `recalcBalances()` existente (chama `rpc`) — não remover, pois alguns invalidates já contam com ele.
-- Adicionar, após cada `onSuccess` de `create`, `update` e `remove`, um IIFE assíncrono que:
-  - Lê `account_id` do payload (`item` para create/update; sem efeito em remove pois o id já não existe — para `remove`, simplesmente pular se não houver `account_id` acessível).
-  - Busca transações `paid` daquela conta.
-  - Busca `opening_balance` da conta.
-  - Recalcula `current_balance = opening_balance + Σ(income) − Σ(expense)`.
-  - Atualiza `accounts.current_balance` para aquela conta.
-  - Engole erros silenciosamente.
-- Esse IIFE é executado em paralelo às `invalidateQueries` já existentes, sem `await`, conforme spec.
-- Para a mutation `update`, o `account_id` precisa ser propagado do payload para o callback (atualmente o `mutationFn` desconstrói `id` mas não retorna `account_id`); usar a closure do payload original recebido por `useMutation` via `(_, variables)` no `onSuccess`.
-- Para `remove`, o callback recebe apenas o `id`; nesse caso pular o recálculo por conta (continuar dependendo de `recalcBalances()` global).
-
-### Resultado esperado
-- Mapeamento de status de parcelas mais legível, sem mudança de comportamento.
-- "Recalcular Saldos" passa a usar o cálculo client-side baseado em `opening_balance` + transações `paid` da própria conta.
-- Após criar ou editar um lançamento, o saldo da conta envolvida é atualizado automaticamente pela mesma fórmula, sem depender da função SQL.
-- Itens #1, #3 e #5 já estão atendidos pelo código atual e não serão modificados.
-
-### Detalhes técnicos
-- Arquivos alterados: somente `src/pages/Lancamentos.tsx`, `src/components/configuracoes/AccountsTab.tsx` e `src/hooks/useTransactions.ts`.
-- Nenhuma mudança em banco de dados, RLS, edge functions, rotas ou outros hooks.
-- O helper `recalcBalances()` (RPC) é mantido como rede de segurança adicional após mutações.
+### Resultado esperado (Abril/2026)
+- `card_installments` não pagas: R$ 7.413,75
+- Transações com center_cost de cartão não pagas: R$ 2.029,09
+- `projected_card_amount` no Dashboard: R$ 9.442,84
+- Sem dupla contagem entre `expense_planned` e o card de comprometimento.
