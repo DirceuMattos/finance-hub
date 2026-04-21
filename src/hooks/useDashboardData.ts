@@ -104,7 +104,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       try {
         const { data: instData, error: instError } = await (supabase as any)
           .from("card_installments")
-          .select("amount, status, card_purchases(financial_entity_id)")
+          .select("amount, status, card_purchases!inner(financial_entity_id, status)")
           .filter("billing_month", "gte", start)
           .filter("billing_month", "lt", end);
 
