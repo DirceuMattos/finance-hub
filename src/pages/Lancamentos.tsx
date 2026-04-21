@@ -104,7 +104,7 @@ export default function Lancamentos() {
   const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
   const [filterMonth, setFilterMonth] = useState(initialMonth);
 
-  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
+  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth, filterStatus !== "all" ? filterStatus : undefined);
   const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
   const updateInstallmentStatus = useCardInstallmentStatusUpdate();
   const { data: entities = [] } = useFinancialEntities();
