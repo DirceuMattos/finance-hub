@@ -115,7 +115,8 @@ export function useTransactions(filterMonth?: string) {
       const { error } = await (supabase as any).from("transactions").insert(rows);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await recalcBalances();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
