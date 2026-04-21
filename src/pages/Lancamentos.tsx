@@ -245,7 +245,8 @@ export default function Lancamentos() {
       } else if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
       if (filterAccount !== "all" && !t.is_card_installment && t.account_id !== filterAccount) return false;
       if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
-      if (filterStatus !== "all" && t.status !== filterStatus) return false;
+      // Status filter is applied server-side for transactions; still filter card installments client-side
+      if (filterStatus !== "all" && t.is_card_installment && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
       if (filterCard !== "all" && t.card_name !== filterCard) return false;
       if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
