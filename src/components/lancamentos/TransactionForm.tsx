@@ -85,11 +85,9 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
 
   useEffect(() => {
     if (transaction) {
-      const legacyCardId = cardsList.find((card) => card.name === (transaction as any).center_cost)?.id || "";
       form.reset({
         description: transaction.description,
         transaction_type: transaction.transaction_type,
-        card_id: transaction.card_id || legacyCardId,
         category_id: transaction.category_id || "",
         financial_entity_id: transaction.financial_entity_id,
         account_id: transaction.account_id || "",
