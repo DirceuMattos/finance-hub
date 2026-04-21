@@ -212,6 +212,43 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     enabled: entitiesQuery.isFetched,
   });
 
+  // --- Dedicated card month total query ---
+  const cardMonthTotal = useQuery({
+    queryKey: ["dashboard_card_month_total", start, view],
+    staleTime: 0,
+    enabled: entitiesQuery.isFetched,
+    queryFn: async () => {
+      const { data: instData } = await (supabase as any)
+        .from("card_installments")
+        .select("amount, status, card_purchases(financial_entity_id)")
+        .gte("billing_month", start)
+        .lt("billing_month", end);
+
+      const { data: txData } = await (supabase as any)
+        .from("transactions")
+        .select("amount, center_cost, financial_entity_id")
+        .neq("status", "cancelled")
+        .gte("competence_date", start)
+        .lt("competence_date", end);
+
+      let total = 0;
+
+      for (const inst of (instData || []) as any[]) {
+        if (filterIds && filterIds.length > 0 && !filterIds.includes(inst.card_purchases?.financial_entity_id)) continue;
+        total += Math.abs(inst.amount || 0);
+      }
+
+      for (const tx of (txData || []) as any[]) {
+        if (!tx.center_cost) continue;
+        if (!CARD_INVOICE_CENTER_COSTS.includes(tx.center_cost)) continue;
+        if (filterIds && filterIds.length > 0 && !filterIds.includes(tx.financial_entity_id)) continue;
+        total += Math.abs(tx.amount || 0);
+      }
+
+      return total;
+    },
+  });
+
   const flow = monthlyFlow.data;
 
   // Forecast directly from calculated data
