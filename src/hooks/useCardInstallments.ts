@@ -111,7 +111,7 @@ export function useBillingProjection() {
         const { data: installments, error: fallbackError } = await (supabase as any)
           .from("card_installments")
           .select("*, card_purchases(card_id, cards(name, due_day))")
-          .in("status", ["pending", "open"])
+          .in("status", ["projected", "pending", "open"])
           .order("billing_month")
           .limit(5000);
         if (fallbackError) throw fallbackError;
