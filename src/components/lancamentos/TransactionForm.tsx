@@ -60,17 +60,14 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     defaultValues: {
       description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-      status: "planned", payee: "", notes: "", card_id: "",
+      status: "planned", payee: "", notes: "",
       installment_number: 1, installment_total: 1, installments_count: 1,
     },
   });
 
   const watchInstallmentsCount = form.watch("installments_count");
-  const watchCardId = form.watch("card_id");
   const isInstallmentMulti = !transaction && Number(watchInstallmentsCount) > 1;
-  const hasCardSelected = !!watchCardId && watchCardId !== "none" && watchCardId !== "";
-  const blockedByCardInstallments = isInstallmentMulti && hasCardSelected;
-  const selectedCard = cardsList.find((card) => card.id === watchCardId);
+  const blockedByCardInstallments = false;
 
   const watchAccountId = form.watch("account_id");
 
@@ -110,7 +107,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.reset({
         description: "", transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
-        status: "planned", payee: "", notes: "", card_id: "",
+        status: "planned", payee: "", notes: "",
         installment_number: 1, installment_total: 1, installments_count: 1,
       });
     }
@@ -152,14 +149,6 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
     const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
     const isMulti = !transaction && installmentsCount > 1;
-    const cardSelected = !!data.card_id && data.card_id !== "none" && data.card_id !== "";
-
-    if (isMulti && cardSelected) {
-      form.setError("installments_count", {
-        message: "Para parcelar no cartão, use o módulo Compras no Cartão.",
-      });
-      return;
-    }
 
     // Blindagem: não permitir status=paid com payment_date futura
     if (data.status === "paid" && data.payment_date) {
@@ -177,7 +166,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       description: data.description,
       transaction_type: data.transaction_type,
       status: isMulti ? "planned" : data.status,
-      card_id: cleanId(data.card_id),
+      
       financial_entity_id: data.financial_entity_id,
       category_id: cleanId(data.category_id),
       account_id: cleanId(data.account_id),
