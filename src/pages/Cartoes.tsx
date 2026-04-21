@@ -8,7 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
-import { useCardInvoicesByCard } from "@/hooks/useCardInvoiceTransactions";
+import { useCardInstallments } from "@/hooks/useCardInstallments";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -41,8 +41,15 @@ export default function Cartoes() {
   const [view, setView] = useState<FilterView>("all");
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
 
-  // Pass the selected month to filter invoices
-  const { byCard } = useCardInvoicesByCard(filterMonth);
+  const { data: installments = [] } = useCardInstallments(filterMonth);
+  const byCard = useMemo(() => {
+    const map = new Map<string, number>();
+    installments.forEach((inst: any) => {
+      const cardName = inst.card_purchases?.cards?.name || "—";
+      map.set(cardName, (map.get(cardName) || 0) + Math.abs(inst.amount || 0));
+    });
+    return map;
+  }, [installments]);
 
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
