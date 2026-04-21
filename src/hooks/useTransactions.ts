@@ -62,6 +62,30 @@ export function useTransactions(filterMonth?: string) {
     },
   });
 
+  const recalcAccountBalance = async (accountId?: string | null) => {
+    if (!accountId) return;
+    try {
+      const { data: txns } = await (supabase as any)
+        .from("transactions")
+        .select("transaction_type, amount")
+        .eq("account_id", accountId)
+        .eq("status", "paid");
+      const { data: acc } = await (supabase as any)
+        .from("accounts")
+        .select("opening_balance")
+        .eq("id", accountId)
+        .single();
+      if (!txns || !acc) return;
+      let balance = Number(acc.opening_balance ?? 0);
+      for (const t of txns) {
+        const amount = Math.abs(Number(t.amount ?? 0));
+        if (t.transaction_type === "income") balance += amount;
+        if (t.transaction_type === "expense") balance -= amount;
+      }
+      await (supabase as any).from("accounts").update({ current_balance: balance }).eq("id", accountId);
+    } catch { /* silently ignore */ }
+  };
+
   const create = useMutation({
     mutationFn: async (item: Partial<Transaction> & { installments_count?: number }) => {
       const { categories, financial_entities, accounts, installments_count, ...rest } = item as any;
@@ -115,8 +139,9 @@ export function useTransactions(filterMonth?: string) {
       const { error } = await (supabase as any).from("transactions").insert(rows);
       if (error) throw error;
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await recalcBalances();
+      void recalcAccountBalance((variables as any)?.account_id);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
