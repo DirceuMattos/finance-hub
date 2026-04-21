@@ -209,65 +209,18 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     enabled: entitiesQuery.isFetched,
   });
 
-  // --- Dedicated card month total query ---
   const cardMonthTotal = useQuery({
     queryKey: ["dashboard_card_month_total", start, view],
     staleTime: 0,
     queryFn: async () => {
-      // Step 1: buscar todas as parcelas do mês sem join
-      const { data: instData } = await (supabase as any)
-        .from("card_installments")
-        .select("amount, status, card_purchase_id")
-        .gte("billing_month", start)
-        .lt("billing_month", end);
-
-      // Step 2: filtrar apenas não pagas
-      const unpaid = (instData || []).filter((i: any) =>
-        i.status !== "paid" && i.status !== "cancelled"
-      );
-
-      let installmentsTotal = 0;
-      if (!filterIds || filterIds.length === 0) {
-        installmentsTotal = unpaid.reduce((sum: number, i: any) => sum + Math.abs(i.amount || 0), 0);
-      } else {
-        // Step 3: filtrar por entidade buscando card_purchases separado
-        const purchaseIds = [...new Set(unpaid.map((i: any) => i.card_purchase_id))];
-        if (purchaseIds.length > 0) {
-          const { data: purchasesData } = await (supabase as any)
-            .from("card_purchases")
-            .select("id, financial_entity_id")
-            .in("id", purchaseIds);
-
-          const allowedPurchaseIds = new Set(
-            (purchasesData || [])
-              .filter((p: any) => filterIds.includes(p.financial_entity_id))
-              .map((p: any) => p.id)
-          );
-
-          installmentsTotal = unpaid
-            .filter((i: any) => allowedPurchaseIds.has(i.card_purchase_id))
-            .reduce((sum: number, i: any) => sum + Math.abs(i.amount || 0), 0);
-        }
-      }
-
-      // Step 4: somar transações center_cost não pagas do mês
-      const { data: centerCostTxns } = await (supabase as any)
-        .from("transactions")
-        .select("amount, financial_entity_id")
-        .neq("status", "paid")
-        .neq("status", "cancelled")
-        .gte("competence_date", start)
-        .lt("competence_date", end)
-        .in("center_cost", [
-          "Cartão de Crédito - Pessoal", "Cartão de Crédito - Prof.",
-          "Cartões de Crédito - Pessoal", "Cartões de Crédito - Prof.",
-        ]);
-
-      const ccTotal = (centerCostTxns || [])
-        .filter((tx: any) => !filterIds || filterIds.length === 0 || filterIds.includes(tx.financial_entity_id))
-        .reduce((sum: number, tx: any) => sum + Math.abs(tx.amount || 0), 0);
-
-      return installmentsTotal + ccTotal;
+      const entityIds = filterIds && filterIds.length > 0 ? filterIds : null;
+      const { data, error } = await (supabase as any).rpc("get_card_month_total", {
+        p_start: start,
+        p_end: end,
+        p_entity_ids: entityIds,
+      });
+      if (error) throw error;
+      return Number(data) || 0;
     },
   });
 
