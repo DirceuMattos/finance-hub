@@ -13,7 +13,7 @@ function getMonthRange(monthStr: string) {
   return { start, end };
 }
 
-export function useTransactions(filterMonth?: string) {
+export function useTransactions(filterMonth?: string, filterStatus?: string) {
   const queryClient = useQueryClient();
   const editableFields = [
     "description",
