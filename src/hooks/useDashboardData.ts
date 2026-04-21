@@ -155,6 +155,15 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         }
       }
 
+      // Adicionar transações com center_cost de cartão
+      for (const tx of (txData || []) as any[]) {
+        if (!tx.center_cost) continue;
+        if (!["Cartão de Crédito - Pessoal","Cartão de Crédito - Prof.",
+              "Cartões de Crédito - Pessoal","Cartões de Crédito - Prof."].includes(tx.center_cost)) continue;
+        if (tx.status === "paid") continue;
+        projected_card_amount += Math.abs(tx.amount || 0);
+      }
+
       // Projected balance: total income - total expenses - all card amounts
       const totalIncome = income_paid + income_planned;
       const totalExpense = expense_paid + expense_planned;
@@ -204,7 +213,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   const cardMonthTotal = useQuery({
     queryKey: ["dashboard_card_month_total", start, view],
     staleTime: 0,
-    enabled: entitiesQuery.isFetched,
     queryFn: async () => {
       const { data: instData } = await (supabase as any)
         .from("card_installments")
@@ -251,7 +259,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     expense_paid: flow?.expense_paid ?? 0,
     expense_planned: flow?.expense_planned ?? 0,
     projected_balance: flow?.projected_balance ?? 0,
-    projected_card_amount: cardMonthTotal.data ?? flow?.projected_card_amount ?? 0,
+    projected_card_amount: cardMonthTotal.data !== undefined ? cardMonthTotal.data : (flow?.projected_card_amount ?? 0),
     potential_containment: flow?.potential_containment ?? 0,
   };
 
@@ -259,7 +267,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   const trafficLight = flow?.traffic_light ?? "green";
   const minimumReserve = flow?.minimum_reserve ?? 0;
   const projectedBalance = flow?.projected_balance ?? 0;
-  const cardPlannedTotal = cardMonthTotal.data ?? flow?.projected_card_amount ?? 0;
+  const cardPlannedTotal = cardMonthTotal.data !== undefined ? cardMonthTotal.data : (flow?.projected_card_amount ?? 0);
 
   const riskLevelMap: Record<string, "controlled" | "attention" | "critical"> = {
     green: "controlled",
