@@ -267,7 +267,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   const trafficLight = flow?.traffic_light ?? "green";
   const minimumReserve = flow?.minimum_reserve ?? 0;
   const projectedBalance = flow?.projected_balance ?? 0;
-  const cardPlannedTotal = cardMonthTotal.data ?? flow?.projected_card_amount ?? 0;
+  const cardPlannedTotal = cardMonthTotal.data !== undefined ? cardMonthTotal.data : (flow?.projected_card_amount ?? 0);
 
   const riskLevelMap: Record<string, "controlled" | "attention" | "critical"> = {
     green: "controlled",
