@@ -175,6 +175,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         p_entity_ids: entityIds,
       });
       if (error) throw error;
+      console.log("RPC get_card_month_total raw data:", data, "error:", error);
+      console.log("RPC parsed value:", parseFloat(String(Array.isArray(data) ? data[0] : data ?? 0)));
       const raw = Array.isArray(data) ? data[0] : data;
       return parseFloat(String(raw ?? 0)) || 0;
     },
