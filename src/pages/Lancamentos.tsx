@@ -103,6 +103,7 @@ export default function Lancamentos() {
   const [searchParams] = useSearchParams();
   const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
   const [filterMonth, setFilterMonth] = useState(initialMonth);
+  const [filterStatus, setFilterStatus] = useState("all");
 
   const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth, filterStatus !== "all" ? filterStatus : undefined);
   const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
@@ -116,7 +117,6 @@ export default function Lancamentos() {
   const [filterEntity, setFilterEntity] = useState("all");
   const [filterAccount, setFilterAccount] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
   const [filterTypeTab, setFilterTypeTab] = useState("all");
   const [filterCardInvoice, setFilterCardInvoice] = useState("all");
   const [filterCard, setFilterCard] = useState("all"); // by specific card name
