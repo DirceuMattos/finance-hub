@@ -1,62 +1,60 @@
 
-## Correções críticas em saldos, filtros e mapeamento de status
+## Revisão e ajustes finais em Lançamentos, Dashboard e Recálculo de Saldos
 
-Quatro ajustes pontuais para corrigir cálculo de saldos, filtros combinados, status de parcelas e visibilidade pós-salvamento. Apenas três arquivos serão modificados.
+A maior parte das correções solicitadas já está aplicada no código atual. Restam apenas dois ajustes reais (item #2 cosmético e item #4 de lógica) e nenhum outro arquivo será tocado.
 
-### 1. Saldos: usar função SQL `recalculate_account_balances` e recálculo automático
+### Estado atual (já correto, sem alteração)
+- **#1** `useTransactions` já tem assinatura `(filterMonth?: string)` sem `filterStatus`; filtro de status já é aplicado client-side em `Lancamentos.tsx` (linha 254) para todas as linhas.
+- **#3** `useDashboardData.monthlyFlow` já agrega `card_installments` exatamente como pedido: `paid` → `card_paid_amount`; demais (`projected`/`pending`/`open`) → `projected_card_amount`.
+- **#5** `ensureSavedRecordVisible` já não contém o bloco que resetava `filterStatus`.
 
-**`src/components/configuracoes/AccountsTab.tsx`**
-- Substituir toda a lógica do `handleRecalculate` por uma chamada via `supabase.rpc("recalculate_account_balances")`.
-- Após sucesso, invalidar `["accounts"]` e `["dashboard_account_balances_split"]`.
+### Alterações a aplicar
+
+**1. `src/pages/Lancamentos.tsx` — simplificar mapeamento de status das parcelas (item #2)**
+
+No bloco `cardRows`, substituir a cascata atual de 5 ramos pela versão enxuta solicitada:
+
+```ts
+status: inst.status === "paid" ? "paid"
+  : inst.status === "cancelled" ? "cancelled"
+  : "planned",
+```
+
+Comportamento idêntico ao atual (`projected`/`pending`/`open`/qualquer outro caem em `"planned"`), apenas mais legível.
+
+**2. `src/components/configuracoes/AccountsTab.tsx` — substituir RPC por recálculo client-side (item #4)**
+
+Reescrever `handleRecalculate` para, em vez de chamar `rpc("recalculate_account_balances")`:
+- Buscar contas ativas (`id`, `opening_balance`).
+- Para cada conta, buscar transações `paid` (`transaction_type`, `amount`).
+- Calcular `balance = opening_balance + Σ(income) − Σ(expense)` usando valores absolutos.
+- Atualizar `accounts.current_balance` por conta.
+- Ao final, invalidar `["accounts"]` e `["dashboard_account_balances_split"]`, exibir toast com a contagem de contas atualizadas.
 - Manter o estado `recalculating` e o tratamento de erro com `getUserErrorMessage`.
 
-**`src/hooks/useTransactions.ts`**
-- Adicionar função auxiliar `recalcBalances` que chama `supabase.rpc("recalculate_account_balances")` silenciosamente.
-- Invocar `recalcBalances()` no `onSuccess` das três mutations (`create`, `update`, `remove`), antes das `invalidateQueries` existentes.
+Observação: este recálculo passa a desconsiderar parcelas pagas de cartão (que não têm `account_id` direto), conforme decisão explícita do usuário.
 
-### 2. Filtro mês + status volta para client-side
+**3. `src/hooks/useTransactions.ts` — recálculo automático por conta após cada mutação (item #4)**
 
-**`src/hooks/useTransactions.ts`**
-- Reverter assinatura para `useTransactions(filterMonth?: string)`.
-- Remover `filterStatus` do `queryKey` e do filtro server-side (`.eq("status", ...)`).
-- Manter o filtro de mês via `.or(...)` com `due_date` e `competence_date`.
-- Manter o limite de 500 quando `filterMonth` for `"all"` ou indefinido.
-
-**`src/pages/Lancamentos.tsx`**
-- Voltar a chamada para `useTransactions(filterMonth)` (sem o segundo parâmetro).
-- No `useMemo` de `filtered`, aplicar o filtro de status no cliente para TODAS as linhas (transações e parcelas de cartão), não apenas para parcelas:
-  - `if (filterStatus !== "all" && t.status !== filterStatus) return false;`
-- Reincluir `filterStatus` nas dependências do `useMemo`.
-
-### 3. Mapeamento completo de status das parcelas de cartão
-
-**`src/pages/Lancamentos.tsx`**
-- No bloco `cardRows`, expandir o mapeamento de `status` para cobrir os valores `projected`, `pending` e `open` do banco, todos tratados como `"planned"`:
-  ```ts
-  status: inst.status === "paid" ? "paid"
-    : inst.status === "cancelled" ? "cancelled"
-    : inst.status === "projected" ? "planned"
-    : inst.status === "pending" ? "planned"
-    : inst.status === "open" ? "planned"
-    : "planned",
-  ```
-
-### 4. `ensureSavedRecordVisible` não deve sobrescrever filtro de status
-
-**`src/pages/Lancamentos.tsx`**
-- Remover da função `ensureSavedRecordVisible` o bloco que reseta `filterStatus` para `"all"` quando o status do item salvo não bate com o filtro corrente.
-- Os demais ajustes da função (mês, etc.) permanecem inalterados.
-- Comportamento resultante: ao salvar um lançamento `paid` com filtro `planned` ativo, o item simplesmente não aparece — comportamento esperado.
+- Manter o helper `recalcBalances()` existente (chama `rpc`) — não remover, pois alguns invalidates já contam com ele.
+- Adicionar, após cada `onSuccess` de `create`, `update` e `remove`, um IIFE assíncrono que:
+  - Lê `account_id` do payload (`item` para create/update; sem efeito em remove pois o id já não existe — para `remove`, simplesmente pular se não houver `account_id` acessível).
+  - Busca transações `paid` daquela conta.
+  - Busca `opening_balance` da conta.
+  - Recalcula `current_balance = opening_balance + Σ(income) − Σ(expense)`.
+  - Atualiza `accounts.current_balance` para aquela conta.
+  - Engole erros silenciosamente.
+- Esse IIFE é executado em paralelo às `invalidateQueries` já existentes, sem `await`, conforme spec.
+- Para a mutation `update`, o `account_id` precisa ser propagado do payload para o callback (atualmente o `mutationFn` desconstrói `id` mas não retorna `account_id`); usar a closure do payload original recebido por `useMutation` via `(_, variables)` no `onSuccess`.
+- Para `remove`, o callback recebe apenas o `id`; nesse caso pular o recálculo por conta (continuar dependendo de `recalcBalances()` global).
 
 ### Resultado esperado
-- "Recalcular Saldos" passa a refletir corretamente parcelas de cartão pagas, alinhado ao trigger SQL existente.
-- Saldos das contas atualizam automaticamente após qualquer criação/edição/exclusão de lançamento.
-- Combinação Mês + Status volta a retornar resultados consistentes (filtro server-side de mês + filtro client-side de status).
-- Parcelas de cartão com status `projected`/`pending`/`open` aparecem corretamente sob o filtro "Previsto".
-- Filtro de status escolhido pelo usuário permanece intacto após salvar um lançamento.
+- Mapeamento de status de parcelas mais legível, sem mudança de comportamento.
+- "Recalcular Saldos" passa a usar o cálculo client-side baseado em `opening_balance` + transações `paid` da própria conta.
+- Após criar ou editar um lançamento, o saldo da conta envolvida é atualizado automaticamente pela mesma fórmula, sem depender da função SQL.
+- Itens #1, #3 e #5 já estão atendidos pelo código atual e não serão modificados.
 
 ### Detalhes técnicos
-- Arquivos alterados: `src/components/configuracoes/AccountsTab.tsx`, `src/hooks/useTransactions.ts`, `src/pages/Lancamentos.tsx`.
-- Sem mudanças em banco de dados, RLS, rotas ou outros hooks.
-- A função `recalculate_account_balances` já existe no banco (visível em `<db-functions>`) e tem `SECURITY DEFINER`, então roda sob permissão adequada via RPC autenticada.
-- `listSummary` continua refletindo o conteúdo de `filtered` exibido em tela.
+- Arquivos alterados: somente `src/pages/Lancamentos.tsx`, `src/components/configuracoes/AccountsTab.tsx` e `src/hooks/useTransactions.ts`.
+- Nenhuma mudança em banco de dados, RLS, edge functions, rotas ou outros hooks.
+- O helper `recalcBalances()` (RPC) é mantido como rede de segurança adicional após mutações.
