@@ -461,11 +461,6 @@ export default function Lancamentos() {
       adjusted = true;
     }
 
-    if (filterStatus !== "all" && item.status && filterStatus !== item.status) {
-      setFilterStatus("all");
-      adjusted = true;
-    }
-
     if (filterTypeTab !== "all" && item.transaction_type && filterTypeTab !== item.transaction_type) {
       setFilterTypeTab("all");
       adjusted = true;
