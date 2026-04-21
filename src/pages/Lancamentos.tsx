@@ -105,7 +105,7 @@ export default function Lancamentos() {
   const [filterMonth, setFilterMonth] = useState(initialMonth);
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth, filterStatus !== "all" ? filterStatus : undefined);
+  const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
   const { data: cardInstallments = [], isLoading: loadingCI } = useCardInstallments(filterMonth);
   const updateInstallmentStatus = useCardInstallmentStatusUpdate();
   const { data: entities = [] } = useFinancialEntities();
@@ -164,7 +164,12 @@ export default function Lancamentos() {
       competence_date: inst.billing_month,
       due_date: inst.due_date,
       payment_date: null,
-      status: inst.status === "paid" ? "paid" : inst.status === "cancelled" ? "cancelled" : "planned",
+      status: inst.status === "paid" ? "paid"
+        : inst.status === "cancelled" ? "cancelled"
+        : inst.status === "projected" ? "planned"
+        : inst.status === "pending" ? "planned"
+        : inst.status === "open" ? "planned"
+        : "planned",
       category_name: inst.card_purchases?.categories?.name || null,
       entity_name: inst.card_purchases?.financial_entities?.name || null,
       entity_type: (inst.card_purchases?.financial_entities as any)?.entity_type || null,
@@ -245,8 +250,8 @@ export default function Lancamentos() {
       } else if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
       if (filterAccount !== "all" && !t.is_card_installment && t.account_id !== filterAccount) return false;
       if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
-      // Status filter is applied server-side for transactions; still filter card installments client-side
-      if (filterStatus !== "all" && t.is_card_installment && t.status !== filterStatus) return false;
+      // Status filter applied client-side for all rows (transactions and card installments)
+      if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
       if (filterCard !== "all" && t.card_name !== filterCard) return false;
       if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
@@ -453,11 +458,6 @@ export default function Lancamentos() {
     const recordMonth = item.due_date?.slice(0, 7) || item.competence_date?.slice(0, 7);
     if (filterMonth !== "all" && recordMonth && filterMonth !== recordMonth) {
       setFilterMonth(recordMonth);
-      adjusted = true;
-    }
-
-    if (filterStatus !== "all" && item.status && filterStatus !== item.status) {
-      setFilterStatus("all");
       adjusted = true;
     }
 

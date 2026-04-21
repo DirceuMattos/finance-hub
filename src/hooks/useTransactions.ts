@@ -13,7 +13,7 @@ function getMonthRange(monthStr: string) {
   return { start, end };
 }
 
-export function useTransactions(filterMonth?: string, filterStatus?: string) {
+export function useTransactions(filterMonth?: string) {
   const queryClient = useQueryClient();
   const editableFields = [
     "description",
@@ -35,8 +35,14 @@ export function useTransactions(filterMonth?: string, filterStatus?: string) {
     "center_cost",
   ] as const;
 
+  const recalcBalances = async () => {
+    try {
+      await (supabase as any).rpc("recalculate_account_balances");
+    } catch { /* silently ignore */ }
+  };
+
   const query = useQuery({
-    queryKey: ["transactions", filterMonth, filterStatus],
+    queryKey: ["transactions", filterMonth],
     queryFn: async () => {
       let q = (supabase as any)
         .from("transactions")
@@ -45,15 +51,9 @@ export function useTransactions(filterMonth?: string, filterStatus?: string) {
 
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        // Keep items visible when either due_date or competence_date falls in the selected month.
-        // This also restores older records previously saved with a shifted due_date.
         q = q.or(`and(due_date.gte.${start},due_date.lt.${end}),and(competence_date.gte.${start},competence_date.lt.${end})`);
       } else {
         q = q.limit(500);
-      }
-
-      if (filterStatus && filterStatus !== "all") {
-        q = q.eq("status", filterStatus);
       }
 
       const { data, error } = await q;
@@ -115,7 +115,8 @@ export function useTransactions(filterMonth?: string, filterStatus?: string) {
       const { error } = await (supabase as any).from("transactions").insert(rows);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await recalcBalances();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
@@ -138,7 +139,8 @@ export function useTransactions(filterMonth?: string, filterStatus?: string) {
       if (error) throw error;
       if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await recalcBalances();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
@@ -157,7 +159,8 @@ export function useTransactions(filterMonth?: string, filterStatus?: string) {
       const { error } = await (supabase as any).from("transactions").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await recalcBalances();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
