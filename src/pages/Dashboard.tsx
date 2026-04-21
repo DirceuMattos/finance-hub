@@ -12,7 +12,7 @@ import {
   Sparkles, Loader2, RefreshCw,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
