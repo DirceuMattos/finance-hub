@@ -389,24 +389,6 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <DateField name="payment_date" label="Pagamento" />
           </div>
 
-          <FormField control={form.control} name="card_id" render={({ field }) => (
-            <FormItem><FormLabel>Cartão de Crédito</FormLabel><FormControl>
-              <Select onValueChange={field.onChange} value={field.value || ""}>
-                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Nenhum</SelectItem>
-                  {cardsList.filter((c: any) => c.is_active !== false).map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </FormControl>
-            {field.value && field.value !== "none" ? (
-              <span className="text-xs text-primary">Cartão selecionado: <strong>{selectedCard?.name || "Cartão"}</strong>.</span>
-            ) : (
-              <span className="text-xs text-muted-foreground">Selecione um cartão apenas para identificar o meio de pagamento desta transação.</span>
-            )}
-            </FormItem>
-          )} />
-
           <FormField control={form.control} name="notes" render={({ field }) => (
             <FormItem><FormLabel>Observações</FormLabel><FormControl><Textarea rows={3} {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
