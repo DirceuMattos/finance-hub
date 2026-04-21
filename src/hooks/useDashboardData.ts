@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth, parseISO } from "date-fns";
-import { CARD_INVOICE_CENTER_COSTS } from "@/lib/cardInvoiceRules";
 import type { FinancialEntity } from "@/types/database";
 
 type ViewType = "consolidated" | "personal" | "business";
@@ -143,15 +142,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         }
       }
 
-      let card_from_transactions = 0;
-      for (const tx of (txData || []) as any[]) {
-        if (!tx.center_cost) continue;
-        const isCardTx = CARD_INVOICE_CENTER_COSTS.includes(tx.center_cost) || tx.center_cost.trim() !== "";
-        if (isCardTx && CARD_INVOICE_CENTER_COSTS.includes(tx.center_cost)) {
-          card_from_transactions += Math.abs(tx.amount || 0);
-        }
-      }
-
       // Aggregate card installments — only unpaid count as projected
       let projected_card_amount = 0;
       let card_paid_amount = 0;
@@ -164,8 +154,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
           projected_card_amount += amt;
         }
       }
-
-      projected_card_amount = projected_card_amount + card_from_transactions;
 
       // Projected balance: total income - total expenses - all card amounts
       const totalIncome = income_paid + income_planned;
@@ -222,13 +210,34 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .from("card_installments")
         .select("amount, status, card_purchases(financial_entity_id)")
         .gte("billing_month", start)
-        .lt("billing_month", end);
+        .lt("billing_month", end)
+        .neq("status", "paid");
 
       let total = 0;
       for (const inst of (instData || []) as any[]) {
         if (filterIds && filterIds.length > 0 && !filterIds.includes(inst.card_purchases?.financial_entity_id)) continue;
         total += Math.abs(inst.amount || 0);
       }
+
+      const { data: centerCostTxns } = await (supabase as any)
+        .from("transactions")
+        .select("amount, financial_entity_id, center_cost")
+        .neq("status", "paid")
+        .neq("status", "cancelled")
+        .gte("competence_date", start)
+        .lt("competence_date", end)
+        .in("center_cost", [
+          "Cartão de Crédito - Pessoal",
+          "Cartão de Crédito - Prof.",
+          "Cartões de Crédito - Pessoal",
+          "Cartões de Crédito - Prof.",
+        ]);
+
+      for (const tx of (centerCostTxns || []) as any[]) {
+        if (filterIds && filterIds.length > 0 && !filterIds.includes(tx.financial_entity_id)) continue;
+        total += Math.abs(tx.amount || 0);
+      }
+
       return total;
     },
   });
