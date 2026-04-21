@@ -20,7 +20,7 @@ import type { Transaction, FinancialEntity, Account, Category } from "@/types/da
 const schema = z.object({
   description: z.string().min(1, "Descrição é obrigatória").max(200),
   transaction_type: z.string().min(1, "Tipo é obrigatório"),
-  card_id: z.string().optional().nullable(),
+  
   category_id: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   account_id: z.string().optional().nullable(),
