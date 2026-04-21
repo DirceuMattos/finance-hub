@@ -164,8 +164,9 @@ export function useTransactions(filterMonth?: string) {
       if (error) throw error;
       if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await recalcBalances();
+      void recalcAccountBalance((variables as any)?.account_id);
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
