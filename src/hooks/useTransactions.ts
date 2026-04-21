@@ -18,7 +18,6 @@ export function useTransactions(filterMonth?: string) {
   const editableFields = [
     "description",
     "transaction_type",
-    "card_id",
     "category_id",
     "financial_entity_id",
     "account_id",
@@ -46,7 +45,7 @@ export function useTransactions(filterMonth?: string) {
     queryFn: async () => {
       let q = (supabase as any)
         .from("transactions")
-        .select("id, description, transaction_type, card_id, category_id, financial_entity_id, account_id, amount, competence_date, due_date, payment_date, status, installment_number, installment_total, payment_method, source_type, source_id, payee, tags, notes, created_at, updated_at, center_cost, categories(name), financial_entities(name, entity_type), accounts(name)")
+        .select("id, description, transaction_type, category_id, financial_entity_id, account_id, amount, competence_date, due_date, payment_date, status, installment_number, installment_total, payment_method, source_type, source_id, payee, tags, notes, created_at, updated_at, center_cost, categories(name), financial_entities(name, entity_type), accounts(name)")
         .order("competence_date", { ascending: false });
 
       if (filterMonth && filterMonth !== "all") {
