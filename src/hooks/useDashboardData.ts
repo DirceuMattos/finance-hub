@@ -105,8 +105,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         const { data: instData, error: instError } = await (supabase as any)
           .from("card_installments")
           .select("amount, status, card_purchases(financial_entity_id)")
-          .gte("billing_month", start)
-          .lt("billing_month", end);
+          .filter("billing_month", "gte", start)
+          .filter("billing_month", "lt", end);
 
         if (!instError && instData) {
           // Filter by entity if needed
@@ -217,8 +217,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       const { data: instData } = await (supabase as any)
         .from("card_installments")
         .select("amount, status, card_purchases(financial_entity_id)")
-        .gte("billing_month", start)
-        .lt("billing_month", end)
+        .filter("billing_month", "gte", start)
+        .filter("billing_month", "lt", end)
         .neq("status", "paid");
 
       let total = 0;

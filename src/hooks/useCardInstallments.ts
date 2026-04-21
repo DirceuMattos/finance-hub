@@ -85,7 +85,7 @@ export function useCardInstallments(filterMonth?: string) {
       // Server-side filter by billing_month (financial competence)
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        query = query.gte("billing_month", start).lt("billing_month", end);
+        query = query.filter("billing_month", "gte", start).filter("billing_month", "lt", end);
       } else {
         // No month filter: limit to avoid truncation
         query = query.limit(5000);
