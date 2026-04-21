@@ -99,29 +99,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       const { data: txData, error: txError } = await txQuery;
       if (txError) throw txError;
 
-      // Fetch card installments for the selected month
-      let cardData: any[] = [];
-      try {
-        const { data: instData, error: instError } = await (supabase as any)
-          .from("card_installments")
-          .select("amount, status, card_purchases!inner(financial_entity_id, status)")
-          .filter("billing_month", "gte", start)
-          .filter("billing_month", "lt", end);
-
-        if (!instError && instData) {
-          // Filter by entity if needed
-          if (filterIds && filterIds.length > 0) {
-            cardData = instData.filter((inst: any) =>
-              filterIds.includes(inst.card_purchases?.financial_entity_id)
-            );
-          } else {
-            cardData = instData;
-          }
-        }
-      } catch {
-        // table may not exist
-      }
-
       // Aggregate transactions
       let income_paid = 0;
       let income_planned = 0;
@@ -140,28 +117,6 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
           if (isPaid) expense_paid += amt;
           else expense_planned += amt;
         }
-      }
-
-      // Aggregate card installments — only unpaid count as projected
-      let projected_card_amount = 0;
-      let card_paid_amount = 0;
-
-      for (const inst of cardData) {
-        const amt = Math.abs(inst.amount || 0);
-        if (inst.status === "paid") {
-          card_paid_amount += amt;
-        } else {
-          projected_card_amount += amt;
-        }
-      }
-
-      // Adicionar transações com center_cost de cartão
-      for (const tx of (txData || []) as any[]) {
-        if (!tx.center_cost) continue;
-        if (!["Cartão de Crédito - Pessoal","Cartão de Crédito - Prof.",
-              "Cartões de Crédito - Pessoal","Cartões de Crédito - Prof."].includes(tx.center_cost)) continue;
-        if (tx.status === "paid") continue;
-        projected_card_amount += Math.abs(tx.amount || 0);
       }
 
       // Projected balance: total income - total expenses - all card amounts
@@ -198,8 +153,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         income_planned,
         expense_paid,
         expense_planned,
-        projected_card_amount,
-        card_paid_amount,
+        projected_card_amount: 0,
+        card_paid_amount: 0,
         projected_balance,
         potential_containment,
         minimum_reserve,
@@ -220,7 +175,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         p_entity_ids: entityIds,
       });
       if (error) throw error;
-      return Number(data) || 0;
+      const raw = Array.isArray(data) ? data[0] : data;
+      return parseFloat(String(raw ?? 0)) || 0;
     },
   });
 
