@@ -258,7 +258,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     expense_paid: flow?.expense_paid ?? 0,
     expense_planned: flow?.expense_planned ?? 0,
     projected_balance: flow?.projected_balance ?? 0,
-    projected_card_amount: flow?.projected_card_amount ?? 0,
+    projected_card_amount: cardMonthTotal.data ?? flow?.projected_card_amount ?? 0,
     potential_containment: flow?.potential_containment ?? 0,
   };
 
@@ -266,7 +266,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
   const trafficLight = flow?.traffic_light ?? "green";
   const minimumReserve = flow?.minimum_reserve ?? 0;
   const projectedBalance = flow?.projected_balance ?? 0;
-  const cardPlannedTotal = flow?.projected_card_amount ?? 0;
+  const cardPlannedTotal = cardMonthTotal.data ?? flow?.projected_card_amount ?? 0;
 
   const riskLevelMap: Record<string, "controlled" | "attention" | "critical"> = {
     green: "controlled",
