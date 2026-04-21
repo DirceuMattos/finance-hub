@@ -219,7 +219,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .select("amount, status, card_purchases(financial_entity_id)")
         .filter("billing_month", "gte", start)
         .filter("billing_month", "lt", end)
-        .neq("status", "paid");
+        .in("status", ["projected", "pending", "open"]);
 
       let total = 0;
       for (const inst of (instData || []) as any[]) {
