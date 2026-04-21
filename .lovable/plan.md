@@ -1,68 +1,46 @@
 
-Objetivo: desfazer a troca para o proxy do cliente e restaurar a conexão original com o banco externo, alterando somente o que você especificou.
+Objetivo: corrigir o card "Comprometimento Cartão" em `src/hooks/useDashboardData.ts` usando uma consulta dedicada para o total mensal de cartões, sem mexer em outros arquivos.
 
-### 1. Recriar o cliente legado em `src/lib/supabaseClient.ts`
-Criar novamente o arquivo com exatamente este conteúdo:
+### O que será alterado
 
-```ts
-import { createClient } from '@supabase/supabase-js';
+1. Manter a query `monthlyFlow` focada no fluxo mensal
+- Preservar nela apenas os cálculos de receitas, despesas, saldo projetado, reserva mínima e risco.
+- Não usar mais o valor calculado ali como fonte principal do total de cartões exibido no dashboard.
 
-const SUPABASE_URL = "https://tabjmrdsadodghvqoqcp.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_eGkMsSSEp9zbibsm0AsMAw_O6IhSv8n";
+2. Adicionar uma nova query dedicada ao total de cartões do mês
+- Inserir uma `useQuery` logo após `monthlyFlow` com chave:
+  - `["dashboard_card_month_total", start, view]`
+- Essa query ficará com:
+  - `staleTime: 0`
+  - `enabled: entitiesQuery.isFetched`
+- Ela fará duas leituras:
+  - `card_installments` filtrando por `billing_month` entre `start` e `end`
+  - `transactions` filtrando por `competence_date` entre `start` e `end`, ignorando canceladas
+- Em ambas, aplicará o filtro por entidade com `filterIds` quando a visão for pessoal ou empresarial.
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-});
-```
+3. Consolidar o total mensal de cartões em uma única métrica
+- Somar os valores absolutos de:
+  - parcelas de cartão vindas de `card_installments`
+  - transações cujo `center_cost` esteja em `CARD_INVOICE_CENTER_COSTS`
+- Retornar um único número da query: o total do mês para o card de comprometimento.
 
-### 2. Reverter imports em `src/hooks/`
-Substituir os imports que hoje apontam para `@/integrations/supabase/client` para voltarem a usar `@/lib/supabaseClient` em todos os hooks afetados dentro de `src/hooks/`.
+4. Passar a usar a nova query no `forecast`
+- Alterar a montagem de `forecast` para que:
+  - `projected_card_amount` use primeiro `cardMonthTotal.data`
+  - mantenha `flow?.projected_card_amount ?? 0` apenas como fallback
 
-Escopo confirmado pelos arquivos atuais:
-- `useAccounts.ts`
-- `useAlerts.ts`
-- `useAuth.ts`
-- `useCardInstallments.ts`
-- `useCardInvoiceTransactions.ts`
-- `useCardPurchases.ts`
-- `useCards.ts`
-- `useCategories.ts`
-- `useDashboardData.ts`
-- `useFinancialEntities.ts`
-- `useInvestmentClassesCrud.ts`
-- `useInvestments.ts`
-- `useMonthlyCashflow.ts`
-- `usePatrimony.ts`
-- `useRecurrences.ts`
-- `useRepairInstallments.ts`
-- `useSystemParameters.ts`
-- `useTransactions.ts`
-- `useUsers.ts`
-
-### 3. Preservar `Dashboard.tsx` como está
-Não alterar `src/pages/Dashboard.tsx`, que deve continuar importando de `@/integrations/supabase/client`, conforme sua instrução.
-
-### 4. Remover o redirecionamento global para o proxy
-Reverter apenas as mudanças que desviaram `@/integrations/supabase/client` para `src/lib/supabase-client-proxy.ts`, para que esse atalho deixe de interferir no restante do app:
-- `vite.config.ts`: remover o alias regex que redireciona `@/integrations/supabase/client`
-- `tsconfig.json`: remover o path mapping de `@/integrations/supabase/client`
-- `tsconfig.app.json`: remover o path mapping de `@/integrations/supabase/client`
-
-Isso é necessário porque, se o alias continuar ativo, o `Dashboard.tsx` continuará indo para o proxy mesmo sem mexer no import.
-
-### 5. Não alterar mais nada
-Fora os itens acima:
-- não mexer no arquivo gerado `src/integrations/supabase/client.ts`
-- não alterar lógica de negócio
-- não alterar queries, hooks, páginas ou backend além dos imports e da restauração do cliente legado
-- não mudar o `Dashboard.tsx`
+5. Passar a usar a nova query no `riskData`
+- Alterar `cardPlannedTotal` para usar:
+  - `cardMonthTotal.data ?? flow?.projected_card_amount ?? 0`
+- Assim, o indicador de risco e o card de comprometimento passam a apontar para a mesma fonte consolidada.
 
 ### Resultado esperado
-- os hooks e utilitários voltam a usar `@/lib/supabaseClient`
-- o Dashboard permanece no cliente integrado atual
-- o redirecionamento global para o proxy deixa de afetar a resolução dos imports
-- a conexão com o banco legado é restaurada apenas nos pontos solicitados
+- O valor de "Comprometimento Cartão" passa a vir de uma query específica e previsível.
+- O cálculo deixa de depender do comportamento interno da query `monthlyFlow`.
+- O total mensal de cartões fica alinhado com a lógica já usada no módulo de cartões, respeitando a separação por visão (Consolidado, Pessoal, Empresarial).
+
+### Detalhes técnicos
+- Arquivo único: `src/hooks/useDashboardData.ts`
+- Reaproveitar o import já existente de `CARD_INVOICE_CENTER_COSTS`
+- Não alterar `src/hooks/useCardInvoiceTransactions.ts`
+- Não alterar rotas, componentes visuais, banco, hooks adicionais ou outros cálculos fora do escopo solicitado
