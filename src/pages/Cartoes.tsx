@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { useCardInstallments } from "@/hooks/useCardInstallments";
+import { useTransactions } from "@/hooks/useTransactions";
+import { CARD_INVOICE_CENTER_COSTS } from "@/lib/cardInvoiceRules";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
