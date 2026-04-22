@@ -30,38 +30,14 @@ export function AccountsTab() {
   const handleRecalculate = async () => {
     setRecalculating(true);
     try {
-      const { data: accounts, error: accErr } = await (supabase as any)
-        .from("accounts")
-        .select("id, opening_balance")
-        .eq("is_active", true);
-      if (accErr) throw accErr;
-
-      let totalAccounts = 0;
-      for (const acc of accounts ?? []) {
-        const { data: txns, error: txErr } = await (supabase as any)
-          .from("transactions")
-          .select("transaction_type, amount")
-          .eq("account_id", acc.id)
-          .eq("status", "paid");
-        if (txErr) throw txErr;
-
-        let balance = Number(acc.opening_balance ?? 0);
-        for (const t of txns || []) {
-          const amount = Math.abs(Number(t.amount ?? 0));
-          if (t.transaction_type === "income") balance += amount;
-          if (t.transaction_type === "expense") balance -= amount;
-        }
-
-        await (supabase as any)
-          .from("accounts")
-          .update({ current_balance: balance })
-          .eq("id", acc.id);
-        totalAccounts++;
-      }
-
+      const { error } = await (supabase as any).rpc(
+        "recalculate_account_balances_from_date",
+        { p_from_date: "2026-04-01" }
+      );
+      if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
-      toast.success(`Saldos recalculados: ${totalAccounts} contas atualizadas`);
+      toast.success("Saldos recalculados com sucesso");
     } catch (e: any) {
       toast.error(getUserErrorMessage(e));
     } finally {
