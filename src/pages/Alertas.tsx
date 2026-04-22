@@ -66,7 +66,7 @@ function AlertCards({ viewType }: { viewType: ViewType }) {
         const sev = getSeverity(alert.severity);
         const SevIcon = sev.icon;
         return (
-          <Card key={alert.id ?? idx} className="relative overflow-hidden">
+          <Card key={`${alert.reference_month}_${alert.alert_type}_${alert.financial_entity_id}_${idx}`} className="relative overflow-hidden">
             <div className={`absolute top-0 left-0 w-1 h-full ${sev.color.split(" ")[0]}`} />
             <CardHeader className="pb-2">
               <div className="flex items-start justify-between gap-2">
@@ -78,14 +78,14 @@ function AlertCards({ viewType }: { viewType: ViewType }) {
                   {sev.label}
                 </Badge>
               </div>
-              {alert.reference_date && (
+              {alert.reference_month && (
                 <CardDescription className="text-xs mt-1">
-                  {format(parseISO(alert.reference_date), "dd/MM/yyyy", { locale: ptBR })}
+                  {format(parseISO(alert.reference_month), "MMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase())}
                 </CardDescription>
               )}
             </CardHeader>
             <CardContent>
-              <p className="text-xs text-muted-foreground">{alert.description}</p>
+              <p className="text-xs text-muted-foreground">{alert.message}</p>
             </CardContent>
           </Card>
         );
