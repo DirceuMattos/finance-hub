@@ -63,6 +63,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
       status: "planned", payee: "", notes: "",
       installment_number: 1, installment_total: 1, installments_count: 1,
+      center_cost: "",
     },
   });
 
