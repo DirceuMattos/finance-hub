@@ -267,6 +267,8 @@ export default function Lancamentos() {
     });
   }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment]);
 
+  console.log("filtered:", filtered.length, "filterStatus:", filterStatus, "filterSource:", filterSource, "filterCardInvoice:", filterCardInvoice);
+
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
