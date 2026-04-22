@@ -4,6 +4,7 @@ export const CARD_INVOICE_CENTER_COSTS = [
   "Cartão de Crédito - Prof.",
   "Cartões de Crédito - Pessoal",
   "Cartões de Crédito - Prof.",
+  "XP 7927 - Pessoal",
 ];
 
 // Map center_cost → entity type
@@ -12,6 +13,7 @@ export const CENTER_COST_ENTITY_MAP: Record<string, "personal" | "business"> = {
   "Cartão de Crédito - Prof.": "business",
   "Cartões de Crédito - Pessoal": "personal",
   "Cartões de Crédito - Prof.": "business",
+  "XP 7927 - Pessoal": "personal",
 };
 
 // Cutoff date for temporal UX rule
