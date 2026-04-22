@@ -42,6 +42,8 @@ export function useTransactions(filterMonth?: string) {
 
   const query = useQuery({
     queryKey: ["transactions", filterMonth],
+    staleTime: 0,
+    gcTime: 0,
     queryFn: async () => {
       let q = (supabase as any)
         .from("transactions")
