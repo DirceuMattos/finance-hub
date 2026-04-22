@@ -219,6 +219,8 @@ export default function Lancamentos() {
     }));
   }, [data, cardsList]);
 
+  console.log("txRows:", txRows.length, "cardRows:", cardRows.length, "allRows:", txRows.length + cardRows.length);
+
   // Merge and filter
   const allRows = useMemo(() => {
     if (filterSource === "transactions") return txRows;
