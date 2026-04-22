@@ -34,6 +34,7 @@ const schema = z.object({
   installment_number: z.coerce.number().min(1).optional().nullable(),
   installment_total: z.coerce.number().min(1).optional().nullable(),
   installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
+  center_cost: z.string().optional().nullable(),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -62,6 +63,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
       status: "planned", payee: "", notes: "",
       installment_number: 1, installment_total: 1, installments_count: 1,
+      center_cost: "",
     },
   });
 
@@ -102,6 +104,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         installment_number: transaction.installment_number ?? 1,
         installment_total: transaction.installment_total ?? 1,
         installments_count: 1,
+        center_cost: (transaction as any).center_cost || "",
       });
     } else {
       form.reset({
@@ -109,6 +112,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         account_id: "", amount: "", competence_date: format(new Date(), "yyyy-MM"), due_date: null, payment_date: null,
         status: "planned", payee: "", notes: "",
         installment_number: 1, installment_total: 1, installments_count: 1,
+        center_cost: "",
       });
     }
     setCreatingCategory(false);
@@ -178,6 +182,9 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       payment_date: (data.status === "paid") && data.payment_date && !isMulti ? format(data.payment_date, "yyyy-MM-dd") : null,
       installment_number: isMulti ? 1 : (data.installment_number || 1),
       installment_total: isMulti ? installmentsCount : (data.installment_total || 1),
+      center_cost: data.center_cost && data.center_cost !== "none" && data.center_cost !== ""
+        ? data.center_cost
+        : null,
     };
     if (isMulti) payload.installments_count = installmentsCount;
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
@@ -308,6 +315,31 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                 </SelectContent>
               </Select>
             </FormControl><FormMessage /></FormItem>
+          )} />
+
+          <FormField control={form.control} name="center_cost" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Cartão de Crédito (opcional)</FormLabel>
+              <Select
+                value={field.value || "none"}
+                onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Nenhum cartão" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum cartão</SelectItem>
+                  {cardsList.map((card: any) => (
+                    <SelectItem key={card.id} value={card.name}>
+                      {card.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
           )} />
 
           <FormField control={form.control} name="financial_entity_id" render={({ field }) => (
