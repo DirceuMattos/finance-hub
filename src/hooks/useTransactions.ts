@@ -50,7 +50,7 @@ export function useTransactions(filterMonth?: string) {
 
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        q = q.gte("competence_date", start).lt("competence_date", end);
+        q = q.gte("competence_date", start).lt("competence_date", end).limit(2000);
       } else {
         q = q.limit(500);
       }
