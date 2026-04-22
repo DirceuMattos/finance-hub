@@ -219,6 +219,8 @@ export default function Lancamentos() {
     }));
   }, [data, cardsList]);
 
+  console.log("txRows:", txRows.length, "cardRows:", cardRows.length, "allRows:", txRows.length + cardRows.length);
+
   // Merge and filter
   const allRows = useMemo(() => {
     if (filterSource === "transactions") return txRows;
@@ -264,6 +266,8 @@ export default function Lancamentos() {
       return true;
     });
   }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment]);
+
+  console.log("filtered:", filtered.length, "filterStatus:", filterStatus, "filterSource:", filterSource, "filterCardInvoice:", filterCardInvoice);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
