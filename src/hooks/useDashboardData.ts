@@ -169,15 +169,12 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     staleTime: 0,
     queryFn: async () => {
       const entityIds = filterIds && filterIds.length > 0 ? filterIds : null;
-      console.log("cardMonthTotal params:", { p_start: start, p_end: end, p_entity_ids: entityIds });
       const { data, error } = await (supabase as any).rpc("get_card_month_total", {
         p_start: start,
         p_end: end,
         p_entity_ids: entityIds,
       });
       if (error) throw error;
-      console.log("RPC get_card_month_total raw data:", data, "error:", error);
-      console.log("RPC parsed value:", parseFloat(String(Array.isArray(data) ? data[0] : data ?? 0)));
       const raw = Array.isArray(data) ? data[0] : data;
       return parseFloat(String(raw ?? 0)) || 0;
     },
