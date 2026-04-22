@@ -182,6 +182,9 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       payment_date: (data.status === "paid") && data.payment_date && !isMulti ? format(data.payment_date, "yyyy-MM-dd") : null,
       installment_number: isMulti ? 1 : (data.installment_number || 1),
       installment_total: isMulti ? installmentsCount : (data.installment_total || 1),
+      center_cost: data.center_cost && data.center_cost !== "none" && data.center_cost !== ""
+        ? data.center_cost
+        : null,
     };
     if (isMulti) payload.installments_count = installmentsCount;
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
