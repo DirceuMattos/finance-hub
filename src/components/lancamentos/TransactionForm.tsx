@@ -34,6 +34,7 @@ const schema = z.object({
   installment_number: z.coerce.number().min(1).optional().nullable(),
   installment_total: z.coerce.number().min(1).optional().nullable(),
   installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
+  center_cost: z.string().optional().nullable(),
 });
 
 type FormData = z.infer<typeof schema>;
