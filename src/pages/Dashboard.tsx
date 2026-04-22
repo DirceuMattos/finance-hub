@@ -84,7 +84,8 @@ export default function Dashboard() {
   const [selectedMonthStr, setSelectedMonthStr] = useState(() => format(new Date(), "yyyy-MM"));
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const selectedMonth = new Date(selectedMonthStr + "-01");
+  const [y, m] = selectedMonthStr.split("-").map(Number);
+  const selectedMonth = new Date(y, m - 1, 1);
   const monthOptions = buildMonthOptions();
 
   const {
