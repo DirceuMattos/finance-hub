@@ -59,6 +59,11 @@ export function useTransactions(filterMonth?: string) {
 
       const { data, error } = await q;
       if (error) throw error;
+      console.log("useTransactions result:", {
+        filterMonth,
+        total: data?.length,
+        sample: data?.slice(0, 3).map((t: any) => ({ id: t.id, desc: t.description, competence: t.competence_date }))
+      });
       return data as Transaction[];
     },
   });
