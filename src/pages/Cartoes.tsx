@@ -44,14 +44,31 @@ export default function Cartoes() {
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
 
   const { data: installments = [] } = useCardInstallments(filterMonth);
+  const { data: transactions = [] } = useTransactions(filterMonth);
   const byCard = useMemo(() => {
     const map = new Map<string, number>();
+
+    // Fonte 1: card_installments
     installments.forEach((inst: any) => {
       const cardName = inst.card_purchases?.cards?.name || "—";
       map.set(cardName, (map.get(cardName) || 0) + Math.abs(inst.amount || 0));
     });
+
+    // Fonte 2: transactions com center_cost de cartão
+    transactions
+      .filter((t: any) =>
+        t.center_cost &&
+        CARD_INVOICE_CENTER_COSTS.includes(t.center_cost) &&
+        t.status !== "paid" &&
+        t.status !== "cancelled"
+      )
+      .forEach((t: any) => {
+        const cardName = t.center_cost;
+        map.set(cardName, (map.get(cardName) || 0) + Math.abs(t.amount || 0));
+      });
+
     return map;
-  }, [installments]);
+  }, [installments, transactions]);
 
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
