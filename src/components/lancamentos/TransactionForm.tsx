@@ -240,6 +240,31 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             <FormItem><FormLabel>Descrição *</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
           )} />
 
+          <FormField control={form.control} name="center_cost" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Cartão de Crédito (opcional)</FormLabel>
+              <Select
+                value={field.value || "none"}
+                onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Nenhum cartão" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum cartão</SelectItem>
+                  {cardsList.map((card: any) => (
+                    <SelectItem key={card.id} value={card.name}>
+                      {card.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )} />
+
           <FormField control={form.control} name="payee" render={({ field }) => (
             <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
