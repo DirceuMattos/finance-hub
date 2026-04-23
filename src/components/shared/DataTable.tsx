@@ -31,6 +31,7 @@ export interface DataTableProps<T> {
   selectedKeys?: Set<string>;
   onSelectionChange?: (keys: Set<string>) => void;
   rowKey?: (row: T) => string;
+  rowClassName?: (row: T) => string;
 }
 
 export function DataTable<T extends object>({
@@ -45,6 +46,7 @@ export function DataTable<T extends object>({
   selectedKeys,
   onSelectionChange,
   rowKey,
+  rowClassName,
 }: DataTableProps<T>) {
   const [sortKey, setSortKey] = useState<string | null>(defaultSortKey ?? null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">(defaultSortDir);
@@ -185,7 +187,7 @@ export function DataTable<T extends object>({
               const key = selectable && rowKey ? rowKey(row) : String(idx);
               const isSelected = selectable && selectedKeys?.has(key);
               return (
-                <TableRow key={key} className={isSelected ? "bg-muted/50" : ""}>
+                <TableRow key={key} className={`${isSelected ? "bg-muted/50" : ""} ${rowClassName ? rowClassName(row) : ""}`}>
                   {selectable && (
                     <TableCell className="px-2">
                       <Checkbox

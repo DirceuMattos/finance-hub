@@ -773,6 +773,12 @@ export default function Lancamentos() {
         selectedKeys={selectedKeys}
         onSelectionChange={setSelectedKeys}
         rowKey={(r) => r.id}
+        rowClassName={(r: any) => {
+          if (r.status === "planned") return "bg-amber-50/40 dark:bg-amber-950/10";
+          if (r.status === "paid") return "bg-emerald-50/40 dark:bg-emerald-950/10";
+          if (r.status === "cancelled") return "opacity-50";
+          return "";
+        }}
       />
 
       <TransactionForm
