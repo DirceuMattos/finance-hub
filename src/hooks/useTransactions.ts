@@ -48,7 +48,8 @@ export function useTransactions(filterMonth?: string) {
       let q = (supabase as any)
         .from("transactions")
         .select("id, description, transaction_type, category_id, financial_entity_id, account_id, amount, competence_date, due_date, payment_date, status, installment_number, installment_total, payment_method, source_type, source_id, payee, tags, notes, created_at, updated_at, center_cost, categories(name), financial_entities(name, entity_type), accounts(name)")
-        .order("competence_date", { ascending: false });
+        .order("competence_date", { ascending: false })
+        .order("due_date", { ascending: false, nullsFirst: false });
 
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);

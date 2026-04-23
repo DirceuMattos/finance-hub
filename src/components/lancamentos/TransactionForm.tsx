@@ -82,6 +82,14 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     }
   }, [watchAccountId, accounts, form]);
 
+  const watchDueDate = form.watch("due_date");
+  useEffect(() => {
+    if (watchDueDate) {
+      const month = format(watchDueDate, "yyyy-MM");
+      form.setValue("competence_date", month);
+    }
+  }, [watchDueDate]);
+
   useEffect(() => {
     if (transaction) {
       form.reset({
