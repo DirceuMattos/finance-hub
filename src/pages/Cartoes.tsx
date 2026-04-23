@@ -201,13 +201,49 @@ export default function Cartoes() {
                     </div>
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Uso do Teto Gerencial</span>
-                      <span className="font-medium">{fmt(usedAmount)} / {fmt(managerialLimit)}</span>
-                    </div>
-                    <Progress value={managerialUsagePct} className={`h-2 ${progressColor ? `[&>div]:${progressColor}` : ""}`} />
-                  </div>
+                  {(() => {
+                    const limit = card.managerial_limit || 0;
+                    const pct = limit > 0 ? (usedAmount / limit) * 100 : 0;
+                    const remaining = limit - usedAmount;
+                    const isOver = pct > 100;
+                    const overAmount = usedAmount - limit;
+
+                    if (limit === 0) {
+                      return (
+                        <div className="mt-2">
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                            Sem teto definido
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    const barColor = isOver ? "bg-red-500" : pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+                    const barWidth = Math.min(pct, 100);
+
+                    return (
+                      <div className="mt-3 space-y-1.5">
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Teto gerencial: {fmt(limit)}</span>
+                          <span className={isOver ? "text-red-600 font-semibold dark:text-red-400" : "font-medium"}>
+                            {pct.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-muted overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barWidth}%` }} />
+                        </div>
+                        {isOver ? (
+                          <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                            ⚠ Ultrapassou {fmt(overAmount)} ({(pct - 100).toFixed(1)}% acima do teto)
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Restam {fmt(remaining)} ({(100 - pct).toFixed(1)}% livre)
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <p className="text-[11px] text-muted-foreground">Limite real do cartão: {fmt(card.credit_limit)}</p>
                   <p className="text-xs text-muted-foreground">
                     Entidade: {card.financial_entities?.name || "—"}
