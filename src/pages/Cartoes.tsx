@@ -50,6 +50,8 @@ export default function Cartoes() {
 
   const { data: cardTotals = [] } = useQuery({
     queryKey: ["card_totals_by_card", filterMonth],
+    staleTime: 0,
+    gcTime: 0,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_card_total_by_card", {
         p_start: start,
