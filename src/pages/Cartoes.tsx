@@ -42,32 +42,27 @@ export default function Cartoes() {
   const [view, setView] = useState<FilterView>("all");
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
 
-  const { data: installments = [] } = useCardInstallments(filterMonth);
-  const { data: transactions = [] } = useTransactions(filterMonth);
-  const byCard = useMemo(() => {
-    const map = new Map<string, number>();
+  const [y, m] = filterMonth.split("-").map(Number);
+  const start = `${y}-${String(m).padStart(2, "0")}-01`;
+  const nextMonth = m === 12 ? 1 : m + 1;
+  const nextYear = m === 12 ? y + 1 : y;
+  const end = `${nextYear}-${String(nextMonth).padStart(2, "0")}-01`;
 
-    // Fonte 1: card_installments
-    installments.forEach((inst: any) => {
-      const cardName = inst.card_purchases?.cards?.name || "—";
-      map.set(cardName, (map.get(cardName) || 0) + Math.abs(inst.amount || 0));
-    });
-
-    // Fonte 2: transactions com center_cost de cartão
-    transactions
-      .filter((t: any) =>
-        t.center_cost &&
-        CARD_INVOICE_CENTER_COSTS.includes(t.center_cost) &&
-        t.status !== "paid" &&
-        t.status !== "cancelled"
-      )
-      .forEach((t: any) => {
-        const cardName = t.center_cost;
-        map.set(cardName, (map.get(cardName) || 0) + Math.abs(t.amount || 0));
+  const { data: cardTotals = [] } = useQuery({
+    queryKey: ["card_totals_by_card", filterMonth],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_card_total_by_card", {
+        p_start: start,
+        p_end: end,
       });
+      if (error) throw error;
+      return data as { card_name: string; total: number }[];
+    },
+  });
 
-    return map;
-  }, [installments, transactions]);
+  const byCard = new Map<string, number>(
+    cardTotals.map((r: any) => [r.card_name, Number(r.total)])
+  );
 
   const monthOptions = useMemo(() => buildMonthOptions(), []);
 
