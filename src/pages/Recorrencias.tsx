@@ -46,9 +46,9 @@ export default function Recorrencias() {
   const columns: Column<Recurrence>[] = [
     { key: "description", header: "Descrição", sortable: true, sortValue: (r) => r.description.toLowerCase() },
     { key: "payee", header: "Favorecido", sortable: true, sortValue: (r) => r.payee || "", render: (r) => r.payee || "—" },
-    { key: "type", header: "Tipo", render: (r) => r.type === "income" ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Receita</Badge> : <Badge variant="destructive">Despesa</Badge> },
-    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : ""}>{fmt(r.amount)}</span> },
-    { key: "frequency", header: "Frequência", render: (r) => r.frequency === "monthly" ? "Mensal" : r.frequency === "yearly" ? "Anual" : r.frequency },
+    { key: "type", header: "Tipo", render: (r) => r.transaction_type === "income" ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Receita</Badge> : <Badge variant="destructive">Despesa</Badge> },
+    { key: "amount", header: "Valor", sortable: true, sortValue: (r) => r.amount, render: (r) => <span className={r.transaction_type === "income" ? "text-[hsl(var(--success))]" : r.amount < 0 ? "text-destructive font-medium" : ""}>{fmt(r.amount)}</span> },
+    { key: "frequency", header: "Frequência", render: (r) => r.frequency === "weekly" ? "Semanal" : r.frequency === "monthly" ? "Mensal" : r.frequency === "yearly" ? "Anual" : r.frequency },
     { key: "category", header: "Categoria", render: (r) => r.categories?.name || "—" },
     { key: "entity", header: "Entidade", render: (r) => {
       const et = r.financial_entities?.entity_type;
@@ -56,8 +56,8 @@ export default function Recorrencias() {
       if (et === "business") return <Badge variant="outline" className="text-xs border-accent-foreground text-accent-foreground">Empresa</Badge>;
       return "—";
     }},
-    { key: "start_date", header: "Início", render: (r) => fmtDate(r.start_date) },
-    { key: "end_date", header: "Fim", render: (r) => fmtDate(r.end_date) },
+    { key: "starts_on", header: "Início", render: (r) => fmtDate(r.starts_on) },
+    { key: "ends_on", header: "Fim", render: (r) => fmtDate(r.ends_on) },
     { key: "is_active", header: "Status", render: (r) => r.is_active ? <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Ativo</Badge> : <Badge variant="secondary">Inativo</Badge> },
     {
       key: "actions", header: "", render: (r) => (

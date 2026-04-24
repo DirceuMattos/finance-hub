@@ -16,18 +16,24 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import type { Recurrence } from "@/hooks/useRecurrences";
 import type { FinancialEntity, Account, Category } from "@/types/database";
+import { useCards } from "@/hooks/useCards";
 
 const schema = z.object({
   description: z.string().min(1, "Descrição é obrigatória").max(200),
   amount: z.string().min(1, "Valor é obrigatório"),
   frequency: z.string().min(1, "Frequência é obrigatória"),
-  type: z.string().min(1, "Tipo é obrigatório"),
+  transaction_type: z.string().min(1, "Tipo é obrigatório"),
   category_id: z.string().optional().nullable(),
   financial_entity_id: z.string().optional().nullable(),
   account_id: z.string().optional().nullable(),
-  start_date: z.date().optional().nullable(),
-  end_date: z.date().optional().nullable(),
+  center_cost: z.string().optional().nullable(),
+  starts_on: z.date().optional().nullable(),
+  ends_on: z.date().optional().nullable(),
+  due_day: z.number().optional().nullable(),
+  day_of_week: z.number().optional().nullable(),
   is_active: z.boolean(),
+  is_continuous: z.boolean(),
+  generate_as_planned: z.boolean(),
   payee: z.string().max(200).optional().nullable(),
   notes: z.string().max(500).optional().nullable(),
 });
@@ -46,14 +52,20 @@ interface Props {
 }
 
 export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accounts, categories, onSubmit, loading }: Props) {
+  const { data: cardsList = [] } = useCards();
+
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      description: "", amount: "", frequency: "monthly", type: "expense",
-      category_id: "", financial_entity_id: "", account_id: "",
-      start_date: null, end_date: null, is_active: true, payee: "", notes: "",
+      description: "", amount: "", frequency: "monthly",
+      transaction_type: "expense", category_id: "", financial_entity_id: "",
+      account_id: "", center_cost: "", starts_on: null, ends_on: null,
+      due_day: null, day_of_week: null, is_active: true,
+      is_continuous: false, generate_as_planned: true, payee: "", notes: "",
     },
   });
+
+  const watchFrequency = form.watch("frequency");
 
   useEffect(() => {
     if (recurrence) {
@@ -61,21 +73,28 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         description: recurrence.description,
         amount: String(recurrence.amount),
         frequency: recurrence.frequency,
-        type: recurrence.type,
+        transaction_type: recurrence.transaction_type,
         category_id: recurrence.category_id || "",
         financial_entity_id: recurrence.financial_entity_id || "",
         account_id: recurrence.account_id || "",
-        start_date: recurrence.start_date ? new Date(recurrence.start_date) : null,
-        end_date: recurrence.end_date ? new Date(recurrence.end_date) : null,
+        center_cost: recurrence.center_cost || "",
+        starts_on: recurrence.starts_on ? new Date(recurrence.starts_on) : null,
+        ends_on: recurrence.ends_on ? new Date(recurrence.ends_on) : null,
+        due_day: recurrence.due_day ?? null,
+        day_of_week: recurrence.day_of_week ?? null,
         is_active: recurrence.is_active,
+        is_continuous: recurrence.is_continuous ?? false,
+        generate_as_planned: recurrence.generate_as_planned ?? true,
         payee: recurrence.payee || "",
         notes: recurrence.notes || "",
       });
     } else {
       form.reset({
-        description: "", amount: "", frequency: "monthly", type: "expense",
-        category_id: "", financial_entity_id: "", account_id: "",
-        start_date: null, end_date: null, is_active: true, payee: "", notes: "",
+        description: "", amount: "", frequency: "monthly",
+        transaction_type: "expense", category_id: "", financial_entity_id: "",
+        account_id: "", center_cost: "", starts_on: null, ends_on: null,
+        due_day: null, day_of_week: null, is_active: true,
+        is_continuous: false, generate_as_planned: true, payee: "", notes: "",
       });
     }
   }, [recurrence, open]);
@@ -90,20 +109,25 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       description: data.description,
       amount: parsedAmount,
       frequency: data.frequency,
-      type: data.type,
+      transaction_type: data.transaction_type,
       category_id: data.category_id || null,
       financial_entity_id: data.financial_entity_id || null,
       account_id: data.account_id || null,
-      start_date: data.start_date ? format(data.start_date, "yyyy-MM-dd") : null,
-      end_date: data.end_date ? format(data.end_date, "yyyy-MM-dd") : null,
+      center_cost: data.center_cost || null,
+      starts_on: data.starts_on ? format(data.starts_on, "yyyy-MM-dd") : null,
+      ends_on: data.ends_on ? format(data.ends_on, "yyyy-MM-dd") : null,
+      due_day: data.due_day ?? null,
+      day_of_week: data.day_of_week ?? null,
       is_active: data.is_active,
+      is_continuous: data.is_continuous,
+      generate_as_planned: data.generate_as_planned,
       payee: data.payee || null,
       notes: data.notes || null,
     };
     onSubmit(recurrence ? { id: recurrence.id, ...payload } : payload);
   };
 
-  const DateField = ({ name, label }: { name: "start_date" | "end_date"; label: string }) => (
+  const DateField = ({ name, label }: { name: "starts_on" | "ends_on"; label: string }) => (
     <FormField control={form.control} name={name} render={({ field }) => (
       <FormItem className="flex flex-col">
         <FormLabel>{label}</FormLabel>
@@ -141,7 +165,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
           )} />
 
           <div className="grid grid-cols-2 gap-3">
-            <FormField control={form.control} name="type" render={({ field }) => (
+            <FormField control={form.control} name="transaction_type" render={({ field }) => (
               <FormItem><FormLabel>Tipo *</FormLabel><FormControl>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -157,6 +181,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
                 <Select onValueChange={field.onChange} value={field.value}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="weekly">Semanal</SelectItem>
                     <SelectItem value="monthly">Mensal</SelectItem>
                     <SelectItem value="yearly">Anual</SelectItem>
                   </SelectContent>
@@ -164,6 +189,32 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
               </FormControl><FormMessage /></FormItem>
             )} />
           </div>
+
+          {watchFrequency === "weekly" && (
+            <FormField control={form.control} name="day_of_week" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Dia da Semana *</FormLabel>
+                <Select
+                  value={field.value !== null && field.value !== undefined ? String(field.value) : ""}
+                  onValueChange={(v) => field.onChange(Number(v))}
+                >
+                  <FormControl>
+                    <SelectTrigger><SelectValue placeholder="Selecione o dia..." /></SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="0">Domingo</SelectItem>
+                    <SelectItem value="1">Segunda-feira</SelectItem>
+                    <SelectItem value="2">Terça-feira</SelectItem>
+                    <SelectItem value="3">Quarta-feira</SelectItem>
+                    <SelectItem value="4">Quinta-feira</SelectItem>
+                    <SelectItem value="5">Sexta-feira</SelectItem>
+                    <SelectItem value="6">Sábado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )} />
+          )}
 
           <FormField control={form.control} name="amount" render={({ field }) => (
             <FormItem><FormLabel>Valor *</FormLabel><FormControl><Input type="text" inputMode="decimal" placeholder="0,00" {...field} /></FormControl><FormMessage /></FormItem>
@@ -216,9 +267,30 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
             </FormControl><FormMessage /></FormItem>
           )} />
 
+          <FormField control={form.control} name="center_cost" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Cartão de Crédito (opcional)</FormLabel>
+              <Select
+                value={field.value || "none"}
+                onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+              >
+                <FormControl>
+                  <SelectTrigger><SelectValue placeholder="Nenhum cartão" /></SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum cartão</SelectItem>
+                  {cardsList.map((card: any) => (
+                    <SelectItem key={card.id} value={card.name}>{card.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )} />
+
           <div className="grid grid-cols-2 gap-3">
-            <DateField name="start_date" label="Data Início" />
-            <DateField name="end_date" label="Data Fim" />
+            <DateField name="starts_on" label="Data Início" />
+            <DateField name="ends_on" label="Data Fim" />
           </div>
 
           <FormField control={form.control} name="is_active" render={({ field }) => (
