@@ -14,6 +14,9 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useCategories } from "@/hooks/useCategories";
 import { RecurrenceForm } from "@/components/recorrencias/RecurrenceForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
+import { supabase } from "@/lib/supabaseClient";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 type ViewType = "all" | "personal" | "business";
 
@@ -28,6 +31,26 @@ export default function Recorrencias() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Recurrence | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const [generating, setGenerating] = useState(false);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const { data, error } = await (supabase as any).rpc(
+        "generate_recurring_transactions",
+        { p_until: null }
+      );
+      if (error) throw error;
+      const count = Number(data) || 0;
+      toast.success(`${count} lançamento(s) gerado(s) com sucesso`);
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    } catch (e: any) {
+      toast.error("Erro ao gerar lançamentos: " + e.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const filtered = useMemo(() => {
     return data.filter((r) => {
@@ -79,7 +102,14 @@ export default function Recorrencias() {
       <PageHeader
         title="Recorrências"
         description="Lançamentos automáticos recorrentes"
-        actions={<Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleGenerate} disabled={generating}>
+              {generating ? "Gerando..." : "Gerar Lançamentos"}
+            </Button>
+            <Button size="sm" onClick={() => { setEditing(null); setFormOpen(true); }}><Plus className="h-4 w-4 mr-1" />Nova</Button>
+          </div>
+        }
       />
 
       <Tabs value={view} onValueChange={(v) => setView(v as ViewType)} className="mb-4">
