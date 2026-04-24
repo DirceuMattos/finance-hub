@@ -83,12 +83,18 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   }, [watchAccountId, accounts, form]);
 
   const watchDueDate = form.watch("due_date");
+  const watchCenterCost = form.watch("center_cost");
   useEffect(() => {
+    // Só sincroniza competence_date com due_date:
+    // 1. Durante CRIAÇÃO (não edição)
+    // 2. Quando NÃO há cartão selecionado
+    if (transaction) return; // não roda na edição
+    if (watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "") return; // não roda com cartão
     if (watchDueDate) {
       const month = format(watchDueDate, "yyyy-MM");
       form.setValue("competence_date", month);
     }
-  }, [watchDueDate]);
+  }, [watchDueDate, watchCenterCost, transaction]);
 
   useEffect(() => {
     if (transaction) {
