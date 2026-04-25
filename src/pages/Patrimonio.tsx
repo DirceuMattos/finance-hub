@@ -25,7 +25,8 @@ const fmt = (v: number) =>
 
 const fmtMonth = (m: string) => {
   try {
-    const d = new Date(m);
+    const [y, mo] = m.split("-").map(Number);
+    const d = new Date(y, mo - 1, 1);
     return format(d, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
   } catch {
     return m;
