@@ -15,7 +15,6 @@ import { supabase } from "@/lib/supabaseClient";
 const schema = z.object({
   reference_month: z.string().min(1, "Mês de referência é obrigatório"),
   item_name: z.string().min(1, "Nome do item é obrigatório"),
-  asset_category_id: z.string().optional().nullable(),
   asset_category_name: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
