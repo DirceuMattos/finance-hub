@@ -122,8 +122,9 @@ export default function Patrimonio() {
       toast.error("Selecione um mês para propagar");
       return;
     }
-    const fromMonth = activeMonth.length === 7 ? `${activeMonth}-01` : activeMonth;
-    const toDate = addMonths(new Date(fromMonth), 1);
+    const fromMonth = activeMonth.length === 10 ? activeMonth : `${activeMonth}-01`;
+    const [fy, fm] = fromMonth.split("-").map(Number);
+    const toDate = new Date(fy, fm, 1); // fm já é o próximo mês (0-indexed)
     const toMonth = format(toDate, "yyyy-MM-dd");
     const toMonthLabel = format(toDate, "MM/yyyy");
 
