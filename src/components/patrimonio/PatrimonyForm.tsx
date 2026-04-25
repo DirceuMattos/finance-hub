@@ -203,7 +203,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
 
             <FormField control={form.control} name="closing_value" render={({ field }) => (
               <FormItem>
-                <FormLabel>Valor Fechamento *</FormLabel>
+                <FormLabel>Valor Fechamento</FormLabel>
                 <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
