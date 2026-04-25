@@ -43,6 +43,8 @@ export default function Patrimonio() {
   const { data: evolution = [] } = usePatrimonyEvolution();
   const { data: entities = [] } = useFinancialEntities();
   const { create, update, remove } = usePatrimonyCrud();
+  const queryClient = useQueryClient();
+  const [propagating, setPropagating] = useState(false);
 
   const personalIds = useMemo(() => entities.filter(e => e.entity_type === "personal").map(e => e.id), [entities]);
   const businessIds = useMemo(() => entities.filter(e => e.entity_type === "business").map(e => e.id), [entities]);
