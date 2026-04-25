@@ -116,6 +116,37 @@ export default function Patrimonio() {
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [filteredSnapshots]);
 
+  const handlePropagate = async () => {
+    if (!activeMonth) {
+      toast.error("Selecione um mês para propagar");
+      return;
+    }
+    const fromMonth = activeMonth.length === 7 ? `${activeMonth}-01` : activeMonth;
+    const toDate = addMonths(new Date(fromMonth), 1);
+    const toMonth = format(toDate, "yyyy-MM-dd");
+    const toMonthLabel = format(toDate, "MM/yyyy");
+
+    setPropagating(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("propagate_patrimony_month", {
+        p_from_month: fromMonth,
+        p_to_month: toMonth,
+      });
+      if (error) throw error;
+      const count = Number(data) || 0;
+      if (count === 0) {
+        toast.info(`Todos os itens já existem em ${toMonthLabel} ou não há itens para propagar`);
+      } else {
+        toast.success(`${count} item(s) propagado(s) para ${toMonthLabel}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
+    } catch (e: any) {
+      toast.error("Erro ao propagar: " + e.message);
+    } finally {
+      setPropagating(false);
+    }
+  };
+
   const handleFormSubmit = (data: any) => {
     if (data.id) {
       update.mutate(data, { onSuccess: () => { setFormOpen(false); setEditingSnapshot(null); } });
