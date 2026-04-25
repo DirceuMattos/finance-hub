@@ -120,7 +120,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       asset_category_id: categoryId,
       financial_entity_id: data.financial_entity_id,
       opening_value: data.opening_value,
-      closing_value: data.closing_value,
+      closing_value: data.closing_value ?? data.opening_value ?? 0,
       notes: data.notes,
     };
 
