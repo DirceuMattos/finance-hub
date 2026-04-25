@@ -18,7 +18,7 @@ const schema = z.object({
   asset_category_name: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
-  closing_value: z.coerce.number(),
+  closing_value: z.coerce.number().optional().nullable(),
   notes: z.string().optional(),
 });
 
