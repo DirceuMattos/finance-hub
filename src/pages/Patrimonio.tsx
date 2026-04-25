@@ -1,6 +1,9 @@
 import { useState, useMemo } from "react";
-import { format } from "date-fns";
+import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { supabase } from "@/lib/supabaseClient";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
@@ -40,6 +43,8 @@ export default function Patrimonio() {
   const { data: evolution = [] } = usePatrimonyEvolution();
   const { data: entities = [] } = useFinancialEntities();
   const { create, update, remove } = usePatrimonyCrud();
+  const queryClient = useQueryClient();
+  const [propagating, setPropagating] = useState(false);
 
   const personalIds = useMemo(() => entities.filter(e => e.entity_type === "personal").map(e => e.id), [entities]);
   const businessIds = useMemo(() => entities.filter(e => e.entity_type === "business").map(e => e.id), [entities]);
@@ -111,6 +116,37 @@ export default function Patrimonio() {
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [filteredSnapshots]);
 
+  const handlePropagate = async () => {
+    if (!activeMonth) {
+      toast.error("Selecione um mês para propagar");
+      return;
+    }
+    const fromMonth = activeMonth.length === 7 ? `${activeMonth}-01` : activeMonth;
+    const toDate = addMonths(new Date(fromMonth), 1);
+    const toMonth = format(toDate, "yyyy-MM-dd");
+    const toMonthLabel = format(toDate, "MM/yyyy");
+
+    setPropagating(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("propagate_patrimony_month", {
+        p_from_month: fromMonth,
+        p_to_month: toMonth,
+      });
+      if (error) throw error;
+      const count = Number(data) || 0;
+      if (count === 0) {
+        toast.info(`Todos os itens já existem em ${toMonthLabel} ou não há itens para propagar`);
+      } else {
+        toast.success(`${count} item(s) propagado(s) para ${toMonthLabel}`);
+      }
+      queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
+    } catch (e: any) {
+      toast.error("Erro ao propagar: " + e.message);
+    } finally {
+      setPropagating(false);
+    }
+  };
+
   const handleFormSubmit = (data: any) => {
     if (data.id) {
       update.mutate(data, { onSuccess: () => { setFormOpen(false); setEditingSnapshot(null); } });
@@ -179,9 +215,14 @@ export default function Patrimonio() {
   return (
     <AppLayout>
       <PageHeader title="Patrimônio" description="Visão consolidada do patrimônio por mês" actions={
-        <Button onClick={() => { setEditingSnapshot(null); setFormOpen(true); }} size="sm">
-          <Plus className="h-4 w-4 mr-1" /> Novo registro
-        </Button>
+        <>
+          <Button variant="outline" size="sm" onClick={handlePropagate} disabled={propagating || !activeMonth}>
+            {propagating ? "Propagando..." : "Propagar para Próximo Mês"}
+          </Button>
+          <Button onClick={() => { setEditingSnapshot(null); setFormOpen(true); }} size="sm">
+            <Plus className="h-4 w-4 mr-1" /> Novo registro
+          </Button>
+        </>
       } />
 
       <div className="flex flex-wrap items-center gap-3 mb-6">
