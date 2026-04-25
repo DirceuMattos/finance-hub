@@ -10,11 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAssetCategories, usePreviousPatrimonyClosingValue, type PatrimonySnapshot } from "@/hooks/usePatrimony";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
+import { supabase } from "@/lib/supabaseClient";
 
 const schema = z.object({
   reference_month: z.string().min(1, "Mês de referência é obrigatório"),
   item_name: z.string().min(1, "Nome do item é obrigatório"),
   asset_category_id: z.string().optional().nullable(),
+  asset_category_name: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
   closing_value: z.coerce.number(),
@@ -41,6 +43,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       reference_month: "",
       item_name: "",
       asset_category_id: "",
+      asset_category_name: "",
       financial_entity_id: "",
       opening_value: 0,
       closing_value: 0,
@@ -71,6 +74,9 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
         reference_month: snapshot.reference_month,
         item_name: snapshot.item_name,
         asset_category_id: snapshot.asset_category_id,
+        asset_category_name: snapshot.asset_category_id
+          ? categories.find((c) => c.id === snapshot.asset_category_id)?.name || ""
+          : "",
         financial_entity_id: snapshot.financial_entity_id,
         opening_value: snapshot.opening_value,
         closing_value: snapshot.closing_value,
@@ -81,26 +87,47 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
         reference_month: "",
         item_name: "",
         asset_category_id: "",
+        asset_category_name: "",
         financial_entity_id: "",
         opening_value: 0,
         closing_value: 0,
         notes: "",
       });
     }
-  }, [snapshot, open]);
+  }, [snapshot, open, categories]);
 
-  const handleSubmit = (data: FormData) => {
-    const payload: any = {
-      ...data,
-      asset_category_id:
-        data.asset_category_id && data.asset_category_id !== "none"
-          ? data.asset_category_id
-          : null,
-    };
-    // Normalize reference_month to yyyy-MM-dd for the database
-    if (payload.reference_month && payload.reference_month.length === 7) {
-      payload.reference_month = `${payload.reference_month}-01`;
+  const handleSubmit = async (data: FormData) => {
+    let categoryId: string | null = null;
+
+    if (data.asset_category_name && data.asset_category_name.trim() !== "") {
+      const existing = categories.find(
+        (c) => c.name.toLowerCase().trim() === data.asset_category_name!.toLowerCase().trim()
+      );
+      if (existing) {
+        categoryId = existing.id;
+      } else {
+        const { data: newCat, error } = await (supabase as any)
+          .from("asset_categories")
+          .insert({ name: data.asset_category_name.trim() })
+          .select("id")
+          .single();
+        if (!error && newCat) {
+          categoryId = newCat.id;
+        }
+      }
     }
+
+    const payload: any = {
+      reference_month:
+        data.reference_month.length === 7 ? `${data.reference_month}-01` : data.reference_month,
+      item_name: data.item_name,
+      asset_category_id: categoryId,
+      financial_entity_id: data.financial_entity_id,
+      opening_value: data.opening_value,
+      closing_value: data.closing_value,
+      notes: data.notes,
+    };
+
     onSubmit(snapshot ? { id: snapshot.id, ...payload } : payload);
   };
 
@@ -128,19 +155,25 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
             </FormItem>
           )} />
 
-          <FormField control={form.control} name="asset_category_id" render={({ field }) => (
+          <FormField control={form.control} name="asset_category_name" render={({ field }) => (
             <FormItem>
               <FormLabel>Categoria (opcional)</FormLabel>
               <FormControl>
-                <Select onValueChange={field.onChange} value={field.value || "none"}>
-                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem categoria</SelectItem>
-                    {categories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Input
+                    {...field}
+                    value={field.value || ""}
+                    list="asset-categories-list"
+                    placeholder="Digite ou selecione uma categoria"
+                  />
+                  <datalist id="asset-categories-list">
+                    {[...categories]
+                      .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"))
+                      .map((c) => (
+                        <option key={c.id} value={c.name} />
+                      ))}
+                  </datalist>
+                </>
               </FormControl>
               <FormMessage />
             </FormItem>
