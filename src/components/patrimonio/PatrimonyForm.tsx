@@ -41,7 +41,6 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
     defaultValues: {
       reference_month: "",
       item_name: "",
-      asset_category_id: "",
       asset_category_name: "",
       financial_entity_id: "",
       opening_value: 0,
@@ -72,7 +71,6 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       form.reset({
         reference_month: snapshot.reference_month,
         item_name: snapshot.item_name,
-        asset_category_id: snapshot.asset_category_id,
         asset_category_name: snapshot.asset_category_id
           ? categories.find((c) => c.id === snapshot.asset_category_id)?.name || ""
           : "",
@@ -85,7 +83,6 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       form.reset({
         reference_month: "",
         item_name: "",
-        asset_category_id: "",
         asset_category_name: "",
         financial_entity_id: "",
         opening_value: 0,
