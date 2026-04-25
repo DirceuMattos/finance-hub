@@ -14,7 +14,7 @@ import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 const schema = z.object({
   reference_month: z.string().min(1, "Mês de referência é obrigatório"),
   item_name: z.string().min(1, "Nome do item é obrigatório"),
-  asset_category_id: z.string().min(1, "Categoria é obrigatória"),
+  asset_category_id: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
   closing_value: z.coerce.number(),
@@ -90,7 +90,13 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
   }, [snapshot, open]);
 
   const handleSubmit = (data: FormData) => {
-    const payload = { ...data };
+    const payload: any = {
+      ...data,
+      asset_category_id:
+        data.asset_category_id && data.asset_category_id !== "none"
+          ? data.asset_category_id
+          : null,
+    };
     // Normalize reference_month to yyyy-MM-dd for the database
     if (payload.reference_month && payload.reference_month.length === 7) {
       payload.reference_month = `${payload.reference_month}-01`;
@@ -124,11 +130,12 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
 
           <FormField control={form.control} name="asset_category_id" render={({ field }) => (
             <FormItem>
-              <FormLabel>Categoria *</FormLabel>
+              <FormLabel>Categoria (opcional)</FormLabel>
               <FormControl>
-                <Select onValueChange={field.onChange} value={field.value}>
+                <Select onValueChange={field.onChange} value={field.value || "none"}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">Sem categoria</SelectItem>
                     {categories.map((c) => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
