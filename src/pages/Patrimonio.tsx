@@ -46,6 +46,7 @@ export default function Patrimonio() {
   const { create, update, remove } = usePatrimonyCrud();
   const queryClient = useQueryClient();
   const [propagating, setPropagating] = useState(false);
+  const [undoing, setUndoing] = useState(false);
 
   const personalIds = useMemo(() => entities.filter(e => e.entity_type === "personal").map(e => e.id), [entities]);
   const businessIds = useMemo(() => entities.filter(e => e.entity_type === "business").map(e => e.id), [entities]);
