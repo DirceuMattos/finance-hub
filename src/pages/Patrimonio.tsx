@@ -46,6 +46,7 @@ export default function Patrimonio() {
   const { create, update, remove } = usePatrimonyCrud();
   const queryClient = useQueryClient();
   const [propagating, setPropagating] = useState(false);
+  const [undoing, setUndoing] = useState(false);
 
   const personalIds = useMemo(() => entities.filter(e => e.entity_type === "personal").map(e => e.id), [entities]);
   const businessIds = useMemo(() => entities.filter(e => e.entity_type === "business").map(e => e.id), [entities]);
@@ -149,6 +150,30 @@ export default function Patrimonio() {
     }
   };
 
+  const lastMonth = months[months.length - 1];
+  const isLastMonthSelected = activeMonth === lastMonth;
+  const canUndo = months.length > 1 && isLastMonthSelected;
+
+  const handleUndo = async () => {
+    if (!canUndo) return;
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir todos os registros de ${fmtMonth(lastMonth)}? Esta ação não pode ser desfeita.`
+    );
+    if (!confirmed) return;
+    setUndoing(true);
+    try {
+      const { error } = await (supabase as any).rpc("delete_last_patrimony_month");
+      if (error) throw error;
+      toast.success(`Registros de ${fmtMonth(lastMonth)} excluídos com sucesso`);
+      queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
+      setSelectedMonth(months[months.length - 2]);
+    } catch (e: any) {
+      toast.error("Erro ao desfazer: " + e.message);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
   const handleFormSubmit = (data: any) => {
     if (data.id) {
       update.mutate(data, { onSuccess: () => { setFormOpen(false); setEditingSnapshot(null); } });
@@ -227,6 +252,15 @@ export default function Patrimonio() {
         <>
           <Button variant="outline" size="sm" onClick={handlePropagate} disabled={propagating || !activeMonth}>
             {propagating ? "Propagando..." : "Propagar para Próximo Mês"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUndo}
+            disabled={undoing || !canUndo}
+            className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+          >
+            {undoing ? "Desfazendo..." : "Desfazer Último Mês"}
           </Button>
           <Button onClick={() => { setEditingSnapshot(null); setFormOpen(true); }} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Novo registro
