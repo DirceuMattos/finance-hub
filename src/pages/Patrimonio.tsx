@@ -198,9 +198,16 @@ export default function Patrimonio() {
       key: "variation", header: "Variação", sortable: true,
       sortValue: (r) => r.closing_value - r.opening_value,
       render: (r) => {
-        const diff = r.closing_value - r.opening_value;
+        if (r.closing_value === null || r.closing_value === undefined) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        const diff = (r.closing_value ?? 0) - (r.opening_value ?? 0);
         if (diff === 0) return <span className="text-muted-foreground">—</span>;
-        return <span className={`font-mono text-[10px] ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>{diff > 0 ? "+" : ""}{fmt(diff)}</span>;
+        return (
+          <span className={`font-mono text-[10px] ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>
+            {diff > 0 ? "+" : ""}{fmt(diff)}
+          </span>
+        );
       },
     },
     {
