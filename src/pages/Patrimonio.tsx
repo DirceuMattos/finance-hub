@@ -150,6 +150,30 @@ export default function Patrimonio() {
     }
   };
 
+  const lastMonth = months[months.length - 1];
+  const isLastMonthSelected = activeMonth === lastMonth;
+  const canUndo = months.length > 1 && isLastMonthSelected;
+
+  const handleUndo = async () => {
+    if (!canUndo) return;
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir todos os registros de ${fmtMonth(lastMonth)}? Esta ação não pode ser desfeita.`
+    );
+    if (!confirmed) return;
+    setUndoing(true);
+    try {
+      const { error } = await (supabase as any).rpc("delete_last_patrimony_month");
+      if (error) throw error;
+      toast.success(`Registros de ${fmtMonth(lastMonth)} excluídos com sucesso`);
+      queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
+      setSelectedMonth(months[months.length - 2]);
+    } catch (e: any) {
+      toast.error("Erro ao desfazer: " + e.message);
+    } finally {
+      setUndoing(false);
+    }
+  };
+
   const handleFormSubmit = (data: any) => {
     if (data.id) {
       update.mutate(data, { onSuccess: () => { setFormOpen(false); setEditingSnapshot(null); } });
