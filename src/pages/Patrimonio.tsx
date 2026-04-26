@@ -253,6 +253,15 @@ export default function Patrimonio() {
           <Button variant="outline" size="sm" onClick={handlePropagate} disabled={propagating || !activeMonth}>
             {propagating ? "Propagando..." : "Propagar para Próximo Mês"}
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleUndo}
+            disabled={undoing || !canUndo}
+            className="text-destructive border-destructive hover:bg-destructive hover:text-white"
+          >
+            {undoing ? "Desfazendo..." : "Desfazer Último Mês"}
+          </Button>
           <Button onClick={() => { setEditingSnapshot(null); setFormOpen(true); }} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Novo registro
           </Button>
