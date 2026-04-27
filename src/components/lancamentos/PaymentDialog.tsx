@@ -26,6 +26,8 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
   const [amount, setAmount] = useState("");
   const [showRemainderAlert, setShowRemainderAlert] = useState(false);
   const [pendingConfirmData, setPendingConfirmData] = useState<{ id: string; status: string; payment_date: string; amount: number } | null>(null);
+  const [showCalc, setShowCalc] = useState(false);
+  const [calcInput, setCalcInput] = useState("");
 
   const parseAmountInput = (raw: unknown): number => {
     if (raw == null) return NaN;
@@ -43,6 +45,8 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
     if (isOpen && transaction) {
       setPaymentDate(new Date());
       setAmount(String(transaction.amount));
+      setShowCalc(false);
+      setCalcInput("");
     }
     onOpenChange(isOpen);
   };
@@ -150,7 +154,78 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
                 </div>
                 <div className="space-y-2">
                   <Label>Valor realizado (R$)</Label>
-                  <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Abrir calculadora"
+                      onClick={() => setShowCalc(!showCalc)}
+                    >
+                      <span className="text-base">🧮</span>
+                    </Button>
+                  </div>
+                  {showCalc && (
+                    <div className="border rounded-lg p-3 bg-muted/30 space-y-2">
+                      <p className="text-xs text-muted-foreground">Digite os valores separados por + para somar</p>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Ex: 150.00 + 89.90 + 45.00"
+                          value={calcInput}
+                          onChange={(e) => setCalcInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              try {
+                                const sanitized = calcInput.replace(/[^0-9+\-*/.]/g, "");
+                                const result = Function(`"use strict"; return (${sanitized})`)();
+                                if (Number.isFinite(result) && result > 0) {
+                                  setAmount(result.toFixed(2));
+                                  setCalcInput("");
+                                  setShowCalc(false);
+                                }
+                              } catch {}
+                            }
+                          }}
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            try {
+                              const sanitized = calcInput.replace(/[^0-9+\-*/.]/g, "");
+                              const result = Function(`"use strict"; return (${sanitized})`)();
+                              if (Number.isFinite(result) && result > 0) {
+                                setAmount(result.toFixed(2));
+                                setCalcInput("");
+                                setShowCalc(false);
+                              }
+                            } catch {}
+                          }}
+                        >
+                          OK
+                        </Button>
+                      </div>
+                      {calcInput && (() => {
+                        try {
+                          const sanitized = calcInput.replace(/[^0-9+\-*/.]/g, "");
+                          const result = Function(`"use strict"; return (${sanitized})`)();
+                          return Number.isFinite(result) ? (
+                            <p className="text-xs text-emerald-600 font-medium">
+                              Total: {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(result)}
+                            </p>
+                          ) : null;
+                        } catch { return null; }
+                      })()}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
