@@ -276,15 +276,17 @@ export default function Lancamentos() {
   const isUpdatedToday = (d?: string | null) => d ? format(parseISO(d), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") : false;
 
   const listSummary = useMemo(() => {
-    return filtered.reduce(
-      (acc, row) => {
-        acc.count += 1;
-        if (row.transaction_type === "income") acc.income += Math.abs(row.amount || 0);
-        if (row.transaction_type === "expense") acc.expense += Math.abs(row.amount || 0);
-        return acc;
-      },
-      { count: 0, income: 0, expense: 0 }
-    );
+    return filtered
+      .filter((row) => row.status !== "cancelled")
+      .reduce(
+        (acc, row) => {
+          acc.count += 1;
+          if (row.transaction_type === "income") acc.income += Math.abs(row.amount || 0);
+          if (row.transaction_type === "expense") acc.expense += Math.abs(row.amount || 0);
+          return acc;
+        },
+        { count: 0, income: 0, expense: 0 }
+      );
   }, [filtered]);
 
   const columns: Column<UnifiedRow>[] = [
