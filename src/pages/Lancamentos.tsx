@@ -447,11 +447,6 @@ export default function Lancamentos() {
   const ensureSavedRecordVisible = (item: Partial<Transaction>) => {
     let adjusted = false;
 
-    if (search && item.description && !item.description.toLowerCase().includes(search.toLowerCase())) {
-      setSearch("");
-      adjusted = true;
-    }
-
     if (filterSource === "card") {
       setFilterSource("transactions");
       adjusted = true;
