@@ -132,6 +132,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     }
     setCreatingCategory(false);
     setNewCategoryName("");
+    setValueType("installment");
   }, [transaction, open, cardsList, form]);
 
   const parseAmountInput = (raw: unknown): number => {
