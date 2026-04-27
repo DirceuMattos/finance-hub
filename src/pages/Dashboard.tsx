@@ -101,10 +101,12 @@ export default function Dashboard() {
     ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
     : undefined;
 
-  const patrimonyChartData = patrimonyEvolution.map(d => ({
-    month: (d as any).label ?? fmtMonth(d.reference_month),
-    Patrimônio: d.net_patrimony,
-  }));
+  const patrimonyChartData = patrimonyEvolution
+    .filter(d => d.net_patrimony !== null && d.net_patrimony !== undefined && Number(d.net_patrimony) > 0)
+    .map(d => ({
+      month: fmtMonth(d.reference_month),
+      Patrimônio: Number(d.net_patrimony),
+    }));
 
   const handleGenerateAnalysis = async () => {
     setAiLoading(true);
@@ -388,7 +390,14 @@ export default function Dashboard() {
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtShort} className="fill-muted-foreground" />
                   <Tooltip formatter={(v: number) => fmtCur(v)} />
-                  <Line type="monotone" dataKey="Patrimônio" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
+                  <Line
+                    type="monotone"
+                    dataKey="Patrimônio"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    connectNulls={false}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             )}
