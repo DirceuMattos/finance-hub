@@ -53,7 +53,7 @@ export function useTransactions(filterMonth?: string) {
 
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        q = q.gte("competence_date", start).lt("competence_date", end).limit(2000);
+        q = q.gte("due_date", start).lt("due_date", end).limit(2000);
       } else {
         q = q.range(0, 4999).order("competence_date", { ascending: false });
       }
