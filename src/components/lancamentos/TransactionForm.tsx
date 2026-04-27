@@ -55,6 +55,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   const { data: cardsList = [] } = useCards();
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [valueType, setValueType] = useState<"installment" | "total">("installment");
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
