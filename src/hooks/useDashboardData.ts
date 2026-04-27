@@ -365,6 +365,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .select("reference_month, net_patrimony")
         .order("reference_month")
         .limit(12);
+      console.log("patrimonyEvolution data:", data, "error:", error);
       if (error) return [];
       return (data || []).map((d: any) => ({
         reference_month: d.reference_month,
