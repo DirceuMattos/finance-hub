@@ -161,7 +161,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   };
 
   const handleSubmit = (data: FormData) => {
-    const parsedAmount = parseAmountInput(data.amount);
+    let parsedAmount = parseAmountInput(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       form.setError("amount", { message: "Valor inválido" });
       return;
@@ -169,6 +169,10 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
     const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
     const isMulti = !transaction && installmentsCount > 1;
+    const hasCard = !!(data.center_cost && data.center_cost !== "none" && data.center_cost !== "");
+    if (hasCard && valueType === "total" && installmentsCount > 1) {
+      parsedAmount = parsedAmount / installmentsCount;
+    }
 
     // Blindagem: não permitir status=paid com payment_date futura
     if (data.status === "paid" && data.payment_date) {
