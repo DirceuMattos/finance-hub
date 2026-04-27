@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
@@ -41,13 +41,16 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
     return parseFloat(hasComma ? s.replace(",", ".") : s);
   };
 
-  const handleOpen = (isOpen: boolean) => {
-    if (isOpen && transaction) {
-      setPaymentDate(new Date());
+  useEffect(() => {
+    if (transaction && open) {
       setAmount(String(transaction.amount));
+      setPaymentDate(new Date());
       setShowCalc(false);
       setCalcInput("");
     }
+  }, [transaction, open]);
+
+  const handleOpen = (isOpen: boolean) => {
     onOpenChange(isOpen);
   };
 
