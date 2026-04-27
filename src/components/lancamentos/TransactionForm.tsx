@@ -285,45 +285,6 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
             </FormItem>
           )} />
 
-          {watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "" &&
-           Number(watchInstallmentsCount) > 1 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
-              <p className="text-sm font-medium text-amber-800">
-                O valor informado é:
-              </p>
-              <div className="flex gap-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="valueType"
-                    value="installment"
-                    checked={valueType === "installment"}
-                    onChange={() => setValueType("installment")}
-                    className="accent-amber-600"
-                  />
-                  <span className="text-sm text-amber-700">Valor de cada parcela</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="valueType"
-                    value="total"
-                    checked={valueType === "total"}
-                    onChange={() => setValueType("total")}
-                    className="accent-amber-600"
-                  />
-                  <span className="text-sm text-amber-700">Valor total</span>
-                </label>
-              </div>
-              {valueType === "total" && Number(watchInstallmentsCount) > 1 && (
-                <p className="text-xs text-amber-600">
-                  Cada parcela será de {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
-                    .format((parseAmountInput(form.watch("amount")) || 0) / Number(watchInstallmentsCount))}
-                </p>
-              )}
-            </div>
-          )}
-
           <FormField control={form.control} name="payee" render={({ field }) => (
             <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
           )} />
