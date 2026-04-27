@@ -421,6 +421,7 @@ export default function Lancamentos() {
   const promotingInstallmentRef = useRef<string | null>(null);
   const handlePromoteInstallment = (r: UnifiedRow) => {
     const realId = r.id.replace("ci_", "");
+    toast.info("Este lançamento será migrado para um lançamento unificado ao salvar.");
     promotingInstallmentRef.current = realId;
     const draft: Partial<Transaction> = {
       description: r.description,
@@ -437,7 +438,6 @@ export default function Lancamentos() {
       notes: r.notes ?? null,
       installment_number: r.installment_number,
       installment_total: r.installment_total,
-      card_id: r.card_id ?? null,
     } as any;
     setEditing(draft as Transaction);
     setFormOpen(true);
@@ -511,7 +511,7 @@ export default function Lancamentos() {
         ensureSavedRecordVisible(d);
         // Se estávamos promovendo uma parcela legada, cancela a origem para evitar duplicidade.
         const promotingId = promotingInstallmentRef.current;
-        if (promotingId && !d.id) {
+        if (promotingId) {
           updateInstallmentStatus.mutate({ id: promotingId, status: "cancelled" });
           promotingInstallmentRef.current = null;
         }
