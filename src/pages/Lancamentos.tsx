@@ -219,8 +219,6 @@ export default function Lancamentos() {
     }));
   }, [data, cardsList]);
 
-  console.log("txRows:", txRows.length, "cardRows:", cardRows.length, "allRows:", txRows.length + cardRows.length);
-
   // Merge and filter
   const allRows = useMemo(() => {
     if (filterSource === "transactions") return txRows;
@@ -267,8 +265,6 @@ export default function Lancamentos() {
     });
   }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment]);
 
-  console.log("filtered:", filtered.length, "filterStatus:", filterStatus, "filterSource:", filterSource, "filterCardInvoice:", filterCardInvoice);
-
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
@@ -288,15 +284,6 @@ export default function Lancamentos() {
         { count: 0, income: 0, expense: 0 }
       );
   }, [filtered]);
-
-  console.log("cardStats debug:", {
-    filtered: filtered.length,
-    active: filtered.filter(t => t.status !== "cancelled").length,
-    income: filtered.filter(t => t.status !== "cancelled" && t.transaction_type === "income").length,
-    expense: filtered.filter(t => t.status !== "cancelled" && t.transaction_type === "expense").length,
-    txRows: txRows.length,
-    cardRows: cardRows.length,
-  });
 
   const columns: Column<UnifiedRow>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },

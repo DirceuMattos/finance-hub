@@ -87,8 +87,11 @@ export function useCardInstallments(filterMonth?: string) {
         const { start, end } = getMonthRange(filterMonth);
         query = query.filter("billing_month", "gte", start).filter("billing_month", "lt", end);
       } else {
-        // No month filter: limit to avoid truncation
-        query = query.limit(5000);
+        // No month filter: exclude cancelled and limit
+        query = query
+          .not("status", "eq", "cancelled")
+          .limit(200)
+          .order("billing_month", { ascending: false });
       }
 
       const { data, error } = await query;
