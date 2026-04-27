@@ -88,12 +88,15 @@ function InstallmentBadge({ number, total }: { number: number | null; total: num
 
 function buildMonthOptions() {
   const options: { value: string; label: string }[] = [];
-  const now = startOfMonth(new Date());
-  for (let i = -12; i <= 6; i++) {
-    const d = i < 0 ? subMonths(now, -i) : addMonths(now, i);
-    const val = format(d, "yyyy-MM");
-    const label = format(d, "MMMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
-    options.push({ value: val, label });
+  const start = new Date(2025, 0, 1);
+  const end = new Date();
+  end.setMonth(end.getMonth() + 24);
+  const cur = new Date(start);
+  while (cur <= end) {
+    const value = format(cur, "yyyy-MM");
+    const label = format(cur, "MMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+    options.push({ value, label });
+    cur.setMonth(cur.getMonth() + 1);
   }
   return options;
 }
