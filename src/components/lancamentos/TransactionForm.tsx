@@ -398,10 +398,15 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                     <Input
                       type="number"
                       min={1}
-                      max={360}
+                      max={60}
+                      step={1}
+                      placeholder="1"
                       {...field}
-                      value={field.value ?? 1}
-                      onChange={(e) => field.onChange(e.target.value === "" ? 1 : Number(e.target.value))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1;
+                        field.onChange(Math.max(1, Math.min(60, val)));
+                      }}
+                      onFocus={(e) => e.target.select()}
                     />
                   </FormControl>
                   <span className="text-xs text-muted-foreground">
@@ -410,6 +415,45 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
                   <FormMessage />
                 </FormItem>
               )} />
+
+              {watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "" &&
+               Number(watchInstallmentsCount) > 1 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+                  <p className="text-sm font-medium text-amber-800">
+                    O valor informado é:
+                  </p>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="valueType"
+                        value="installment"
+                        checked={valueType === "installment"}
+                        onChange={() => setValueType("installment")}
+                        className="accent-amber-600"
+                      />
+                      <span className="text-sm text-amber-700">Valor de cada parcela</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="valueType"
+                        value="total"
+                        checked={valueType === "total"}
+                        onChange={() => setValueType("total")}
+                        className="accent-amber-600"
+                      />
+                      <span className="text-sm text-amber-700">Valor total</span>
+                    </label>
+                  </div>
+                  {valueType === "total" && Number(watchInstallmentsCount) > 1 && (
+                    <p className="text-xs text-amber-600">
+                      Cada parcela será de {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+                        .format((parseAmountInput(form.watch("amount")) || 0) / Number(watchInstallmentsCount))}
+                    </p>
+                  )}
+                </div>
+              )}
               {blockedByCardInstallments && (
                 <div className="text-xs text-destructive">
                   Parcelamento em cartão de crédito deve ser feito no módulo <strong>Compras no Cartão</strong>, que gerencia faturas e fechamentos automaticamente. Remova o cartão selecionado abaixo ou reduza para 1 parcela.
