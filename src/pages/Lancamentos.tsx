@@ -87,7 +87,7 @@ function InstallmentBadge({ number, total }: { number: number | null; total: num
 }
 
 function buildMonthOptions() {
-  const options: { value: string; label: string }[] = [{ value: "all", label: "Todos os meses" }];
+  const options: { value: string; label: string }[] = [];
   const now = startOfMonth(new Date());
   for (let i = -12; i <= 6; i++) {
     const d = i < 0 ? subMonths(now, -i) : addMonths(now, i);
