@@ -289,6 +289,15 @@ export default function Lancamentos() {
       );
   }, [filtered]);
 
+  console.log("cardStats debug:", {
+    filtered: filtered.length,
+    active: filtered.filter(t => t.status !== "cancelled").length,
+    income: filtered.filter(t => t.status !== "cancelled" && t.transaction_type === "income").length,
+    expense: filtered.filter(t => t.status !== "cancelled" && t.transaction_type === "expense").length,
+    txRows: txRows.length,
+    cardRows: cardRows.length,
+  });
+
   const columns: Column<UnifiedRow>[] = [
     { key: "due_date", header: "Vencimento", sortable: true, sortValue: (r) => r.due_date || "", render: (r) => fmtDate(r.due_date) },
     { key: "competence_date", header: "Mês do Evento", sortable: true, sortValue: (r) => r.competence_date || "", render: (r) => fmtMonth(r.competence_date) },
