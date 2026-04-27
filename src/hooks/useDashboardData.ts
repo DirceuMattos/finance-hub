@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type { FinancialEntity } from "@/types/database";
 
 type ViewType = "consolidated" | "personal" | "business";
