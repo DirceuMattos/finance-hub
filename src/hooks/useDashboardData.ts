@@ -322,7 +322,16 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       if (error) throw error;
       if (!data || data.length === 0) return { total: 0, byCategory: [], latestMonth: null };
 
-      const latestMonth = data[0].reference_month;
+      // Pegar o último mês com closing_value preenchido
+      const monthsWithData = [...new Set(
+        (data as any[])
+          .filter((d: any) => d.closing_value !== null && d.closing_value !== undefined)
+          .map((d: any) => d.reference_month)
+      )].sort().reverse();
+
+      if (monthsWithData.length === 0) return { total: 0, byCategory: [], latestMonth: null };
+
+      const latestMonth = monthsWithData[0];
       const latestItems = (data as any[]).filter((d: any) => d.reference_month === latestMonth);
 
       const filtered = filterIds && filterIds.length > 0
