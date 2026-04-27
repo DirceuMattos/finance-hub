@@ -511,7 +511,7 @@ export default function Lancamentos() {
         ensureSavedRecordVisible(d);
         // Se estávamos promovendo uma parcela legada, cancela a origem para evitar duplicidade.
         const promotingId = promotingInstallmentRef.current;
-        if (promotingId && !d.id) {
+        if (promotingId) {
           updateInstallmentStatus.mutate({ id: promotingId, status: "cancelled" });
           promotingInstallmentRef.current = null;
         }
