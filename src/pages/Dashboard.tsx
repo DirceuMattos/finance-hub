@@ -101,7 +101,7 @@ export default function Dashboard() {
     : undefined;
 
   const patrimonyChartData = patrimonyEvolution.map(d => ({
-    month: fmtMonth(d.reference_month),
+    month: (d as any).label ?? fmtMonth(d.reference_month),
     Patrimônio: d.net_patrimony,
   }));
 

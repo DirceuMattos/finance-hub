@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type { FinancialEntity } from "@/types/database";
 
 type ViewType = "consolidated" | "personal" | "business";
@@ -365,7 +366,15 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .order("reference_month")
         .limit(12);
       if (error) return [];
-      return (data || []) as { reference_month: string; net_patrimony: number }[];
+      return (data || []).map((d: any) => ({
+        reference_month: d.reference_month,
+        net_patrimony: Number(d.net_patrimony) || 0,
+        label: (() => {
+          const [y, m] = d.reference_month.split("-").map(Number);
+          const date = new Date(y, m - 1, 1);
+          return format(date, "MMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+        })(),
+      })) as { reference_month: string; net_patrimony: number; label: string }[];
     },
   });
 
