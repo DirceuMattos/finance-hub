@@ -55,6 +55,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   const { data: cardsList = [] } = useCards();
   const [newCategoryName, setNewCategoryName] = useState("");
   const [creatingCategory, setCreatingCategory] = useState(false);
+  const [valueType, setValueType] = useState<"installment" | "total">("installment");
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -131,6 +132,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     }
     setCreatingCategory(false);
     setNewCategoryName("");
+    setValueType("installment");
   }, [transaction, open, cardsList, form]);
 
   const parseAmountInput = (raw: unknown): number => {
@@ -159,7 +161,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
   };
 
   const handleSubmit = (data: FormData) => {
-    const parsedAmount = parseAmountInput(data.amount);
+    let parsedAmount = parseAmountInput(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       form.setError("amount", { message: "Valor inválido" });
       return;
@@ -167,6 +169,10 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     const cleanId = (v: string | null | undefined) => (v && v !== "none" && v !== "") ? v : null;
     const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
     const isMulti = !transaction && installmentsCount > 1;
+    const hasCard = !!(data.center_cost && data.center_cost !== "none" && data.center_cost !== "");
+    if (hasCard && valueType === "total" && installmentsCount > 1) {
+      parsedAmount = parsedAmount / installmentsCount;
+    }
 
     // Blindagem: não permitir status=paid com payment_date futura
     if (data.status === "paid" && data.payment_date) {
@@ -278,6 +284,45 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
               <FormMessage />
             </FormItem>
           )} />
+
+          {watchCenterCost && watchCenterCost !== "none" && watchCenterCost !== "" &&
+           Number(watchInstallmentsCount) > 1 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <p className="text-sm font-medium text-amber-800">
+                O valor informado é:
+              </p>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="valueType"
+                    value="installment"
+                    checked={valueType === "installment"}
+                    onChange={() => setValueType("installment")}
+                    className="accent-amber-600"
+                  />
+                  <span className="text-sm text-amber-700">Valor de cada parcela</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="valueType"
+                    value="total"
+                    checked={valueType === "total"}
+                    onChange={() => setValueType("total")}
+                    className="accent-amber-600"
+                  />
+                  <span className="text-sm text-amber-700">Valor total</span>
+                </label>
+              </div>
+              {valueType === "total" && Number(watchInstallmentsCount) > 1 && (
+                <p className="text-xs text-amber-600">
+                  Cada parcela será de {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+                    .format((parseAmountInput(form.watch("amount")) || 0) / Number(watchInstallmentsCount))}
+                </p>
+              )}
+            </div>
+          )}
 
           <FormField control={form.control} name="payee" render={({ field }) => (
             <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>
