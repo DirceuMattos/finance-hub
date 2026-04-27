@@ -94,7 +94,9 @@ function useCardInvoiceTransactionsQuery() {
           .limit(10000);
 
         if (!instError && instData) {
-          fromInstallments = (instData as any[]).map((inst): CardInvoiceTransaction => {
+          fromInstallments = (instData as any[])
+            .filter((inst) => inst.status !== "cancelled")
+            .map((inst): CardInvoiceTransaction => {
             const cardName = inst.card_purchases?.cards?.name || "—";
             const entityRaw = inst.card_purchases?.financial_entities?.entity_type;
             const entityType: "personal" | "business" | null =
