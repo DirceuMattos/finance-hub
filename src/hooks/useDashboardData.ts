@@ -261,7 +261,8 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .from("transactions")
         .select("amount, competence_date, transaction_type, status, financial_entity_id")
         .neq("status", "cancelled")
-        .order("competence_date");
+        .order("competence_date")
+        .limit(5000);
 
       if (filterIds && filterIds.length > 0) {
         txQuery = txQuery.in("financial_entity_id", filterIds);
