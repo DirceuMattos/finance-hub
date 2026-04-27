@@ -64,6 +64,7 @@ function useCardInvoiceTransactionsQuery() {
       const fromTransactions: CardInvoiceTransaction[] = (txData || [])
         .filter((t: any) => {
           if (!t.center_cost) return false;
+          if (t.status === "cancelled") return false;
           return CARD_INVOICE_CENTER_COSTS.includes(t.center_cost) || cardEntityMap.has(t.center_cost);
         })
         .map((t: any): CardInvoiceTransaction => {
@@ -93,7 +94,9 @@ function useCardInvoiceTransactionsQuery() {
           .limit(10000);
 
         if (!instError && instData) {
-          fromInstallments = (instData as any[]).map((inst): CardInvoiceTransaction => {
+          fromInstallments = (instData as any[])
+            .filter((inst) => inst.status !== "cancelled")
+            .map((inst): CardInvoiceTransaction => {
             const cardName = inst.card_purchases?.cards?.name || "—";
             const entityRaw = inst.card_purchases?.financial_entities?.entity_type;
             const entityType: "personal" | "business" | null =
