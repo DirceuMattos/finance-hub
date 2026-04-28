@@ -112,6 +112,18 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       form.setError("amount", { message: "Valor inválido" });
       return;
     }
+    let endsOn = data.ends_on;
+    if (endDateMode === "count" && data.installments_count && data.starts_on) {
+      const count = data.installments_count;
+      const starts = data.starts_on;
+      if (data.frequency === "monthly") {
+        endsOn = new Date(starts.getFullYear(), starts.getMonth() + count - 1, starts.getDate());
+      } else if (data.frequency === "weekly") {
+        endsOn = new Date(starts.getTime() + (count - 1) * 7 * 24 * 60 * 60 * 1000);
+      } else if (data.frequency === "yearly") {
+        endsOn = new Date(starts.getFullYear() + count - 1, starts.getMonth(), starts.getDate());
+      }
+    }
     const payload: any = {
       description: data.description,
       amount: parsedAmount,
@@ -122,7 +134,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       account_id: data.account_id || null,
       center_cost: data.center_cost || null,
       starts_on: data.starts_on ? format(data.starts_on, "yyyy-MM-dd") : null,
-      ends_on: data.ends_on ? format(data.ends_on, "yyyy-MM-dd") : null,
+      ends_on: endsOn ? format(endsOn, "yyyy-MM-dd") : null,
       due_day: data.due_day ?? null,
       day_of_week: data.day_of_week ?? null,
       is_active: data.is_active,
