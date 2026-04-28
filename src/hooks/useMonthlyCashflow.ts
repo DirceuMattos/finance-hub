@@ -28,7 +28,7 @@ export function useMonthlyCashflow(view: ViewName) {
       // 1. Fetch all transactions with entity info
       const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
-        .select("amount, competence_date, transaction_type, status, financial_entities(entity_type)")
+        .select("amount, competence_date, due_date, transaction_type, status, financial_entities(entity_type)")
         .neq("status", "cancelled")
         .order("competence_date");
       if (txError) throw txError;
@@ -39,6 +39,7 @@ export function useMonthlyCashflow(view: ViewName) {
         const { data: instData, error: instError } = await (supabase as any)
           .from("card_installments")
           .select("amount, billing_month, status, card_purchases(financial_entities(entity_type))")
+          .neq("status", "cancelled")
           .order("billing_month");
         if (!instError && instData) cardData = instData;
       } catch {
@@ -85,7 +86,7 @@ export function useMonthlyCashflow(view: ViewName) {
         const entityType = tx.financial_entities?.entity_type;
         if (!matchesView(entityType)) return;
 
-        const month = (tx.competence_date || "").substring(0, 7);
+        const month = (tx.due_date || tx.competence_date || "").substring(0, 7);
         if (!month || month.length < 7) return;
 
         const entry = getOrCreate(month);
