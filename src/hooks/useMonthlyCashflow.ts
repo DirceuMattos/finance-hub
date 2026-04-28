@@ -86,7 +86,8 @@ export function useMonthlyCashflow(view: ViewName) {
         const entityType = tx.financial_entities?.entity_type;
         if (!matchesView(entityType)) return;
 
-        const month = (tx.due_date || tx.competence_date || "").substring(0, 7);
+        const rawDate = tx.due_date || tx.competence_date || "";
+        const month = rawDate.substring(0, 7);
         if (!month || month.length < 7) return;
 
         const entry = getOrCreate(month);
