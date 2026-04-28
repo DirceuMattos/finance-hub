@@ -26,7 +26,9 @@ const schema = z.object({
   account_id: z.string().optional().nullable(),
   amount: z.string().min(1, "Valor é obrigatório"),
   competence_date: z.string().min(1, "Competência é obrigatória"),
-  due_date: z.date().optional().nullable(),
+  due_date: z.date({
+    required_error: "Data de vencimento é obrigatória para lançamentos com cartão",
+  }).optional().nullable(),
   payment_date: z.date().optional().nullable(),
   status: z.string().min(1, "Status é obrigatório"),
   payee: z.string().max(200).optional().nullable(),
@@ -35,6 +37,15 @@ const schema = z.object({
   installment_total: z.coerce.number().min(1).optional().nullable(),
   installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
   center_cost: z.string().optional().nullable(),
+}).superRefine((data, ctx) => {
+  const hasCard = data.center_cost && data.center_cost !== "none" && data.center_cost !== "";
+  if (hasCard && !data.due_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Data de vencimento é obrigatória para lançamentos com cartão",
+      path: ["due_date"],
+    });
+  }
 });
 
 type FormData = z.infer<typeof schema>;
