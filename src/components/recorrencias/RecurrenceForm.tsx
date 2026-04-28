@@ -91,16 +91,19 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         generate_as_planned: recurrence.generate_as_planned ?? true,
         payee: recurrence.payee || "",
         notes: recurrence.notes || "",
+        installments_count: null,
       });
     } else {
       form.reset({
         description: "", amount: "", frequency: "monthly",
         transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", center_cost: "", starts_on: null, ends_on: null,
+        installments_count: null,
         due_day: null, day_of_week: null, is_active: true,
         is_continuous: false, generate_as_planned: true, payee: "", notes: "",
       });
     }
+    setEndDateMode("date");
   }, [recurrence, open]);
 
   const handleSubmit = (data: FormData) => {
