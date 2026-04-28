@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FormDrawer } from "@/components/shared/FormDrawer";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ const schema = z.object({
   center_cost: z.string().optional().nullable(),
   starts_on: z.date().optional().nullable(),
   ends_on: z.date().optional().nullable(),
+  installments_count: z.number().optional().nullable(),
   due_day: z.number().optional().nullable(),
   day_of_week: z.number().optional().nullable(),
   is_active: z.boolean(),
@@ -54,12 +55,15 @@ interface Props {
 export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accounts, categories, onSubmit, loading }: Props) {
   const { data: cardsList = [] } = useCards();
 
+  const [endDateMode, setEndDateMode] = useState<"date" | "count">("date");
+
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       description: "", amount: "", frequency: "monthly",
       transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", center_cost: "", starts_on: null, ends_on: null,
+      installments_count: null,
       due_day: null, day_of_week: null, is_active: true,
       is_continuous: false, generate_as_planned: true, payee: "", notes: "",
     },
@@ -87,16 +91,19 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         generate_as_planned: recurrence.generate_as_planned ?? true,
         payee: recurrence.payee || "",
         notes: recurrence.notes || "",
+        installments_count: null,
       });
     } else {
       form.reset({
         description: "", amount: "", frequency: "monthly",
         transaction_type: "expense", category_id: "", financial_entity_id: "",
         account_id: "", center_cost: "", starts_on: null, ends_on: null,
+        installments_count: null,
         due_day: null, day_of_week: null, is_active: true,
         is_continuous: false, generate_as_planned: true, payee: "", notes: "",
       });
     }
+    setEndDateMode("date");
   }, [recurrence, open]);
 
   const handleSubmit = (data: FormData) => {
@@ -104,6 +111,18 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       form.setError("amount", { message: "Valor inválido" });
       return;
+    }
+    let endsOn = data.ends_on;
+    if (endDateMode === "count" && data.installments_count && data.starts_on) {
+      const count = data.installments_count;
+      const starts = data.starts_on;
+      if (data.frequency === "monthly") {
+        endsOn = new Date(starts.getFullYear(), starts.getMonth() + count - 1, starts.getDate());
+      } else if (data.frequency === "weekly") {
+        endsOn = new Date(starts.getTime() + (count - 1) * 7 * 24 * 60 * 60 * 1000);
+      } else if (data.frequency === "yearly") {
+        endsOn = new Date(starts.getFullYear() + count - 1, starts.getMonth(), starts.getDate());
+      }
     }
     const payload: any = {
       description: data.description,
@@ -115,7 +134,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       account_id: data.account_id || null,
       center_cost: data.center_cost || null,
       starts_on: data.starts_on ? format(data.starts_on, "yyyy-MM-dd") : null,
-      ends_on: data.ends_on ? format(data.ends_on, "yyyy-MM-dd") : null,
+      ends_on: endsOn ? format(endsOn, "yyyy-MM-dd") : null,
       due_day: data.due_day ?? null,
       day_of_week: data.day_of_week ?? null,
       is_active: data.is_active,
@@ -290,7 +309,73 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
 
           <div className="grid grid-cols-2 gap-3">
             <DateField name="starts_on" label="Data Início" />
-            <DateField name="ends_on" label="Data Fim" />
+            <FormItem>
+              <FormLabel>Data Final</FormLabel>
+              <div className="flex gap-2 mb-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={endDateMode === "date" ? "default" : "outline"}
+                  onClick={() => setEndDateMode("date")}
+                >
+                  Data
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={endDateMode === "count" ? "default" : "outline"}
+                  onClick={() => setEndDateMode("count")}
+                >
+                  Quantidade
+                </Button>
+              </div>
+              {endDateMode === "date" ? (
+                <FormField control={form.control} name="ends_on" render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input type="date" value={field.value ? format(field.value, "yyyy-MM-dd") : ""} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              ) : (
+                <FormField control={form.control} name="installments_count" render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={600}
+                        placeholder="Ex: 12"
+                        value={field.value || ""}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || null)}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {field.value && form.watch("starts_on") && form.watch("frequency") ? (() => {
+                        const starts = form.watch("starts_on");
+                        const freq = form.watch("frequency");
+                        const count = field.value;
+                        if (!starts || !count) return null;
+                        let endDate: Date;
+                        if (freq === "monthly") {
+                          endDate = new Date(starts.getFullYear(), starts.getMonth() + count - 1, starts.getDate());
+                        } else if (freq === "weekly") {
+                          endDate = new Date(starts.getTime() + (count - 1) * 7 * 24 * 60 * 60 * 1000);
+                        } else if (freq === "yearly") {
+                          endDate = new Date(starts.getFullYear() + count - 1, starts.getMonth(), starts.getDate());
+                        } else {
+                          return null;
+                        }
+                        return `Data final: ${format(endDate, "dd/MM/yyyy")}`;
+                      })() : null}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+            </FormItem>
           </div>
 
           <FormField control={form.control} name="is_active" render={({ field }) => (
