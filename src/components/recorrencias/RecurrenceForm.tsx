@@ -309,7 +309,73 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
 
           <div className="grid grid-cols-2 gap-3">
             <DateField name="starts_on" label="Data Início" />
-            <DateField name="ends_on" label="Data Fim" />
+            <FormItem>
+              <FormLabel>Data Final</FormLabel>
+              <div className="flex gap-2 mb-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={endDateMode === "date" ? "default" : "outline"}
+                  onClick={() => setEndDateMode("date")}
+                >
+                  Data
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={endDateMode === "count" ? "default" : "outline"}
+                  onClick={() => setEndDateMode("count")}
+                >
+                  Quantidade
+                </Button>
+              </div>
+              {endDateMode === "date" ? (
+                <FormField control={form.control} name="ends_on" render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input type="date" value={field.value ? format(field.value, "yyyy-MM-dd") : ""} onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              ) : (
+                <FormField control={form.control} name="installments_count" render={({ field }) => (
+                  <FormItem>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={600}
+                        placeholder="Ex: 12"
+                        value={field.value || ""}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || null)}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      {field.value && form.watch("starts_on") && form.watch("frequency") ? (() => {
+                        const starts = form.watch("starts_on");
+                        const freq = form.watch("frequency");
+                        const count = field.value;
+                        if (!starts || !count) return null;
+                        let endDate: Date;
+                        if (freq === "monthly") {
+                          endDate = new Date(starts.getFullYear(), starts.getMonth() + count - 1, starts.getDate());
+                        } else if (freq === "weekly") {
+                          endDate = new Date(starts.getTime() + (count - 1) * 7 * 24 * 60 * 60 * 1000);
+                        } else if (freq === "yearly") {
+                          endDate = new Date(starts.getFullYear() + count - 1, starts.getMonth(), starts.getDate());
+                        } else {
+                          return null;
+                        }
+                        return `Data final: ${format(endDate, "dd/MM/yyyy")}`;
+                      })() : null}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+            </FormItem>
           </div>
 
           <FormField control={form.control} name="is_active" render={({ field }) => (
