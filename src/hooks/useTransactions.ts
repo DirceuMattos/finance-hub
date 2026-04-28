@@ -98,6 +98,12 @@ export function useTransactions(filterMonth?: string) {
       const { categories, financial_entities, accounts, installments_count, ...rest } = item as any;
       const N = Math.max(1, Math.floor(Number(installments_count) || 1));
 
+      if (!rest.due_date && rest.competence_date) {
+        const [y, m] = rest.competence_date.split("-").map(Number);
+        const lastDay = new Date(y, m, 0).getDate();
+        rest.due_date = `${rest.competence_date.substring(0, 7)}-${String(lastDay).padStart(2, "0")}`;
+      }
+
       if (N <= 1) {
         const { error } = await (supabase as any).from("transactions").insert(rest);
         if (error) throw error;
