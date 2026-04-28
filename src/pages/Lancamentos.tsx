@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
 import { format, subMonths, addMonths, startOfMonth, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSearchParams } from "react-router-dom";
@@ -154,7 +155,43 @@ export default function Lancamentos() {
     return accounts;
   }, [accounts, filterEntity, personalEntities, businessEntities]);
 
-  const monthOptions = useMemo(() => buildMonthOptions(), []);
+  const { data: maxDateData } = useQuery({
+    queryKey: ["max_due_date"],
+    queryFn: async () => {
+      const { data } = await (supabase as any)
+        .from("transactions")
+        .select("due_date")
+        .not("due_date", "is", null)
+        .order("due_date", { ascending: false })
+        .limit(1);
+      return data?.[0]?.due_date ?? null;
+    },
+    staleTime: 60000,
+  });
+
+  const monthOptions = useMemo(() => {
+    const options: { value: string; label: string }[] = [];
+    const start = new Date(2025, 0, 1);
+
+    const minEnd = new Date();
+    minEnd.setMonth(minEnd.getMonth() + 36);
+
+    const end = maxDateData
+      ? new Date(Math.max(new Date(maxDateData).getTime(), minEnd.getTime()))
+      : minEnd;
+
+    end.setMonth(end.getMonth() + 1);
+
+    const cur = new Date(start);
+    while (cur <= end) {
+      const value = format(cur, "yyyy-MM");
+      const label = format(cur, "MMM yyyy", { locale: ptBR })
+        .replace(/^\w/, c => c.toUpperCase());
+      options.push({ value, label });
+      cur.setMonth(cur.getMonth() + 1);
+    }
+    return options;
+  }, [maxDateData]);
 
   // Map card installments to unified rows
   const cardRows: UnifiedRow[] = useMemo(() => {
