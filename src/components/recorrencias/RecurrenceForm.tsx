@@ -29,6 +29,7 @@ const schema = z.object({
   center_cost: z.string().optional().nullable(),
   starts_on: z.date().optional().nullable(),
   ends_on: z.date().optional().nullable(),
+  installments_count: z.number().optional().nullable(),
   due_day: z.number().optional().nullable(),
   day_of_week: z.number().optional().nullable(),
   is_active: z.boolean(),
