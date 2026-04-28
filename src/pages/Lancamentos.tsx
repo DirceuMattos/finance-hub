@@ -87,21 +87,6 @@ function InstallmentBadge({ number, total }: { number: number | null; total: num
   return <Badge variant="outline" className="text-[10px] font-mono">{n}/{t}</Badge>;
 }
 
-function buildMonthOptions() {
-  const options: { value: string; label: string }[] = [];
-  const start = new Date(2025, 0, 1);
-  const end = new Date();
-  end.setMonth(end.getMonth() + 24);
-  const cur = new Date(start);
-  while (cur <= end) {
-    const value = format(cur, "yyyy-MM");
-    const label = format(cur, "MMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
-    options.push({ value, label });
-    cur.setMonth(cur.getMonth() + 1);
-  }
-  return options;
-}
-
 export default function Lancamentos() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
