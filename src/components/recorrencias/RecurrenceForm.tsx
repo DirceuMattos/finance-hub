@@ -55,12 +55,15 @@ interface Props {
 export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accounts, categories, onSubmit, loading }: Props) {
   const { data: cardsList = [] } = useCards();
 
+  const [endDateMode, setEndDateMode] = useState<"date" | "count">("date");
+
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
       description: "", amount: "", frequency: "monthly",
       transaction_type: "expense", category_id: "", financial_entity_id: "",
       account_id: "", center_cost: "", starts_on: null, ends_on: null,
+      installments_count: null,
       due_day: null, day_of_week: null, is_active: true,
       is_continuous: false, generate_as_planned: true, payee: "", notes: "",
     },
