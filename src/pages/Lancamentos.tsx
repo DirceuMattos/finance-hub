@@ -619,8 +619,8 @@ export default function Lancamentos() {
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Buscar por descrição, cartão, parcela, valor, observação..."
-          hasActiveFilters={filterMonth !== format(new Date(), "yyyy-MM") || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all"}
-          onClear={() => { setFilterMonth(format(new Date(), "yyyy-MM")); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); }}
+          hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all"}
+          onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); }}
         />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
           <div className="flex flex-col gap-1">
@@ -628,6 +628,7 @@ export default function Lancamentos() {
             <Select value={filterMonth} onValueChange={setFilterMonth}>
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">Todos os meses</SelectItem>
                 {monthOptions.map(o => (
                   <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                 ))}
@@ -756,28 +757,35 @@ export default function Lancamentos() {
         </div>
       )}
 
-      <div className="grid gap-3 mb-4 md:grid-cols-3">
-        <StatCard
-          title="Quantidade"
-          value={String(listSummary.count)}
-          icon={List}
-          subLabel="Lançamentos exibidos"
-        />
-        <StatCard
-          title="Receitas"
-          value={fmt(listSummary.income)}
-          icon={ArrowUpCircle}
-          subLabel="Total filtrado em tela"
-          variant="positive"
-        />
-        <StatCard
-          title="Despesas"
-          value={fmt(listSummary.expense)}
-          icon={ArrowDownCircle}
-          subLabel="Total filtrado em tela"
-          variant="negative"
-        />
-      </div>
+      {filterMonth !== "all" && (
+        <div className="grid gap-3 mb-4 md:grid-cols-3">
+          <StatCard
+            title="Quantidade"
+            value={String(listSummary.count)}
+            icon={List}
+            subLabel="Lançamentos exibidos"
+          />
+          <StatCard
+            title="Receitas"
+            value={fmt(listSummary.income)}
+            icon={ArrowUpCircle}
+            subLabel="Total filtrado em tela"
+            variant="positive"
+          />
+          <StatCard
+            title="Despesas"
+            value={fmt(listSummary.expense)}
+            icon={ArrowDownCircle}
+            subLabel="Total filtrado em tela"
+            variant="negative"
+          />
+        </div>
+      )}
+      {filterMonth === "all" && (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-700 mb-4">
+          Selecione um mês para ver os totais de Receitas e Despesas.
+        </div>
+      )}
 
       <DataTable
         columns={columns}

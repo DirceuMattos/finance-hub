@@ -53,9 +53,12 @@ export function useTransactions(filterMonth?: string) {
 
       if (filterMonth && filterMonth !== "all") {
         const { start, end } = getMonthRange(filterMonth);
-        q = q.or(`due_date.gte.${start},and(due_date.is.null,competence_date.gte.${start})`).or(`due_date.lt.${end},and(due_date.is.null,competence_date.lt.${end})`).limit(2000);
+        q = q
+          .or(`due_date.gte.${start},and(due_date.is.null,competence_date.gte.${start})`)
+          .or(`due_date.lt.${end},and(due_date.is.null,competence_date.lt.${end})`)
+          .limit(2000);
       } else {
-        q = q.range(0, 4999).order("competence_date", { ascending: false });
+        q = q.order("due_date", { ascending: false, nullsFirst: false }).limit(2000);
       }
 
       const { data, error } = await q;
