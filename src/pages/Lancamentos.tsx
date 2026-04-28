@@ -155,7 +155,6 @@ export default function Lancamentos() {
   });
 
   const monthOptions = useMemo(() => {
-    const options: { value: string; label: string }[] = [];
     const start = new Date(2025, 0, 1);
 
     const minEnd = new Date();
@@ -167,15 +166,24 @@ export default function Lancamentos() {
 
     end.setMonth(end.getMonth() + 1);
 
+    const all: { value: string; label: string }[] = [];
     const cur = new Date(start);
     while (cur <= end) {
       const value = format(cur, "yyyy-MM");
       const label = format(cur, "MMM yyyy", { locale: ptBR })
         .replace(/^\w/, c => c.toUpperCase());
-      options.push({ value, label });
+      all.push({ value, label });
       cur.setMonth(cur.getMonth() + 1);
     }
-    return options;
+
+    // Reorder: current month first, then future months (asc), then past months (most recent first)
+    const currentValue = format(new Date(), "yyyy-MM");
+    const currentIdx = all.findIndex(o => o.value === currentValue);
+    if (currentIdx === -1) return all;
+    const current = all[currentIdx];
+    const future = all.slice(currentIdx + 1); // ascending future
+    const past = all.slice(0, currentIdx).reverse(); // most recent past first
+    return [current, ...future, ...past];
   }, [maxDateData]);
 
   // Map card installments to unified rows
