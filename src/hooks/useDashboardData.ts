@@ -379,6 +379,40 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     },
   });
 
+  // --- Investment evolution ---
+  const investmentEvolution = useQuery({
+    queryKey: ["dashboard_investment_evolution", view],
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("investment_snapshots")
+        .select("reference_month, closing_value, financial_entity_id")
+        .order("reference_month");
+      if (error) return [];
+
+      const monthMap = new Map<string, number>();
+      (data || []).forEach((d: any) => {
+        if (filterIds && filterIds.length > 0 && !filterIds.includes(d.financial_entity_id)) {
+          return;
+        }
+        const month = d.reference_month;
+        monthMap.set(month, (monthMap.get(month) || 0) + Number(d.closing_value || 0));
+      });
+      return Array.from(monthMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([month, total]) => {
+          const [y, mo] = month.split("-").map(Number);
+          const date = new Date(y, mo - 1, 1);
+          return {
+            month,
+            total,
+            label: format(date, "MMM yy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase()),
+          };
+        });
+    },
+    enabled: entitiesQuery.isFetched,
+  });
+
   // --- Investment total ---
   const investmentData = useQuery({
     queryKey: ["dashboard_investments", view],
@@ -439,6 +473,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null },
     patrimonyEvolution: patrimonyEvolution.data ?? [],
     investment: investmentData.data ?? { total: 0, byClass: [] },
+    investmentEvolution: investmentEvolution.data ?? [],
     riskData,
     isLoading: accountBalances.isLoading || monthlyFlow.isLoading,
     fmt: fmtCur,
