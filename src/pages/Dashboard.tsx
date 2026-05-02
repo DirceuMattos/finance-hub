@@ -92,7 +92,7 @@ export default function Dashboard() {
   const {
     balance, balanceSplit, forecast,
     expensesByCategory,
-    patrimony, patrimonyEvolution, investment, riskData,
+    patrimony, patrimonyEvolution, investment, investmentEvolution, riskData,
   } = useDashboardData(view, selectedMonth);
 
   const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
@@ -423,6 +423,39 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <HorizontalBreakdown items={investment.byClass} label="investimentos" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Evolução dos Investimentos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {investmentEvolution.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">Sem dados disponíveis</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={investmentEvolution} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`}
+                  />
+                  <Tooltip
+                    formatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)}
+                    labelFormatter={(l) => `Mês: ${l}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="total"
+                    name="Investimentos"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
