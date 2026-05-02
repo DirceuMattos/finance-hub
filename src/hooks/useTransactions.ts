@@ -155,9 +155,14 @@ export function useTransactions(filterMonth?: string) {
       const { error } = await (supabase as any).from("transactions").insert(rows);
       if (error) throw error;
     },
-    onSuccess: async (_data, variables) => {
-      await recalcBalances();
-      void recalcAccountBalance((variables as any)?.account_id);
+    onSuccess: async () => {
+      (async () => {
+        try {
+          await (supabase as any).rpc("recalculate_account_balances_from_date", {
+            p_from_date: "2026-04-01"
+          });
+        } catch { /* silently ignore */ }
+      })();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
@@ -180,9 +185,14 @@ export function useTransactions(filterMonth?: string) {
       if (error) throw error;
       if (!updated || updated.length === 0) throw new Error("Nenhum registro foi atualizado. Verifique as permissões.");
     },
-    onSuccess: async (_data, variables) => {
-      await recalcBalances();
-      void recalcAccountBalance((variables as any)?.account_id);
+    onSuccess: async () => {
+      (async () => {
+        try {
+          await (supabase as any).rpc("recalculate_account_balances_from_date", {
+            p_from_date: "2026-04-01"
+          });
+        } catch { /* silently ignore */ }
+      })();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
@@ -202,7 +212,13 @@ export function useTransactions(filterMonth?: string) {
       if (error) throw error;
     },
     onSuccess: async () => {
-      await recalcBalances();
+      (async () => {
+        try {
+          await (supabase as any).rpc("recalculate_account_balances_from_date", {
+            p_from_date: "2026-04-01"
+          });
+        } catch { /* silently ignore */ }
+      })();
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
