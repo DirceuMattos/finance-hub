@@ -269,7 +269,7 @@ export default function Relatorios() {
                     </SelectContent>
                   </Select>
                 </div>
-                <ExportButtons data={filteredTx} columns={txColumns} filename="lancamentos" />
+                <ExportButtons data={exportTx} columns={txColumns} filename="lancamentos" />
               </AccordionContent>
             </AccordionItem>
 
