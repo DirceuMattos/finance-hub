@@ -79,6 +79,9 @@ export default function Relatorios() {
     setRecLoaded(true);
   };
 
+  const statusLabel = (s: string) =>
+    s === "paid" ? "Realizado" : s === "planned" ? "Previsto" : s === "cancelled" ? "Cancelado" : (s ?? "");
+
   // Filtered transactions
   const filteredTx = useMemo(() => {
     let result = [...transactions];
