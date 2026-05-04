@@ -101,17 +101,43 @@ export default function Relatorios() {
     return result;
   }, [cardPurchases, cardMonth, cardFilter]);
 
+  const exportTx = useMemo(
+    () =>
+      filteredTx.map((t: any) => ({
+        due_date_fmt: fmtDate(t.due_date),
+        payment_date_fmt: fmtDate(t.payment_date),
+        description: t.description ?? "",
+        type_label:
+          t.transaction_type === "income"
+            ? "Receita"
+            : t.transaction_type === "expense"
+            ? "Despesa"
+            : t.transaction_type ?? "",
+        payee: t.payee ?? "",
+        category_name: t.categories?.name ?? "",
+        entity_name: t.financial_entities?.name ?? "",
+        account_name: t.accounts?.name ?? "",
+        card_name: t.cards?.name ?? "",
+        status_label: statusLabel(t.status),
+        receita: t.transaction_type === "income" ? Number(t.amount) : "",
+        despesa: t.transaction_type === "expense" ? Number(t.amount) : "",
+      })),
+    [filteredTx]
+  );
+
   const txColumns = [
-    { key: "due_date", header: "Vencimento" },
-    { key: "competence_date", header: "Mês do Evento" },
+    { key: "due_date_fmt", header: "Vencimento" },
+    { key: "payment_date_fmt", header: "Data Pagamento" },
     { key: "description", header: "Descrição" },
-    { key: "type", header: "Tipo" },
-    { key: "categories.name", header: "Categoria" },
-    { key: "financial_entities.name", header: "Entidade" },
-    { key: "accounts.name", header: "Conta" },
-    { key: "amount", header: "Valor" },
-    { key: "status", header: "Status" },
-    { key: "payment_date", header: "Data Pagamento" },
+    { key: "type_label", header: "Tipo" },
+    { key: "payee", header: "Favorecido" },
+    { key: "category_name", header: "Categoria" },
+    { key: "entity_name", header: "Entidade" },
+    { key: "account_name", header: "Conta" },
+    { key: "card_name", header: "Cartão" },
+    { key: "status_label", header: "Status" },
+    { key: "receita", header: "Receita" },
+    { key: "despesa", header: "Despesa" },
   ];
 
   const cardColumns = [
