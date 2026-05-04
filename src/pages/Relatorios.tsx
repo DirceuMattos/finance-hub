@@ -101,6 +101,11 @@ export default function Relatorios() {
     return result;
   }, [cardPurchases, cardMonth, cardFilter]);
 
+  const cardNameSet = useMemo(
+    () => new Set((cards as any[]).filter((c) => c.is_active !== false).map((c) => c.name)),
+    [cards]
+  );
+
   const exportTx = useMemo(
     () =>
       filteredTx.map((t: any) => ({
@@ -113,16 +118,16 @@ export default function Relatorios() {
             : t.transaction_type === "expense"
             ? "Despesa"
             : t.transaction_type ?? "",
+        card_name: t.center_cost && cardNameSet.has(t.center_cost) ? t.center_cost : "",
         payee: t.payee ?? "",
         category_name: t.categories?.name ?? "",
         entity_name: t.financial_entities?.name ?? "",
         account_name: t.accounts?.name ?? "",
-        card_name: t.cards?.name ?? "",
         status_label: statusLabel(t.status),
         receita: t.transaction_type === "income" ? Number(t.amount) : "",
         despesa: t.transaction_type === "expense" ? Number(t.amount) : "",
       })),
-    [filteredTx]
+    [filteredTx, cardNameSet]
   );
 
   const txColumns = [
@@ -130,11 +135,11 @@ export default function Relatorios() {
     { key: "payment_date_fmt", header: "Data Pagamento" },
     { key: "description", header: "Descrição" },
     { key: "type_label", header: "Tipo" },
+    { key: "card_name", header: "Cartão" },
     { key: "payee", header: "Favorecido" },
     { key: "category_name", header: "Categoria" },
     { key: "entity_name", header: "Entidade" },
     { key: "account_name", header: "Conta" },
-    { key: "card_name", header: "Cartão" },
     { key: "status_label", header: "Status" },
     { key: "receita", header: "Receita" },
     { key: "despesa", header: "Despesa" },
