@@ -287,6 +287,36 @@ export default function Lancamentos() {
       if (filterCard !== "all" && t.card_name !== filterCard) return false;
       if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
       if (filterInstallment === "no" && ((t.installment_total ?? 1) > 1)) return false;
+      if (filterContainable) {
+        if (!t.category_id) return false;
+        const containableIds = [
+          "6ee7982b-25c4-45a7-ac72-fea3a8ba1272",
+          "f178ef3d-83ca-4146-87a0-863030b36e7c",
+          "73357c14-f61a-4678-92ff-61ef644b4d1d",
+          "064b5cce-8959-4d55-8b03-229d45612563",
+          "59eaa66e-53dc-4209-96dd-ecdabc046437",
+          "601ba4b3-46b8-480e-8e96-5876d111d990",
+          "1255b532-72ec-4dab-86f7-0a47ef0945d9",
+          "2ac9b891-e4dc-4d38-a32a-081cf4ab2e81",
+          "351d9eff-8d2b-4d8b-81cc-ab71fd1c8775",
+          "4c424b1d-bd6a-4b01-af61-e5c524486a67",
+          "887450ea-5c91-4b1f-bba6-89854f5b3623",
+          "509266a3-5244-459f-9f16-4478778f34d5",
+          "3b66271c-f9cb-4efa-8dbd-605b63869009",
+          "365554ad-67f6-4f8d-b2a3-1082d58d133e",
+          "bf6b40c5-b698-4bef-9a2b-d7e7750340a8",
+          "be48396a-213a-4bfe-b0db-d576237fabbf",
+          "b7bc256b-e99c-4c2c-97b8-c0a504b77762",
+          "4f60a642-aa29-4f2d-8d70-c2fae515849e",
+          "5b08cb22-aecf-4ba8-8acf-b84b7a25b8bc",
+          "e84d029d-c837-4059-92bc-494eaf0519e3",
+          "4a67cdfd-449a-498c-9a10-26be55a3b953",
+          "da439600-ff9d-4f28-9b72-3c1776d39559",
+          "3cc47209-64d5-4bf3-8bc7-f22b8dda56e0",
+          "c812e16d-22ea-42f2-a15d-22d6f5253830",
+        ];
+        if (!containableIds.includes(t.category_id)) return false;
+      }
       if (!t.is_card_installment) {
         const isCCInvoice = isCardInvoiceByCenterCost(t.center_cost) || isCardInvoice(t.category_name || "");
         if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
@@ -297,7 +327,7 @@ export default function Lancamentos() {
       // Month filtering is now done server-side in the hooks
       return true;
     });
-  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment]);
+  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment, filterContainable]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
