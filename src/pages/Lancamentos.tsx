@@ -776,6 +776,20 @@ export default function Lancamentos() {
               </SelectContent>
             </Select>
           </div>
+          <div className="flex items-end">
+            <div className="flex items-center gap-2 h-9">
+              <input
+                type="checkbox"
+                id="filterContainable"
+                checked={filterContainable}
+                onChange={(e) => setFilterContainable(e.target.checked)}
+                className="accent-amber-600 w-4 h-4 cursor-pointer"
+              />
+              <label htmlFor="filterContainable" className="text-sm cursor-pointer text-muted-foreground">
+                Somente contíveis
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
