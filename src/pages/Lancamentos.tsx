@@ -111,6 +111,7 @@ export default function Lancamentos() {
   const [filterCard, setFilterCard] = useState("all"); // by specific card name
   const [filterInstallment, setFilterInstallment] = useState("all"); // all | yes | no
   const [filterSource, setFilterSource] = useState("all"); // all | transactions | card
+  const [filterContainable, setFilterContainable] = useState(false);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
