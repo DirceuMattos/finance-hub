@@ -32,6 +32,7 @@ export function useMonthlyCashflow(view: ViewName) {
         .select("amount, competence_date, due_date, transaction_type, status, financial_entities(entity_type)")
         .in("status", ["paid", "planned"])
         .order("competence_date");
+      console.log("txData count:", txData?.length, "txError:", txError);
       if (txError) throw txError;
 
       // 2. Fetch card installments with entity info
@@ -46,6 +47,7 @@ export function useMonthlyCashflow(view: ViewName) {
       } catch {
         // table may not exist
       }
+      console.log("cardData count:", cardData?.length);
 
       // Helper: check entity filter
       const matchesView = (entityType: string | null | undefined): boolean => {
