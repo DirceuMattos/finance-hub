@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -225,6 +226,35 @@ export default function FluxoMensal() {
       </div>
 
       <DataTable columns={columns} data={data as any} loading={isLoading} emptyMessage="Nenhum dado de fluxo mensal encontrado." />
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Evolução Últimos 6 Meses</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={(rawData as MonthlyCashflow[]).slice(-6).map((m) => ({
+              mes: (() => {
+                const [y, mo] = m.reference_month.split("-").map(Number);
+                return format(new Date(y, mo - 1, 1), "MMM yy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
+              })(),
+              "Receita Realizada": m.income_paid,
+              "Despesa Realizada": m.expense_paid,
+              "Receita Prevista": m.income_planned,
+              "Despesa Prevista": m.expense_planned,
+            }))} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)} />
+              <Legend />
+              <Bar dataKey="Receita Realizada" fill="#10b981" />
+              <Bar dataKey="Despesa Realizada" fill="#ef4444" />
+              <Bar dataKey="Receita Prevista" fill="#6ee7b7" />
+              <Bar dataKey="Despesa Prevista" fill="#fca5a5" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
     </AppLayout>
   );
 }
