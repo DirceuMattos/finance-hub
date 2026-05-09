@@ -1,51 +1,33 @@
 ## Objetivo
-Corrigir a exportação CSV/XLSX de Lançamentos no módulo Relatórios.
+Corrigir definitivamente a lógica de parcelamento para diferenciar "valor total" de "valor da parcela" via flag `is_total_amount`.
 
-## Arquivo único alterado
-`src/pages/Relatorios.tsx`
+## Arquivos alterados
 
-## Mudanças
+### 1. `src/components/lancamentos/TransactionForm.tsx`
+- Adicionar `is_total_amount: z.boolean().optional().default(false)` ao schema zod.
+- Adicionar `is_total_amount: false` aos `defaultValues`.
+- Substituir o bloco atual no `handleSubmit` que trata `valueType` pela nova lógica:
+  - Calcular `hasCard`, `installmentsCount`, `rawAmount`.
+  - Se `hasCard && valueType === "total" && installmentsCount > 1`: `data.amount = String(rawAmount); data.is_total_amount = true;`
+  - Caso contrário: `data.amount = String(rawAmount); data.is_total_amount = false;`
 
-### 1. Pré-processar `filteredTx` antes de exportar
-Criar `exportTx` (via `useMemo`) que mapeia cada transação para um objeto plano com os campos finais já traduzidos/formatados:
+### 2. `src/hooks/useTransactions.ts`
+Na `mutationFn` de `create`:
+- Extrair `is_total_amount` junto com os demais campos descartados (não enviar para o insert).
+- Computar:
+  ```ts
+  const isTotal = (item as any).is_total_amount === true;
+  const baseAmount = isTotal ? (parseFloat(String(rest.amount)) / N) : parseFloat(String(rest.amount));
+  ```
+- Substituir a lógica atual baseada em centavos pela lógica baseada em `baseAmount`:
+  ```ts
+  const originalTotal = isTotal ? parseFloat(String(rest.amount)) : baseAmount * N;
+  const totalFromBase = parseFloat((baseAmount * N).toFixed(2));
+  const diff = parseFloat((originalTotal - totalFromBase).toFixed(2));
+  ```
+- Gerar `rows` usando `parcelAmount = isLast ? baseAmount + diff : baseAmount` (com `toFixed(2)`), preservando o restante da geração (descrição numerada, datas via `addMonthsKeepDay`, status `planned`, `payment_date: null`).
+- Garantir que `is_total_amount` não seja enviado ao Supabase.
 
-- `due_date_fmt`: `due_date` formatado como `DD/MM/AAAA` (vazio se nulo)
-- `payment_date_fmt`: `payment_date` formatado como `DD/MM/AAAA` (vazio se nulo)
-- `description`: igual
-- `type_label`: `"Receita"` se `transaction_type === "income"`, `"Despesa"` se `"expense"`
-- `payee`: igual
-- `category_name`: `categories?.name`
-- `entity_name`: `financial_entities?.name`
-- `account_name`: `accounts?.name`
-- `card_name`: `cards?.name ?? ""` (campo pode estar ausente no fetch atual; permanecerá vazio sem quebrar)
-- `status_label`: `paid → "Realizado"`, `planned → "Previsto"`, `cancelled → "Cancelado"` (fallback no original)
-- `receita`: `Number(amount)` se income, senão `""` (string vazia para célula em branco)
-- `despesa`: `Number(amount)` se expense, senão `""`
-
-### 2. Substituir `txColumns` pela nova ordem
-```ts
-const txColumns = [
-  { key: "due_date_fmt",     header: "Vencimento" },
-  { key: "payment_date_fmt", header: "Data Pagamento" },
-  { key: "description",      header: "Descrição" },
-  { key: "type_label",       header: "Tipo" },
-  { key: "payee",            header: "Favorecido" },
-  { key: "category_name",    header: "Categoria" },
-  { key: "entity_name",      header: "Entidade" },
-  { key: "account_name",     header: "Conta" },
-  { key: "card_name",        header: "Cartão" },
-  { key: "status_label",     header: "Status" },
-  { key: "receita",          header: "Receita" },
-  { key: "despesa",          header: "Despesa" },
-];
-```
-
-Coluna "Mês do Evento" (`competence_date`) removida. Coluna única "Valor" substituída por "Receita"/"Despesa" como números (permite SOMA na planilha).
-
-### 3. Passar `exportTx` para `<ExportButtons data={...} />` da seção Lançamentos
-O contador de registros continua refletindo a mesma quantidade.
-
-## Sem alterações em
-- `src/lib/exportUtils.ts` (já trata números corretamente via `aoa_to_sheet`)
-- Hooks de dados
-- Outras seções do relatório (Cartões, Investimentos, Patrimônio, Recorrências)
+## Regras
+- Nenhum outro arquivo será alterado.
+- Comportamento para N=1 permanece igual (insert único, sem divisão).
