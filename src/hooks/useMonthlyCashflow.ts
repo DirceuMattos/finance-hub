@@ -145,7 +145,6 @@ export function useMonthlyCashflow(view: ViewName) {
         }
       });
 
-      console.log("useMonthlyCashflow entries:", entries.map(e => ({ month: e.reference_month, income_paid: e.income_paid, expense_paid: e.expense_paid })));
       return entries;
     },
   });
