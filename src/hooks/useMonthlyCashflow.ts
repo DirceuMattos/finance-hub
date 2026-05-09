@@ -24,6 +24,7 @@ type ViewName = "consolidated" | "personal" | "business";
 export function useMonthlyCashflow(view: ViewName) {
   return useQuery({
     queryKey: ["monthly_cashflow", view],
+    staleTime: 0,
     queryFn: async () => {
       // 1. Fetch all transactions with entity info
       const { data: txData, error: txError } = await (supabase as any)
