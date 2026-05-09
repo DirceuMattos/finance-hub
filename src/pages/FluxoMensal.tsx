@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
