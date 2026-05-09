@@ -29,7 +29,7 @@ export function useMonthlyCashflow(view: ViewName) {
       const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
         .select("amount, competence_date, due_date, transaction_type, status, financial_entities(entity_type)")
-        .neq("status", "cancelled")
+        .in("status", ["paid", "planned"])
         .order("competence_date");
       if (txError) throw txError;
 
