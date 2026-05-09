@@ -37,6 +37,7 @@ const schema = z.object({
   installment_total: z.coerce.number().min(1).optional().nullable(),
   installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
   center_cost: z.string().optional().nullable(),
+  is_total_amount: z.boolean().optional().default(false),
 }).superRefine((data, ctx) => {
   const hasCard = data.center_cost && data.center_cost !== "none" && data.center_cost !== "";
   if (hasCard && !data.due_date) {
