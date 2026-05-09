@@ -98,7 +98,7 @@ export function useTransactions(filterMonth?: string) {
 
   const create = useMutation({
     mutationFn: async (item: Partial<Transaction> & { installments_count?: number }) => {
-      const { categories, financial_entities, accounts, installments_count, ...rest } = item as any;
+      const { categories, financial_entities, accounts, installments_count, is_total_amount, ...rest } = item as any;
       const N = Math.max(1, Math.floor(Number(installments_count) || 1));
 
       if (!rest.due_date && rest.competence_date) {
@@ -114,9 +114,13 @@ export function useTransactions(filterMonth?: string) {
       }
 
       // Generate N installments
-      const totalAmount = Number(rest.amount) || 0;
-      const baseCents = Math.floor((totalAmount * 100) / N);
-      const remainderCents = Math.round(totalAmount * 100) - baseCents * N;
+      const isTotal = is_total_amount === true;
+      const rawAmount = parseFloat(String(rest.amount)) || 0;
+      const baseAmount = isTotal ? (rawAmount / N) : rawAmount;
+      const baseAmountRounded = parseFloat(baseAmount.toFixed(2));
+      const originalTotal = isTotal ? rawAmount : baseAmount * N;
+      const totalFromBase = parseFloat((baseAmountRounded * N).toFixed(2));
+      const diff = parseFloat((originalTotal - totalFromBase).toFixed(2));
       const baseDescription = String(rest.description || "").replace(/\s*\(\d+\/\d+\)\s*$/, "");
 
       const addMonthsKeepDay = (isoDate: string, monthsToAdd: number): string => {
@@ -133,8 +137,9 @@ export function useTransactions(filterMonth?: string) {
       const rows = Array.from({ length: N }, (_, i) => {
         const installmentNumber = i + 1;
         const isLast = installmentNumber === N;
-        const cents = baseCents + (isLast ? remainderCents : 0);
-        const amount = Number((cents / 100).toFixed(2));
+        const parcelAmount = isLast
+          ? parseFloat((baseAmountRounded + diff).toFixed(2))
+          : baseAmountRounded;
 
         const due = rest.due_date ? addMonthsKeepDay(rest.due_date, i) : null;
         const competence = rest.competence_date ? addMonthsKeepDay(rest.competence_date, i) : null;
@@ -142,7 +147,7 @@ export function useTransactions(filterMonth?: string) {
         return {
           ...rest,
           description: `${baseDescription} (${installmentNumber}/${N})`,
-          amount,
+          amount: parcelAmount,
           installment_number: installmentNumber,
           installment_total: N,
           due_date: due,
