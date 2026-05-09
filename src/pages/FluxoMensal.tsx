@@ -80,6 +80,34 @@ export default function FluxoMensal() {
     return rawData.filter((r) => r.reference_month.substring(0, 4) === selectedYear);
   }, [rawData, selectedYear]);
 
+  const filteredCashflow = useMemo(() => {
+    const today = new Date();
+    const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+    return data.filter((m) => {
+      const [y, mo] = m.reference_month.split("-").map(Number);
+      const d = new Date(y, mo - 1, 1);
+      return d >= sixMonthsAgo && d < nextMonth;
+    });
+  }, [data]);
+
+  const { data: dailyPattern = [] } = useQuery({
+    queryKey: ["daily_spending_pattern", view],
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_daily_spending_pattern", {
+        p_view: view,
+        p_months: 6,
+      });
+      if (error) throw error;
+      return (data || []).map((d: any) => ({
+        dia: d.day_of_month,
+        "Gasto Médio": Number(d.avg_expense || 0),
+        "Receita Média": Number(d.avg_income || 0),
+      }));
+    },
+  });
+
   const totals = useMemo(() => {
     const income_paid = data.reduce((s, r) => s + (r.income_paid || 0), 0);
     const income_planned = data.reduce((s, r) => s + (r.income_planned || 0), 0);
