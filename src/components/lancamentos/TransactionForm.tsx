@@ -181,8 +181,10 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
     const installmentsCount = Math.max(1, Math.floor(Number(data.installments_count) || 1));
     const isMulti = !transaction && installmentsCount > 1;
     const hasCard = !!(data.center_cost && data.center_cost !== "none" && data.center_cost !== "");
-    if (hasCard && valueType === "total" && installmentsCount > 1) {
-      parsedAmount = parsedAmount / installmentsCount;
+    if (hasCard && valueType === "installment") {
+      // valor já é da parcela, não divide
+    } else if (hasCard && valueType === "total" && installmentsCount > 1) {
+      // valor é o total — NÃO divide aqui pois a mutation já divide
     }
 
     // Blindagem: não permitir status=paid com payment_date futura
