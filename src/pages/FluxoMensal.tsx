@@ -2,6 +2,8 @@ import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/lib/supabaseClient";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -77,6 +79,34 @@ export default function FluxoMensal() {
     if (selectedYear === "all") return rawData;
     return rawData.filter((r) => r.reference_month.substring(0, 4) === selectedYear);
   }, [rawData, selectedYear]);
+
+  const filteredCashflow = useMemo(() => {
+    const today = new Date();
+    const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+    const nextMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+    return data.filter((m) => {
+      const [y, mo] = m.reference_month.split("-").map(Number);
+      const d = new Date(y, mo - 1, 1);
+      return d >= sixMonthsAgo && d < nextMonth;
+    });
+  }, [data]);
+
+  const { data: dailyPattern = [] } = useQuery({
+    queryKey: ["daily_spending_pattern", view],
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_daily_spending_pattern", {
+        p_view: view,
+        p_months: 6,
+      });
+      if (error) throw error;
+      return (data || []).map((d: any) => ({
+        dia: d.day_of_month,
+        "Gasto Médio": Number(d.avg_expense || 0),
+        "Receita Média": Number(d.avg_income || 0),
+      }));
+    },
+  });
 
   const totals = useMemo(() => {
     const income_paid = data.reduce((s, r) => s + (r.income_paid || 0), 0);
@@ -225,32 +255,30 @@ export default function FluxoMensal() {
         </Card>
       </div>
 
-      <DataTable columns={columns} data={data as any} loading={isLoading} emptyMessage="Nenhum dado de fluxo mensal encontrado." />
+      <div className="max-h-[400px] overflow-y-auto">
+        <DataTable columns={columns} data={filteredCashflow as any} loading={isLoading} emptyMessage="Nenhum dado de fluxo mensal encontrado." />
+      </div>
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="text-sm font-medium">Evolução Últimos 6 Meses</CardTitle>
+          <CardTitle className="text-sm font-medium">Padrão Diário — Média dos Últimos 6 Meses</CardTitle>
+          <p className="text-xs text-muted-foreground">Dias com maior concentração de gastos e receitas</p>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={(rawData as MonthlyCashflow[]).slice(-6).map((m) => ({
-              mes: (() => {
-                const [y, mo] = m.reference_month.split("-").map(Number);
-                return format(new Date(y, mo - 1, 1), "MMM yy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
-              })(),
-              "Receita Realizada": m.income_paid,
-              "Despesa Realizada": m.expense_paid,
-              "Receita Prevista": m.income_planned,
-              "Despesa Prevista": m.expense_planned,
-            }))} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-              <XAxis dataKey="mes" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v)} />
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={dailyPattern} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+              <XAxis dataKey="dia" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v / 1000).toFixed(1)}k`} />
+              <Tooltip
+                formatter={(v: number, name: string) => [
+                  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v),
+                  name,
+                ]}
+                labelFormatter={(l) => `Dia ${l}`}
+              />
               <Legend />
-              <Bar dataKey="Receita Realizada" fill="#10b981" />
-              <Bar dataKey="Despesa Realizada" fill="#ef4444" />
-              <Bar dataKey="Receita Prevista" fill="#6ee7b7" />
-              <Bar dataKey="Despesa Prevista" fill="#fca5a5" />
+              <Bar dataKey="Gasto Médio" fill="#ef4444" />
+              <Bar dataKey="Receita Média" fill="#10b981" />
             </BarChart>
           </ResponsiveContainer>
         </CardContent>
