@@ -220,7 +220,10 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         ? data.center_cost
         : null,
     };
-    if (isMulti) payload.installments_count = installmentsCount;
+    if (isMulti) {
+      payload.installments_count = installmentsCount;
+      payload.is_total_amount = isTotalAmount;
+    }
     onSubmit(transaction ? { id: transaction.id, ...payload } : payload);
   };
 
