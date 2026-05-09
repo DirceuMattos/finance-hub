@@ -77,6 +77,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       status: "planned", payee: "", notes: "",
       installment_number: 1, installment_total: 1, installments_count: 1,
       center_cost: "",
+      is_total_amount: false,
     },
   });
 
