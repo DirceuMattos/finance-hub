@@ -83,8 +83,8 @@ export default function FluxoMensal() {
     const income_planned = data.reduce((s, r) => s + (r.income_planned || 0), 0);
     const expense_paid = data.reduce((s, r) => s + (r.expense_paid || 0), 0);
     const expense_planned = data.reduce((s, r) => s + (r.expense_planned || 0), 0);
-    const card_projected = data.reduce((s, r) => s + (r.projected_card_amount || 0), 0);
-    const card_paid = data.reduce((s, r) => s + (r.card_paid_amount || 0), 0);
+    const card_projected = data.reduce((s, r) => s + (r.card_projected || 0), 0);
+    const card_paid = data.reduce((s, r) => s + (r.card_paid || 0), 0);
     const totalIncome = income_paid + income_planned;
     const totalExpense = expense_paid + expense_planned + card_projected + card_paid;
     return { income_paid, income_planned, expense_paid, expense_planned, card_projected, card_paid, totalIncome, totalExpense, result: totalIncome - totalExpense };
