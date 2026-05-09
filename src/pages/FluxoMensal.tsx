@@ -121,12 +121,12 @@ export default function FluxoMensal() {
       render: (r) => <span className="text-destructive">{fmt(r.expense_paid ?? 0)}</span>,
     },
     {
-      key: "card_paid_amount", header: "Cartão Pago",
-      render: (r) => <span>{fmt(r.card_paid_amount ?? 0)}</span>,
+      key: "card_paid", header: "Cartão Pago",
+      render: (r) => <span>{fmt(r.card_paid ?? 0)}</span>,
     },
     {
-      key: "projected_card_amount", header: "Cartão Projetado",
-      render: (r) => <span className={(r.projected_card_amount ?? 0) > 0 ? "text-amber-600 dark:text-amber-400" : ""}>{fmt(r.projected_card_amount ?? 0)}</span>,
+      key: "card_projected", header: "Cartão Projetado",
+      render: (r) => <span className={(r.card_projected ?? 0) > 0 ? "text-amber-600 dark:text-amber-400" : ""}>{fmt(r.card_projected ?? 0)}</span>,
     },
     {
       key: "projected_balance", header: "Saldo Projetado",
