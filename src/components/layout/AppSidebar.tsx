@@ -86,7 +86,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="offcanvas">
+    <Sidebar collapsible="icon">
       <SidebarContent>
         <div className="p-4 pb-2">
           <div className="flex items-center gap-2">
