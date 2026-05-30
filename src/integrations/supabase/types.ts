@@ -91,6 +91,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_card_month_total: {
+        Args: { p_end: string; p_entity_ids?: string[]; p_start: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
