@@ -88,10 +88,12 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
       // Fetch transactions for the selected month
       let txQuery = (supabase as any)
         .from("transactions")
-        .select("amount, transaction_type, status, financial_entity_id, center_cost")
+        .select("amount, transaction_type, status, financial_entity_id, center_cost, due_date, competence_date")
         .neq("status", "cancelled")
-        .gte("competence_date", start)
-        .lt("competence_date", end);
+        .or(
+          `and(due_date.gte.${start},due_date.lt.${end}),` +
+          `and(due_date.is.null,competence_date.gte.${start},competence_date.lt.${end})`
+        );
 
       if (filterIds && filterIds.length > 0) {
         txQuery = txQuery.in("financial_entity_id", filterIds);
