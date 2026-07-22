@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, addMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -23,13 +23,17 @@ import {
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { InvestmentForm } from "@/components/investimentos/InvestmentForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
+import { supabase } from "@/lib/supabaseClient";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 const fmtMonth = (m: string) => {
   try {
-    const d = parseISO(m);
+    const [y, mo] = m.split("-").map(Number);
+    const d = new Date(y, mo - 1, 1);
     return format(d, "MMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
   } catch {
     return m;
@@ -44,6 +48,8 @@ export default function Investimentos() {
   const [editSnapshot, setEditSnapshot] = useState<InvestmentSnapshot | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const [propagating, setPropagating] = useState(false);
+  const queryClient = useQueryClient();
   const { data: snapshots = [], isLoading: loadingSnapshots } = useInvestmentSnapshots();
   const { data: entities = [] } = useFinancialEntities();
   const { create, update, remove } = useInvestmentCrud();
@@ -79,8 +85,8 @@ export default function Investimentos() {
 
   // Stat cards computed from snapshots
   const totals = useMemo(() => {
-    const totalOpening = filteredSnapshots.reduce((s, r) => s + r.opening_value, 0);
-    const totalClosing = filteredSnapshots.reduce((s, r) => s + r.closing_value, 0);
+    const totalOpening = filteredSnapshots.reduce((s, r) => s + (r.opening_value || 0), 0);
+    const totalClosing = filteredSnapshots.reduce((s, r) => s + (r.closing_value ?? r.opening_value ?? 0), 0);
     const variation = totalClosing - totalOpening;
     const variationPct = totalOpening > 0 ? (variation / totalOpening) * 100 : 0;
     return { totalClosing, totalOpening, variation, variationPct };
@@ -109,19 +115,52 @@ export default function Investimentos() {
   }, [filteredSnapshots, totals.totalClosing]);
 
   // Evolution chart from all snapshots grouped by month
+  // Only include months where all snapshots have closing_value set
   const chartData = useMemo(() => {
     const entityFiltered = filterByEntity(snapshots);
-    const byMonth = new Map<string, number>();
+    const byMonth = new Map<string, { total: number; hasNull: boolean }>();
     entityFiltered.forEach((s) => {
-      const eff = getEffectiveClosing(s, snapshots);
-      byMonth.set(s.reference_month, (byMonth.get(s.reference_month) || 0) + eff);
+      const existing = byMonth.get(s.reference_month) || { total: 0, hasNull: false };
+      if (s.closing_value == null) {
+        existing.hasNull = true;
+      } else {
+        existing.total += s.closing_value;
+      }
+      byMonth.set(s.reference_month, existing);
     });
     return Array.from(byMonth.entries())
-      .map(([month, portfolio]) => ({ month, portfolio }))
+      .filter(([, v]) => !v.hasNull && v.total > 0)
+      .map(([month, v]) => ({ month, portfolio: v.total }))
       .sort((a, b) => a.month.localeCompare(b.month));
   }, [snapshots, view, personalIds, businessIds]);
 
   const hasEnoughHistory = chartData.length >= 2;
+
+  // Propagate to next month
+  const handlePropagate = async () => {
+    if (!activeMonth) { toast.error("Selecione um mês para propagar"); return; }
+    setPropagating(true);
+    try {
+      const fromMonth = activeMonth.length === 10 ? activeMonth : `${activeMonth}-01`;
+      const [fy, fm] = fromMonth.split("-").map(Number);
+      const toDate = new Date(fy, fm, 1);
+      const toMonth = format(toDate, "yyyy-MM-dd");
+      const toMonthLabel = format(toDate, "MM/yyyy");
+      const { data, error } = await (supabase as any).rpc("propagate_investment_month", {
+        p_from_month: fromMonth,
+        p_to_month: toMonth,
+      });
+      if (error) throw error;
+      const count = Number(data) || 0;
+      if (count === 0) toast.info(`Todos os itens já existem em ${toMonthLabel}`);
+      else toast.success(`${count} item(s) propagado(s) para ${toMonthLabel}`);
+      queryClient.invalidateQueries({ queryKey: ["investment_snapshots"] });
+    } catch (e: any) {
+      toast.error("Erro ao propagar: " + e.message);
+    } finally {
+      setPropagating(false);
+    }
+  };
 
   // CRUD handlers
   const handleSubmit = (data: any) => {
@@ -182,15 +221,18 @@ export default function Investimentos() {
       key: "closing_value",
       header: "Fechamento",
       sortable: true,
-      sortValue: (r) => r.closing_value,
-      render: (r) => <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
+      sortValue: (r) => r.closing_value ?? 0,
+      render: (r) => r.closing_value == null
+        ? <span className="text-muted-foreground text-xs italic">Em aberto</span>
+        : <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
     },
     {
       key: "variation",
       header: "Variação",
       sortable: true,
-      sortValue: (r) => r.closing_value - r.opening_value,
+      sortValue: (r) => (r.closing_value ?? 0) - r.opening_value,
       render: (r) => {
+        if (r.closing_value == null) return <span className="text-muted-foreground">—</span>;
         const diff = r.closing_value - r.opening_value;
         const pct = r.opening_value > 0 ? ((diff / r.opening_value) * 100).toFixed(2) : "—";
         if (diff === 0) return <span className="text-muted-foreground">—</span>;
@@ -223,9 +265,14 @@ export default function Investimentos() {
         title="Investimentos"
         description="Carteira de investimentos por classe e período"
         actions={
-          <Button size="sm" onClick={() => { setEditSnapshot(null); setFormOpen(true); }}>
-            <Plus className="h-4 w-4 mr-1" /> Novo registro
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handlePropagate} disabled={propagating || !activeMonth}>
+              {propagating ? "Propagando..." : "Propagar para Próximo Mês"}
+            </Button>
+            <Button size="sm" onClick={() => { setEditSnapshot(null); setFormOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" /> Novo registro
+            </Button>
+          </div>
         }
       />
 

@@ -124,6 +124,12 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         endsOn = new Date(starts.getFullYear() + count - 1, starts.getMonth(), starts.getDate());
       }
     }
+    // Auto-extract due_day from starts_on when not explicitly set
+    let dueDay = data.due_day ?? null;
+    if (!dueDay && data.starts_on && data.frequency === "monthly") {
+      dueDay = data.starts_on.getDate();
+    }
+
     const payload: any = {
       description: data.description,
       amount: parsedAmount,
@@ -135,7 +141,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       center_cost: data.center_cost || null,
       starts_on: data.starts_on ? format(data.starts_on, "yyyy-MM-dd") : null,
       ends_on: endsOn ? format(endsOn, "yyyy-MM-dd") : null,
-      due_day: data.due_day ?? null,
+      due_day: dueDay,
       day_of_week: data.day_of_week ?? null,
       is_active: data.is_active,
       is_continuous: data.is_continuous,
