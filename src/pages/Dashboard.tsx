@@ -16,10 +16,11 @@ import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line,
+  LineChart, Line, BarChart, Bar, Legend,
 } from "recharts";
 import { format, subMonths, addMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useQuery } from "@tanstack/react-query";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import { cn } from "@/lib/utils";
 
@@ -82,6 +83,7 @@ function HorizontalBreakdown({ items, label }: { items: { name: string; total: n
 
 export default function Dashboard() {
   const [view, setView] = useState<ViewType>("consolidated");
+  const [dashPage, setDashPage] = useState<1 | 2>(1);
   const [selectedMonthStr, setSelectedMonthStr] = useState(() => format(new Date(), "yyyy-MM"));
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -94,6 +96,46 @@ export default function Dashboard() {
     expensesByCategory,
     patrimony, patrimonyEvolution, investment, investmentEvolution, riskData,
   } = useDashboardData(view, selectedMonth);
+
+  const { data: dailyPattern = [] } = useQuery({
+    queryKey: ["daily_spending_pattern", view],
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_daily_spending_pattern", {
+        p_view: view,
+        p_months: 6,
+      });
+      if (error) return [];
+      return (data || []).map((d: any) => ({
+        dia: d.day_of_month,
+        "Gasto Médio": Number(d.avg_expense || 0),
+        "Receita Média": Number(d.avg_income || 0),
+      }));
+    },
+  });
+
+  const { data: monthlyCashflowData = [] } = useQuery({
+    queryKey: ["dashboard_monthly_cashflow_p2", view],
+    staleTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_monthly_cashflow", {
+        p_view: view,
+        p_months: 6,
+      });
+      if (error) return [];
+      return (data || []).map((d: any) => {
+        const [yr, mo] = (d.reference_month || "").split("-").map(Number);
+        const label = yr && mo ? format(new Date(yr, mo - 1, 1), "MMM yy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase()) : d.reference_month;
+        return {
+          label,
+          "Receita Realizada": Number(d.income_paid || 0),
+          "Despesa Realizada": Number(d.expense_paid || 0),
+          "Receita Prevista": Number(d.income_planned || 0),
+          "Despesa Prevista": Number(d.expense_planned || 0),
+        };
+      });
+    },
+  });
 
   const viewLabel = view === "personal" ? "Pessoal" : view === "business" ? "Empresarial" : "Consolidado";
 
@@ -362,6 +404,25 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* ===== NAVEGAÇÃO ENTRE PÁGINAS ===== */}
+      <div className="flex gap-2 mb-4">
+        <Button
+          size="sm"
+          variant={dashPage === 1 ? "default" : "outline"}
+          onClick={() => setDashPage(1)}
+        >
+          Visão Geral
+        </Button>
+        <Button
+          size="sm"
+          variant={dashPage === 2 ? "default" : "outline"}
+          onClick={() => setDashPage(2)}
+        >
+          Análises
+        </Button>
+      </div>
+
+      {dashPage === 1 && (<>
       {/* ===== TOP DESPESAS POR CATEGORIA ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card>
@@ -459,6 +520,90 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      </>)}
+
+      {/* ===== PÁGINA 2 — ANÁLISES ===== */}
+      {dashPage === 2 && (<>
+
+        {/* Top Despesas por Categoria — Gráfico de Barras */}
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Top Despesas por Categoria</CardTitle>
+            <p className="text-xs text-muted-foreground">Mês selecionado</p>
+          </CardHeader>
+          <CardContent>
+            {expensesByCategory.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Sem dados de despesas.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart
+                  data={expensesByCategory.slice(0, 10).map(e => ({ name: e.name.length > 20 ? e.name.substring(0, 20) + "…" : e.name, Valor: e.total }))}
+                  layout="vertical"
+                  margin={{ top: 5, right: 30, left: 10, bottom: 5 }}
+                >
+                  <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={fmtShort} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={140} />
+                  <Tooltip formatter={(v: number) => fmtCur(v)} />
+                  <Bar dataKey="Valor" fill="#ef4444" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Fluxo Mensal — Últimos 6 meses */}
+        <Card className="mb-6">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Fluxo Mensal — Últimos 6 Meses</CardTitle>
+            <p className="text-xs text-muted-foreground">Receitas e despesas realizadas vs previstas</p>
+          </CardHeader>
+          <CardContent>
+            {monthlyCashflowData.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Sem dados disponíveis.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={monthlyCashflowData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtShort} />
+                  <Tooltip formatter={(v: number) => fmtCur(v)} />
+                  <Legend />
+                  <Bar dataKey="Receita Realizada" fill="#10b981" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Despesa Realizada" fill="#ef4444" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Receita Prevista" fill="#6ee7b7" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Despesa Prevista" fill="#fca5a5" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Padrão Diário — Média dos últimos 6 meses */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Padrão Diário — Média dos Últimos 6 Meses</CardTitle>
+            <p className="text-xs text-muted-foreground">Dias com maior concentração de gastos e receitas</p>
+          </CardHeader>
+          <CardContent>
+            {dailyPattern.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Sem dados disponíveis.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={dailyPattern} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                  <XAxis dataKey="dia" tick={{ fontSize: 10 }} label={{ value: "Dia do mês", position: "insideBottom", offset: -2, fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 10 }} tickFormatter={fmtShort} />
+                  <Tooltip
+                    formatter={(v: number, name: string) => [fmtCur(v), name]}
+                    labelFormatter={(l) => `Dia ${l}`}
+                  />
+                  <Legend />
+                  <Bar dataKey="Gasto Médio" fill="#ef4444" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="Receita Média" fill="#10b981" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </>)}
     </AppLayout>
   );
 }
