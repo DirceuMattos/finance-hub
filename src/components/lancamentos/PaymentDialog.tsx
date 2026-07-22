@@ -10,13 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAccounts } from "@/hooks/useAccounts";
 import type { Transaction } from "@/types/database";
 
 interface PaymentDialogProps {
   transaction: Transaction | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: (data: { id: string; status: string; payment_date: string; amount: number }) => void;
+  onConfirm: (data: { id: string; status: string; payment_date: string; amount: number; account_id?: string }) => void;
   onCreateRemainder?: (data: Partial<Transaction>) => void;
   loading?: boolean;
 }
@@ -24,10 +26,12 @@ interface PaymentDialogProps {
 export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCreateRemainder, loading }: PaymentDialogProps) {
   const [paymentDate, setPaymentDate] = useState<Date | undefined>(undefined);
   const [amount, setAmount] = useState("");
+  const [accountId, setAccountId] = useState<string>("");
   const [showRemainderAlert, setShowRemainderAlert] = useState(false);
-  const [pendingConfirmData, setPendingConfirmData] = useState<{ id: string; status: string; payment_date: string; amount: number } | null>(null);
+  const [pendingConfirmData, setPendingConfirmData] = useState<{ id: string; status: string; payment_date: string; amount: number; account_id?: string } | null>(null);
   const [showCalc, setShowCalc] = useState(false);
   const [calcInput, setCalcInput] = useState("");
+  const { data: accounts = [] } = useAccounts();
 
   const parseAmountInput = (raw: unknown): number => {
     if (raw == null) return NaN;
@@ -45,6 +49,7 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
     if (transaction && open) {
       setAmount(String(transaction.amount));
       setPaymentDate(new Date());
+      setAccountId(transaction.account_id || "");
       setShowCalc(false);
       setCalcInput("");
     }
@@ -63,6 +68,7 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
       status: "paid",
       payment_date: format(paymentDate, "yyyy-MM-dd"),
       amount: realizedAmount,
+      account_id: accountId || transaction.account_id || undefined,
     };
 
     if (realizedAmount < transaction.amount && onCreateRemainder) {
@@ -145,6 +151,23 @@ export function PaymentDialog({ transaction, open, onOpenChange, onConfirm, onCr
                     </PopoverContent>
                   </Popover>
                 </div>
+              </div>
+
+              {/* Conta bancária */}
+              <div className="space-y-2">
+                <Label>Conta bancária</Label>
+                <Select value={accountId} onValueChange={setAccountId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a conta..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((acc: any) => (
+                      <SelectItem key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Valores: Previsto x Realizado lado a lado */}
