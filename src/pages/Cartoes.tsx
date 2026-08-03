@@ -13,11 +13,9 @@ import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { CreditCard, Info, AlertTriangle, CheckCircle2, Receipt } from "lucide-react";
 import { toast } from "sonner";
+import { CardInvoiceSettleDialog } from "@/components/cartoes/CardInvoiceSettleDialog";
 
 type FilterView = "all" | "personal" | "business";
 
@@ -63,6 +61,9 @@ export default function Cartoes() {
   const [payDate, setPayDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [payNotes, setPayNotes] = useState("");
   const [paying, setPaying] = useState(false);
+
+  // Settle dialog state
+  const [settleCard, setSettleCard] = useState<{ id: string; name: string; dueDay: number } | null>(null);
 
   const [y, m] = filterMonth.split("-").map(Number);
   const referenceMonth = `${y}-${String(m).padStart(2, "0")}-01`;
@@ -312,10 +313,10 @@ export default function Cartoes() {
                     size="sm"
                     variant={invoicePaid ? "outline" : "default"}
                     className="w-full"
-                    onClick={() => handleOpenPayDialog(card.id, card.name, totalPlanned, totalPaid)}
+                    onClick={() => setSettleCard({ id: card.id, name: card.name, dueDay: card.due_day || 25 })}
                   >
                     <Receipt className="h-4 w-4 mr-1" />
-                    {invoicePaid ? "Atualizar Pagamento" : "Quitar Fatura"}
+                    {invoicePaid ? "Ver / Atualizar Fatura" : "Quitar Fatura"}
                   </Button>
 
                   <p className="text-[11px] text-muted-foreground italic flex items-center gap-1">
@@ -329,52 +330,17 @@ export default function Cartoes() {
         </div>
       )}
 
-      {/* Invoice Payment Dialog */}
-      <Dialog open={!!payingCard} onOpenChange={(o) => { if (!o) setPayingCard(null); }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Quitar Fatura — {payingCard?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label>Valor Total do Ciclo</Label>
-              <p className="text-sm text-muted-foreground">{payingCard ? fmt(payingCard.total) : ""}</p>
-            </div>
-            <div className="space-y-1">
-              <Label>Valor Pago (R$)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={payAmount}
-                onChange={(e) => setPayAmount(e.target.value)}
-                onFocus={(e) => e.target.select()}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Data do Pagamento</Label>
-              <Input
-                type="date"
-                value={payDate}
-                onChange={(e) => setPayDate(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>Observações (opcional)</Label>
-              <Input
-                value={payNotes}
-                onChange={(e) => setPayNotes(e.target.value)}
-                placeholder="Ex: Pago via débito automático"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayingCard(null)}>Cancelar</Button>
-            <Button onClick={handlePayInvoice} disabled={paying || !payAmount || !payDate}>
-              {paying ? "Salvando..." : "Confirmar Pagamento"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Invoice Settle Dialog */}
+      {settleCard && (
+        <CardInvoiceSettleDialog
+          open={!!settleCard}
+          onOpenChange={(o) => { if (!o) setSettleCard(null); }}
+          cardId={settleCard.id}
+          cardName={settleCard.name}
+          dueDay={settleCard.dueDay}
+          referenceMonth={referenceMonth}
+        />
+      )}
     </AppLayout>
   );
 }
