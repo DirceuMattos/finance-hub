@@ -177,14 +177,7 @@ export default function Lancamentos() {
       cur.setMonth(cur.getMonth() + 1);
     }
 
-    // Reorder: current month first, then future months (asc), then past months (most recent first)
-    const currentValue = format(new Date(), "yyyy-MM");
-    const currentIdx = all.findIndex(o => o.value === currentValue);
-    if (currentIdx === -1) return all;
-    const current = all[currentIdx];
-    const future = all.slice(currentIdx + 1); // ascending future
-    const past = all.slice(0, currentIdx).reverse(); // most recent past first
-    return [current, ...future, ...past];
+    return all;
   }, [maxDateData]);
 
   // Map card installments to unified rows
@@ -416,7 +409,6 @@ export default function Lancamentos() {
     },
     { key: "transaction_type", header: "Tipo", sortable: true, sortValue: (r) => r.transaction_type, render: (r) => <TypeBadge type={r.transaction_type} /> },
     { key: "payee", header: "Favorecido", sortable: true, sortValue: (r) => r.payee || "", render: (r) => r.payee || "—" },
-    { key: "category", header: "Categoria", sortable: true, sortValue: (r) => r.category_name || "", render: (r) => r.category_name || "—" },
     {
       key: "entity", header: "Entidade", sortable: true, sortValue: (r) => r.entity_name || "",
       render: (r) => {
@@ -514,10 +506,6 @@ export default function Lancamentos() {
     }
 
     const recordMonth = item.due_date?.slice(0, 7) || item.competence_date?.slice(0, 7);
-    if (filterMonth !== "all" && recordMonth && filterMonth !== recordMonth) {
-      setFilterMonth(recordMonth);
-      adjusted = true;
-    }
 
     if (filterTypeTab !== "all" && item.transaction_type && filterTypeTab !== item.transaction_type) {
       setFilterTypeTab("all");
