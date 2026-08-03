@@ -77,25 +77,30 @@ export default function Patrimonio() {
 
   const filteredEvolution = useMemo(() => filterByEntity(evolution), [evolution, view]);
 
-  // Aggregate evolution for chart
+  // Aggregate evolution for chart — only months with valid data
   const chartData = useMemo(() => {
     if (view === "all") {
       const byMonth = new Map<string, { reference_month: string; total_assets: number; total_liabilities: number; net_patrimony: number }>();
       filteredEvolution.forEach((e) => {
+        if (!e.net_patrimony && e.net_patrimony !== 0) return; // skip null
         const existing = byMonth.get(e.reference_month) || { reference_month: e.reference_month, total_assets: 0, total_liabilities: 0, net_patrimony: 0 };
-        existing.total_assets += e.total_assets;
-        existing.total_liabilities += e.total_liabilities;
-        existing.net_patrimony += e.net_patrimony;
+        existing.total_assets += e.total_assets || 0;
+        existing.total_liabilities += e.total_liabilities || 0;
+        existing.net_patrimony += e.net_patrimony || 0;
         byMonth.set(e.reference_month, existing);
       });
-      return Array.from(byMonth.values()).sort((a, b) => a.reference_month.localeCompare(b.reference_month));
+      return Array.from(byMonth.values())
+        .filter((e) => e.net_patrimony !== 0)
+        .sort((a, b) => a.reference_month.localeCompare(b.reference_month));
     }
-    return filteredEvolution.map((e) => ({
-      reference_month: e.reference_month,
-      total_assets: e.total_assets,
-      total_liabilities: e.total_liabilities,
-      net_patrimony: e.net_patrimony,
-    }));
+    return filteredEvolution
+      .filter((e) => e.net_patrimony !== null && e.net_patrimony !== undefined && e.net_patrimony !== 0)
+      .map((e) => ({
+        reference_month: e.reference_month,
+        total_assets: e.total_assets || 0,
+        total_liabilities: e.total_liabilities || 0,
+        net_patrimony: e.net_patrimony || 0,
+      }));
   }, [filteredEvolution, view]);
 
   const hasEnoughHistory = chartData.length >= 2;
@@ -105,6 +110,19 @@ export default function Patrimonio() {
     const liabilities = filteredSnapshots.filter((s) => s.closing_value < 0).reduce((sum, s) => sum + Math.abs(s.closing_value), 0);
     return { assets, liabilities, net: assets - liabilities };
   }, [filteredSnapshots]);
+
+  // Previous month comparison
+  const prevTotals = useMemo(() => {
+    const sortedMonths = [...months].sort();
+    const currentIdx = sortedMonths.indexOf(activeMonth);
+    if (currentIdx <= 0) return null;
+    const prevMonth = sortedMonths[currentIdx - 1];
+    const prevSnapshots = filterByEntity(snapshots).filter((s) => s.reference_month === prevMonth);
+    if (prevSnapshots.length === 0) return null;
+    const assets = prevSnapshots.filter((s) => s.closing_value > 0).reduce((sum, s) => sum + s.closing_value, 0);
+    const liabilities = prevSnapshots.filter((s) => s.closing_value < 0).reduce((sum, s) => sum + Math.abs(s.closing_value), 0);
+    return { assets, liabilities, net: assets - liabilities };
+  }, [snapshots, activeMonth, months, view]);
 
   const byCategory = useMemo(() => {
     const map = new Map<string, { name: string; total: number; items: number }>();
@@ -290,9 +308,36 @@ export default function Patrimonio() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Ativos" value={fmt(totals.assets)} icon={TrendingUp} variant={totals.assets < 0 ? "negative" : "neutral"} />
-        <StatCard title="Passivos" value={fmt(totals.liabilities)} icon={TrendingDown} variant={totals.liabilities < 0 ? "negative" : "neutral"} />
-        <StatCard title="Patrimônio Líquido" value={fmt(totals.net)} icon={Landmark} variant={totals.net < 0 ? "negative" : "neutral"} />
+        <StatCard
+          title="Ativos"
+          value={fmt(totals.assets)}
+          icon={TrendingUp}
+          variant={totals.assets < 0 ? "negative" : "neutral"}
+          subLabel={prevTotals ? (() => {
+            const diff = totals.assets - prevTotals.assets;
+            return `${diff >= 0 ? "+" : ""}${fmt(diff)} vs mês anterior`;
+          })() : undefined}
+        />
+        <StatCard
+          title="Passivos"
+          value={fmt(totals.liabilities)}
+          icon={TrendingDown}
+          variant={totals.liabilities < 0 ? "negative" : "neutral"}
+          subLabel={prevTotals ? (() => {
+            const diff = totals.liabilities - prevTotals.liabilities;
+            return `${diff >= 0 ? "+" : ""}${fmt(diff)} vs mês anterior`;
+          })() : undefined}
+        />
+        <StatCard
+          title="Patrimônio Líquido"
+          value={fmt(totals.net)}
+          icon={Landmark}
+          variant={totals.net < 0 ? "negative" : "neutral"}
+          subLabel={prevTotals ? (() => {
+            const diff = totals.net - prevTotals.net;
+            return `${diff >= 0 ? "+" : ""}${fmt(diff)} vs mês anterior`;
+          })() : undefined}
+        />
       </div>
 
       {/* Evolution Chart */}
