@@ -36,7 +36,9 @@ export function useTransactions(filterMonth?: string) {
 
   const recalcBalances = async () => {
     try {
-      await (supabase as any).rpc("recalculate_account_balances");
+      await (supabase as any).rpc("recalculate_account_balances_from_date", {
+        p_from_date: "2026-04-01",
+      });
     } catch { /* silently ignore */ }
   };
 
@@ -63,11 +65,6 @@ export function useTransactions(filterMonth?: string) {
 
       const { data, error } = await q;
       if (error) throw error;
-      console.log("useTransactions result:", {
-        filterMonth,
-        total: data?.length,
-        sample: data?.slice(0, 3).map((t: any) => ({ id: t.id, desc: t.description, competence: t.competence_date }))
-      });
       return data as Transaction[];
     },
   });
@@ -75,24 +72,9 @@ export function useTransactions(filterMonth?: string) {
   const recalcAccountBalance = async (accountId?: string | null) => {
     if (!accountId) return;
     try {
-      const { data: txns } = await (supabase as any)
-        .from("transactions")
-        .select("transaction_type, amount")
-        .eq("account_id", accountId)
-        .eq("status", "paid");
-      const { data: acc } = await (supabase as any)
-        .from("accounts")
-        .select("opening_balance")
-        .eq("id", accountId)
-        .single();
-      if (!txns || !acc) return;
-      let balance = Number(acc.opening_balance ?? 0);
-      for (const t of txns) {
-        const amount = Math.abs(Number(t.amount ?? 0));
-        if (t.transaction_type === "income") balance += amount;
-        if (t.transaction_type === "expense") balance -= amount;
-      }
-      await (supabase as any).from("accounts").update({ current_balance: balance }).eq("id", accountId);
+      await (supabase as any).rpc("recalculate_account_balances_from_date", {
+        p_from_date: "2026-04-01",
+      });
     } catch { /* silently ignore */ }
   };
 
