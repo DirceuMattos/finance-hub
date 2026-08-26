@@ -68,6 +68,8 @@ export function CardInvoiceSettleDialog({
     queryKey: ["card_invoice_items", cardName, referenceMonth],
     enabled: open,
     staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("transactions")
@@ -90,6 +92,9 @@ export function CardInvoiceSettleDialog({
       const defaults: Record<string, string> = {};
       items.forEach((i) => { defaults[i.id] = nextDueDate; });
       setReschedule(defaults);
+    } else {
+      setSelected(new Set());
+      setReschedule({});
     }
   }, [items, nextDueDate]);
 
