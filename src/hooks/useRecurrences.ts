@@ -48,11 +48,17 @@ export function useRecurrences() {
   const create = useMutation({
     mutationFn: async (item: Partial<Recurrence>) => {
       const { categories, financial_entities, accounts, ...rest } = item as any;
-      const { error } = await (supabase as any).from("recurrences").insert(rest);
+      const { data: inserted, error } = await (supabase as any)
+        .from("recurrences")
+        .insert(rest)
+        .select("id")
+        .single();
       if (error) throw error;
+      if (!inserted?.id) throw new Error("A recorrência não foi gravada. Verifique as permissões.");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["recurrences"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_monthly_flow_view"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_expenses_category"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard_cashflow_chart"] });
