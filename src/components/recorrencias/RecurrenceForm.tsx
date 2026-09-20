@@ -17,6 +17,7 @@ import { Calendar } from "@/components/ui/calendar";
 import type { Recurrence } from "@/hooks/useRecurrences";
 import type { FinancialEntity, Account, Category } from "@/types/database";
 import { useCards } from "@/hooks/useCards";
+import { normalizeOptionalRelationId, parseRecurrenceAmount } from "@/lib/recurrenceRules";
 
 const schema = z.object({
   description: z.string().min(1, "Descrição é obrigatória").max(200),
@@ -107,9 +108,13 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
   }, [recurrence, open]);
 
   const handleSubmit = (data: FormData) => {
-    const parsedAmount = parseFloat(String(data.amount).replace(/\./g, "").replace(",", "."));
+    const parsedAmount = parseRecurrenceAmount(data.amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       form.setError("amount", { message: "Valor inválido" });
+      return;
+    }
+    if (!data.starts_on) {
+      form.setError("starts_on", { message: "Data de início é obrigatória" });
       return;
     }
     let endsOn = data.ends_on;
@@ -124,6 +129,10 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
         endsOn = new Date(starts.getFullYear() + count - 1, starts.getMonth(), starts.getDate());
       }
     }
+    if (endsOn && endsOn < data.starts_on) {
+      form.setError("ends_on", { message: "A data final não pode ser anterior à data de início" });
+      return;
+    }
     // Auto-extract due_day from starts_on when not explicitly set
     let dueDay = data.due_day ?? null;
     if (!dueDay && data.starts_on && data.frequency === "monthly") {
@@ -135,11 +144,11 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
       amount: parsedAmount,
       frequency: data.frequency,
       transaction_type: data.transaction_type,
-      category_id: data.category_id || null,
-      financial_entity_id: data.financial_entity_id || null,
-      account_id: data.account_id || null,
+      category_id: normalizeOptionalRelationId(data.category_id),
+      financial_entity_id: normalizeOptionalRelationId(data.financial_entity_id),
+      account_id: normalizeOptionalRelationId(data.account_id),
       center_cost: data.center_cost || null,
-      starts_on: data.starts_on ? format(data.starts_on, "yyyy-MM-dd") : null,
+      starts_on: format(data.starts_on, "yyyy-MM-dd"),
       ends_on: endsOn ? format(endsOn, "yyyy-MM-dd") : null,
       due_day: dueDay,
       day_of_week: data.day_of_week ?? null,
@@ -247,7 +256,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
 
           <FormField control={form.control} name="category_id" render={({ field }) => (
             <FormItem><FormLabel>Categoria</FormLabel><FormControl>
-              <Select onValueChange={field.onChange} value={field.value || ""}>
+              <Select onValueChange={(value) => field.onChange(value === "none" ? "" : value)} value={field.value || ""}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
@@ -259,7 +268,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
 
           <FormField control={form.control} name="financial_entity_id" render={({ field }) => (
             <FormItem><FormLabel>Entidade</FormLabel><FormControl>
-              <Select onValueChange={field.onChange} value={field.value || ""}>
+              <Select onValueChange={(value) => field.onChange(value === "none" ? "" : value)} value={field.value || ""}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
@@ -282,7 +291,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
 
           <FormField control={form.control} name="account_id" render={({ field }) => (
             <FormItem><FormLabel>Conta</FormLabel><FormControl>
-              <Select onValueChange={field.onChange} value={field.value || ""}>
+              <Select onValueChange={(value) => field.onChange(value === "none" ? "" : value)} value={field.value || ""}>
                 <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma</SelectItem>
@@ -314,7 +323,7 @@ export function RecurrenceForm({ open, onOpenChange, recurrence, entities, accou
           )} />
 
           <div className="grid grid-cols-2 gap-3">
-            <DateField name="starts_on" label="Data Início" />
+            <DateField name="starts_on" label="Data Início *" />
             <FormItem>
               <FormLabel>Data Final</FormLabel>
               <div className="flex gap-2 mb-2">
