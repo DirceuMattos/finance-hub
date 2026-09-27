@@ -1,6 +1,8 @@
 -- Rollback da migration 20260920000000.
 -- Remove somente o gatilho e as funções adicionadas por ela.
 -- Não apaga recorrências nem lançamentos já existentes.
+-- Se o backfill 20260920000001 precisar ser revertido, execute primeiro
+-- 20260920000001_backfill_missing_recurrence_transactions.rollback.sql.
 
 BEGIN;
 
