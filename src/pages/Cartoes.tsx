@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Info, AlertTriangle, CheckCircle2, Receipt } from "lucide-react";
-import { cardCycleWindow, formatIsoDateBR } from "@/lib/cardCycle";
+import { cardCycleMonthOf, cardCycleWindow, formatIsoDateBR } from "@/lib/cardCycle";
 import { CardInvoiceSettleDialog } from "@/components/cartoes/CardInvoiceSettleDialog";
 
 type FilterView = "all" | "personal" | "business";
@@ -52,13 +52,35 @@ export default function Cartoes() {
   const { data: entities = [] } = useFinancialEntities();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<FilterView>("all");
-  const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
+  // Padrão: a fatura do ciclo em andamento hoje (após o vencimento do dia 25, já é a do mês seguinte).
+  const currentCycleMonth = useMemo(() => cardCycleMonthOf(format(new Date(), "yyyy-MM-dd"), 25), []);
+  const [filterMonth, setFilterMonth] = useState(currentCycleMonth);
 
   // Settle dialog state
-  const [settleCard, setSettleCard] = useState<{ id: string; name: string; dueDay: number } | null>(null);
+  const [settleCard, setSettleCard] = useState<{ id: string; name: string; dueDay: number; referenceMonth: string; label: string } | null>(null);
 
   const [y, m] = filterMonth.split("-").map(Number);
   const referenceMonth = `${y}-${String(m).padStart(2, "0")}-01`;
+  const prevMonth = format(addMonths(new Date(y, m - 1, 1), -1), "yyyy-MM");
+  const prevReferenceMonth = `${prevMonth}-01`;
+  const prevMonthLabel = format(new Date(y, m - 2, 1), "MMMM yyyy", { locale: ptBR }).replace(/^\w/, (c) => c.toUpperCase());
+
+  // Fatura anterior: detecta ciclo vencido que ainda não foi conferido e fechado.
+  const { data: prevCycleTotals = [] } = useQuery({
+    queryKey: ["card_cycle_totals", prevMonth],
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_card_cycle_totals", { p_month: prevReferenceMonth });
+      if (error) throw error;
+      return data as CycleTotals[];
+    },
+  });
+  const byCardPrev = useMemo(() => {
+    const map = new Map<string, CycleTotals>();
+    prevCycleTotals.forEach((r: CycleTotals) => map.set(r.card_id, r));
+    return map;
+  }, [prevCycleTotals]);
 
   const { data: cycleTotals = [] } = useQuery({
     queryKey: ["card_cycle_totals", filterMonth],
@@ -119,7 +141,7 @@ export default function Cartoes() {
         </TabsList>
       </Tabs>
 
-      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão..." hasActiveFilters={filterMonth !== format(new Date(), "yyyy-MM")} onClear={() => setFilterMonth(format(new Date(), "yyyy-MM"))}>
+      <FilterBar searchValue={search} onSearchChange={setSearch} searchPlaceholder="Buscar cartão..." hasActiveFilters={filterMonth !== currentCycleMonth} onClear={() => setFilterMonth(currentCycleMonth)}>
         <Select value={filterMonth} onValueChange={setFilterMonth}>
           <SelectTrigger className="h-9 w-[180px] text-xs"><SelectValue placeholder="Mês" /></SelectTrigger>
           <SelectContent>
@@ -150,8 +172,17 @@ export default function Cartoes() {
             const totalPaid = cycleData?.total_paid || 0;
             const totalPlanned = cycleData?.total_planned || 0;
             const cycleTotal = totalPaid + totalPlanned;
-            // Quitada: registro de pagamento da fatura ou nada pendente com algo pago no ciclo.
-            const invoicePaid = (cycleData?.invoice_paid || false) || (totalPlanned === 0 && totalPaid > 0);
+            // Fechada: operador conferiu e virou a fatura. Paga sem fechamento: nada pendente, falta conferir.
+            const invoiceClosed = cycleData?.invoice_paid || false;
+            const paidNotClosed = !invoiceClosed && totalPlanned === 0 && totalPaid > 0;
+            const invoicePaid = invoiceClosed || paidNotClosed;
+            const prevData = byCardPrev.get(card.id);
+            const prevCycle = cardCycleWindow(prevMonth, card.due_day);
+            const prevPlanned = Number(prevData?.total_planned) || 0;
+            const prevPaid = Number(prevData?.total_paid) || 0;
+            const prevOpen = !!prevData && !prevData.invoice_paid && prevPlanned + prevPaid > 0;
+            const openSettle = (ref: string, label: string) =>
+              setSettleCard({ id: card.id, name: card.name, dueDay: card.due_day || 25, referenceMonth: ref, label });
             // Uso do teto = o que ainda está em aberto no ciclo; zera quando a fatura é quitada.
             const usedAmount = totalPlanned;
             const invoiceAmount = cycleData?.invoice_amount ?? (invoicePaid ? totalPaid : null);
@@ -170,9 +201,11 @@ export default function Cartoes() {
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {entityType === "personal" && <Badge variant="outline" className="text-[10px] border-primary text-primary">Pessoal</Badge>}
                       {entityType === "business" && <Badge variant="outline" className="text-[10px] border-accent-foreground text-accent-foreground">Empresa</Badge>}
-                      {invoicePaid
-                        ? <Badge className="bg-emerald-500 text-white text-[10px] gap-1"><CheckCircle2 className="h-3 w-3" />Fatura Quitada</Badge>
-                        : <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Ativo</Badge>
+                      {invoiceClosed
+                        ? <Badge className="bg-emerald-500 text-white text-[10px] gap-1"><CheckCircle2 className="h-3 w-3" />Fatura fechada</Badge>
+                        : paidNotClosed
+                          ? <Badge variant="outline" className="text-[10px] border-emerald-500 text-emerald-700 dark:text-emerald-400">Paga · falta fechar</Badge>
+                          : <Badge className="bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]">Em aberto</Badge>
                       }
                     </div>
                   </div>
@@ -180,11 +213,31 @@ export default function Cartoes() {
                 </CardHeader>
                 <CardContent className="space-y-4">
 
-                  {/* Invoice paid info */}
-                  {invoicePaid && invoiceAmount && (
+                  {/* Fatura anterior vencida e não fechada */}
+                  {prevOpen && (
+                    <div className="flex items-center justify-between gap-2 rounded-md px-3 py-2 text-xs font-medium bg-amber-500/10 text-amber-800 dark:text-amber-400">
+                      <span className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        Fatura de {prevMonthLabel} (venc. {formatIsoDateBR(prevCycle.end)}) não foi fechada ·{" "}
+                        {prevPlanned > 0 ? `${fmt(prevPlanned)} em aberto` : "tudo pago, falta conferir"}
+                      </span>
+                      <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => openSettle(prevReferenceMonth, prevMonthLabel)}>
+                        Conferir
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Situação da fatura do mês selecionado */}
+                  {invoiceClosed && invoiceAmount && (
                     <div className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                       <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Fatura quitada{invoicePaymentDate ? ` em ${formatIsoDateBR(invoicePaymentDate)}` : ""} — {fmt(invoiceAmount)}
+                      Fatura fechada{invoicePaymentDate ? ` · pago até ${formatIsoDateBR(invoicePaymentDate)}` : ""} — {fmt(invoiceAmount)}
+                    </div>
+                  )}
+                  {paidNotClosed && (
+                    <div className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                      Todos os lançamentos do ciclo estão pagos ({fmt(totalPaid)}). Confira e feche a fatura.
                     </div>
                   )}
 
@@ -279,10 +332,10 @@ export default function Cartoes() {
                     size="sm"
                     variant={invoicePaid ? "outline" : "default"}
                     className="w-full"
-                    onClick={() => setSettleCard({ id: card.id, name: card.name, dueDay: card.due_day || 25 })}
+                    onClick={() => openSettle(referenceMonth, selectedMonthLabel)}
                   >
                     <Receipt className="h-4 w-4 mr-1" />
-                    {invoicePaid ? "Ver / Atualizar Fatura" : "Quitar Fatura"}
+                    {invoiceClosed ? "Ver fatura fechada" : paidNotClosed ? "Conferir e fechar fatura" : "Quitar fatura"}
                   </Button>
 
                   <p className="text-[11px] text-muted-foreground italic flex items-center gap-1">
@@ -304,8 +357,8 @@ export default function Cartoes() {
           cardId={settleCard.id}
           cardName={settleCard.name}
           dueDay={settleCard.dueDay}
-          referenceLabel={selectedMonthLabel}
-          referenceMonth={referenceMonth}
+          referenceLabel={settleCard.label}
+          referenceMonth={settleCard.referenceMonth}
         />
       )}
     </AppLayout>

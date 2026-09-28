@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import { Banknote, Calculator, CalendarClock, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Banknote, Calculator, CalendarClock, CheckCircle2, Lock } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { cardCycleWindow, formatIsoDateBR, normalizeDueDay } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
@@ -97,6 +97,24 @@ export function CardInvoiceSettleDialog({
     },
   });
 
+  // Fatura já fechada (virada) pelo operador?
+  const { data: closedInvoice = null, isLoading: loadingClosed } = useQuery({
+    queryKey: ["card_invoice_payment", cardId, referenceMonth],
+    enabled: open,
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("card_invoice_payments")
+        .select("amount_paid, payment_date, updated_at")
+        .eq("card_id", cardId)
+        .eq("reference_month", referenceMonth)
+        .maybeSingle();
+      if (error) throw error;
+      return data as { amount_paid: number; payment_date: string; updated_at: string } | null;
+    },
+  });
+
   const pending = useMemo(() => items.filter((i) => i.status === "planned"), [items]);
   const alreadyPaid = useMemo(() => items.filter((i) => i.status === "paid"), [items]);
 
@@ -116,6 +134,19 @@ export function CardInvoiceSettleDialog({
   const totalSelected = selectedItems.reduce((s, i) => s + Math.abs(i.amount), 0);
   const totalPaid = alreadyPaid.reduce((s, i) => s + Math.abs(i.amount), 0);
   const allSelected = pending.length > 0 && selectedItems.length === pending.length;
+  const todayIso = today();
+  const overdue = cycle.end < todayIso;
+  // Varredura: nada pendente e algo pago -> conferência e pedido para virar a fatura.
+  const readyToClose = !closedInvoice && pending.length === 0 && alreadyPaid.length > 0;
+  const paidByAccount = useMemo(() => {
+    const map = new Map<string, number>();
+    alreadyPaid.forEach((i) => map.set(i.account_id ?? "", (map.get(i.account_id ?? "") || 0) + Math.abs(i.amount)));
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+  }, [alreadyPaid]);
+  const nextCycle = useMemo(() => {
+    const [yy, mm] = referenceMonth.split("-").map(Number);
+    return cardCycleWindow(format(addMonths(new Date(yy, mm - 1, 1), 1), "yyyy-MM"), due);
+  }, [referenceMonth, due]);
 
   const setAll = (selected: boolean) =>
     setRows((prev) => {
@@ -143,6 +174,41 @@ export function CardInvoiceSettleDialog({
   const badReschedule = rescheduleItems.some((i) => !rows[i.id]?.newDueDate || rows[i.id].newDueDate <= cycle.end);
   const nothingToDo = selectedItems.length === 0 && rescheduleItems.length === 0;
 
+  const invalidateAll = () =>
+    ["transactions", "card_cycle_totals", "dashboard_account_balances_split", "card_invoice_items",
+     "card_invoice_transactions", "card_invoice_payment", "accounts"]
+      .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+
+  const callSettle = async (settle: unknown[], reschedule: unknown[], close: boolean) => {
+    const { data, error } = await (supabase as any).rpc("settle_card_invoice", {
+      p_card_id: cardId,
+      p_reference_month: referenceMonth,
+      p_settle: settle,
+      p_reschedule: reschedule,
+      p_close: close,
+    });
+    if (error) throw error;
+    invalidateAll();
+    return data;
+  };
+
+  const handleCloseInvoice = async () => {
+    setSaving(true);
+    try {
+      const data = await callSettle([], [], true);
+      if (!data?.invoice_paid) {
+        toast.error("A fatura não pôde ser fechada: ainda há lançamentos em aberto. Atualize a tela.");
+        return;
+      }
+      toast.success(`Fatura fechada (${fmt(Number(data.paid_total) || 0)}). Novo período: ${formatIsoDateBR(nextCycle.start)} a ${formatIsoDateBR(nextCycle.end)}.`);
+      onOpenChange(false);
+    } catch (e: any) {
+      toast.error("Não foi possível fechar a fatura: " + (e?.message || "erro desconhecido"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleConfirm = async () => {
     if (nothingToDo) return;
     if (missingAccount) { toast.error("Informe a conta bancária de todos os itens selecionados."); return; }
@@ -150,28 +216,24 @@ export function CardInvoiceSettleDialog({
     if (badReschedule) { toast.error(`A nova data de vencimento deve ser posterior a ${formatIsoDateBR(cycle.end)}.`); return; }
     setSaving(true);
     try {
-      const { data, error } = await (supabase as any).rpc("settle_card_invoice", {
-        p_card_id: cardId,
-        p_reference_month: referenceMonth,
-        p_settle: selectedItems.map((i) => ({ id: i.id, account_id: rows[i.id].accountId, payment_date: rows[i.id].paymentDate })),
-        p_reschedule: rescheduleItems.map((i) => ({ id: i.id, due_date: rows[i.id].newDueDate })),
-      });
-      if (error) throw error;
+      // Baixas não fecham a fatura: o fechamento é sempre confirmado na conferência.
+      const data = await callSettle(
+        selectedItems.map((i) => ({ id: i.id, account_id: rows[i.id].accountId, payment_date: rows[i.id].paymentDate })),
+        rescheduleItems.map((i) => ({ id: i.id, due_date: rows[i.id].newDueDate })),
+        false,
+      );
 
       // Mantém o recálculo de saldos que já existia (regra de saldo será revista no módulo Contas).
       const { error: recalcError } = await (supabase as any).rpc("recalculate_account_balances_from_date", { p_from_date: "2026-04-01" });
       if (recalcError) toast.warning("Baixa registrada, mas o recálculo de saldos falhou. Recarregue a tela de Contas.");
 
-      ["transactions", "card_cycle_totals", "dashboard_account_balances_split", "card_invoice_items", "card_invoice_transactions", "accounts"]
-        .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
-
       const parts: string[] = [];
       if (data?.settled) parts.push(`${data.settled} baixado(s)`);
       if (data?.rescheduled) parts.push(`${data.rescheduled} reagendado(s)`);
-      if (data?.invoice_paid) parts.push("fatura quitada");
-      else if (data?.remaining) parts.push(`${data.remaining} ainda em aberto`);
-      toast.success(parts.join(" · ") || "Fatura processada.");
-      onOpenChange(false);
+      if (data?.remaining) parts.push(`${data.remaining} ainda em aberto`);
+      else parts.push("nada mais em aberto: confira e feche a fatura");
+      toast.success(parts.join(" · "));
+      // Não fecha o modal: a varredura recarrega e, se tudo estiver pago, mostra a conferência.
     } catch (e: any) {
       toast.error("Não foi possível processar a fatura: " + (e?.message || "erro desconhecido"));
     } finally {
@@ -195,7 +257,56 @@ export function CardInvoiceSettleDialog({
           </p>
         </DialogHeader>
 
+        {closedInvoice && (
+          <div className="flex items-center gap-2 rounded-md px-3 py-2 text-sm bg-emerald-500/10 text-emerald-800 dark:text-emerald-300">
+            <Lock className="h-4 w-4 shrink-0" />
+            Fatura fechada — {fmt(Number(closedInvoice.amount_paid) || 0)}, pago até {formatIsoDateBR(closedInvoice.payment_date)}.
+            Novo período: {formatIsoDateBR(nextCycle.start)} a {formatIsoDateBR(nextCycle.end)}.
+          </div>
+        )}
+
+        {!closedInvoice && pending.length > 0 && overdue && (
+          <div className="flex items-start gap-2 rounded-md px-3 py-2 text-sm bg-amber-500/10 text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <span>
+              Varredura: a fatura venceu em {formatIsoDateBR(cycle.end)} e {pending.length} lançamento(s) seguem em aberto ({fmt(totalPending)}).
+              Se já foram pagos pelo módulo Lançamentos, marque-os lá ou baixe aqui. Você também pode reagendá-los.
+            </span>
+          </div>
+        )}
+
+        {readyToClose && !isLoading && !loadingClosed && (
+          <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 space-y-2 text-sm">
+            <p className="font-medium flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4" />
+              Varredura concluída: nenhum lançamento em aberto neste ciclo.
+            </p>
+            <p>
+              {alreadyPaid.length} lançamento(s) pagos, total de <b>{fmt(totalPaid)}</b>. Confira com o extrato antes de fechar.
+            </p>
+            {paidByAccount.length > 0 && (
+              <ul className="text-xs text-muted-foreground grid sm:grid-cols-2 gap-x-6">
+                {paidByAccount.map(([acc, v]) => (
+                  <li key={acc || "sem-conta"} className="flex justify-between gap-3">
+                    <span>{acc ? accountName(acc) : "Sem conta"}</span><span className="font-mono">{fmt(v)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <Button size="sm" onClick={handleCloseInvoice} disabled={saving}>
+                <Lock className="h-4 w-4 mr-1" />
+                {saving ? "Fechando..." : "Fechar fatura e iniciar novo período"}
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Próximo período de gastos: {formatIsoDateBR(nextCycle.start)} a {formatIsoDateBR(nextCycle.end)}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Ações em lote */}
+        {pending.length > 0 && (
         <div className="flex flex-wrap items-end gap-3 py-2 border-b">
           <div className="space-y-1">
             <Label className="text-xs">Data de pagamento</Label>
@@ -220,8 +331,9 @@ export function CardInvoiceSettleDialog({
             </Button>
           </div>
         </div>
+        )}
 
-        {showCalc && (
+        {showCalc && pending.length > 0 && (
           <div className="flex flex-wrap items-center gap-3 py-2 border-b text-sm">
             <Input
               id="settle-calc"
@@ -342,7 +454,8 @@ export function CardInvoiceSettleDialog({
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>{pending.length > 0 ? "Cancelar" : "Fechar"}</Button>
+          {pending.length > 0 && (
           <Button onClick={handleConfirm} disabled={saving || nothingToDo}>
             {saving
               ? "Processando..."
@@ -350,6 +463,7 @@ export function CardInvoiceSettleDialog({
                 ? "Selecione lançamentos"
                 : `Confirmar${selectedItems.length ? ` ${selectedItems.length} baixa(s)` : ""}${rescheduleItems.length ? ` · ${rescheduleItems.length} reagend.` : ""}`}
           </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
