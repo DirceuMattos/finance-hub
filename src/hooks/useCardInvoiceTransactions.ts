@@ -7,6 +7,7 @@ import {
   CENTER_COST_ENTITY_MAP,
   CUTOFF_DATE,
 } from "@/lib/cardInvoiceRules";
+import { cardCycleMonthOf } from "@/lib/cardCycle";
 
 interface CardInvoiceTransaction {
   id: string;
@@ -18,6 +19,8 @@ interface CardInvoiceTransaction {
   center_cost: string;
   card_name: string;
   entity_type: "personal" | "business" | null;
+  /** Mês (yyyy-MM) da fatura pela regra única de ciclo de vencimento. */
+  cycle_month: string;
 }
 
 export interface CardInvoiceProjection {
@@ -46,9 +49,11 @@ function useCardInvoiceTransactionsQuery() {
       // Load active cards to allow dynamic center_cost matching (any card name)
       const { data: cardsData } = await (supabase as any)
         .from("cards")
-        .select("name, financial_entities(entity_type)");
+        .select("name, due_day, financial_entities(entity_type)");
       const cardEntityMap = new Map<string, "personal" | "business" | null>();
+      const cardDueDayMap = new Map<string, number | null>();
       (cardsData || []).forEach((c: any) => {
+        cardDueDayMap.set(c.name, c.due_day ?? null);
         const t = c?.financial_entities?.entity_type;
         cardEntityMap.set(c.name, t === "personal" || t === "business" ? t : null);
       });
@@ -57,8 +62,11 @@ function useCardInvoiceTransactionsQuery() {
       const { data: txData, error: txError } = await (supabase as any)
         .from("transactions")
         .select("id, description, amount, competence_date, due_date, status, center_cost")
+        // Filtra no servidor só os centros de custo de cartão: evita o corte de linhas da API.
+        .in("center_cost", Array.from(new Set([...CARD_INVOICE_CENTER_COSTS, ...cardEntityMap.keys()])))
+        .neq("status", "cancelled")
         .order("competence_date", { ascending: false })
-        .limit(5000);
+        .limit(10000);
       if (txError) throw txError;
 
       const fromTransactions: CardInvoiceTransaction[] = (txData || [])
@@ -81,6 +89,9 @@ function useCardInvoiceTransactionsQuery() {
             center_cost: t.center_cost,
             card_name: mappedCard || t.center_cost,
             entity_type: mappedEntity || dynamicEntity,
+            cycle_month: t.due_date
+              ? cardCycleMonthOf(t.due_date, cardDueDayMap.get(t.center_cost))
+              : t.competence_date.substring(0, 7),
           };
         });
 
@@ -113,6 +124,7 @@ function useCardInvoiceTransactionsQuery() {
               center_cost: "",
               card_name: cardName,
               entity_type: entityType,
+              cycle_month: String(inst.billing_month).substring(0, 7),
             };
           });
         }
@@ -203,7 +215,7 @@ export function useCardInvoiceProjections() {
     const grouped = new Map<string, CardInvoiceProjection & { paid_amount: number; planned_amount: number }>();
 
     invoices.forEach((inv) => {
-      const month = inv.competence_date.substring(0, 7);
+      const month = inv.cycle_month;
       const key = `${inv.card_name}_${month}`;
       const existing = grouped.get(key);
 

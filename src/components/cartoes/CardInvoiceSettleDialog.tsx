@@ -1,16 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
-import { format, addMonths } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useEffect, useMemo, useState } from "react";
+import { addMonths, format } from "date-fns";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import { CheckSquare, Square, CalendarClock, Banknote } from "lucide-react";
+import { Banknote, Calculator, CalendarClock, CheckCircle2 } from "lucide-react";
+import { useAccounts } from "@/hooks/useAccounts";
+import { cardCycleWindow, formatIsoDateBR, normalizeDueDay } from "@/lib/cardCycle";
+import { evaluateExpression } from "@/lib/calc";
 
 interface Props {
   open: boolean;
@@ -18,7 +21,8 @@ interface Props {
   cardId: string;
   cardName: string;
   dueDay: number;
-  referenceMonth: string; // "yyyy-MM-dd"
+  referenceMonth: string; // "yyyy-MM-01"
+  referenceLabel?: string;
 }
 
 interface InvoiceItem {
@@ -26,13 +30,23 @@ interface InvoiceItem {
   description: string;
   amount: number;
   due_date: string;
+  status: "planned" | "paid";
+  payment_date: string | null;
   installment_number: number | null;
   installment_total: number | null;
   account_id: string | null;
 }
 
-const fmt = (v: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+interface RowState {
+  selected: boolean;
+  accountId: string | null;
+  paymentDate: string;
+  reschedule: boolean;
+  newDueDate: string;
+}
+
+const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+const today = () => format(new Date(), "yyyy-MM-dd");
 
 export function CardInvoiceSettleDialog({
   open,
@@ -41,31 +55,29 @@ export function CardInvoiceSettleDialog({
   cardName,
   dueDay,
   referenceMonth,
+  referenceLabel,
 }: Props) {
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [reschedule, setReschedule] = useState<Record<string, string>>({});
-  const [paymentDate, setPaymentDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const { data: allAccounts = [] } = useAccounts();
+  const accounts = useMemo(() => allAccounts.filter((a) => a.is_active), [allAccounts]);
+
+  const due = normalizeDueDay(dueDay);
+  const cycle = useMemo(() => cardCycleWindow(referenceMonth, due), [referenceMonth, due]);
+  const nextDueDate = useMemo(() => {
+    const [y, m] = referenceMonth.split("-").map(Number);
+    const next = addMonths(new Date(y, m - 1, 1), 1);
+    return cardCycleWindow(format(next, "yyyy-MM"), due).end;
+  }, [referenceMonth, due]);
+
+  const [rows, setRows] = useState<Record<string, RowState>>({});
+  const [bulkDate, setBulkDate] = useState(today());
+  const [bulkAccount, setBulkAccount] = useState<string>("");
+  const [calcExpr, setCalcExpr] = useState("");
+  const [showCalc, setShowCalc] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Compute next due date (same day, next month)
-  const [y, m] = referenceMonth.split("-").map(Number);
-  const nextDueDate = useMemo(() => {
-    const next = addMonths(new Date(y, m - 1, 1), 1);
-    return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}-${String(dueDay).padStart(2, "0")}`;
-  }, [y, m, dueDay]);
-
-  // Cycle window: from day 26 of previous month to due_day of current month
-  const cycleStart = useMemo(() => {
-    const prev = addMonths(new Date(y, m - 1, 1), -1);
-    return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}-26`;
-  }, [y, m]);
-  const cycleEnd = useMemo(() => {
-    return `${y}-${String(m).padStart(2, "0")}-${String(dueDay).padStart(2, "0")}`;
-  }, [y, m, dueDay]);
-
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ["card_invoice_items", cardName, referenceMonth],
+    queryKey: ["card_invoice_items", cardId, referenceMonth],
     enabled: open,
     staleTime: 0,
     gcTime: 0,
@@ -73,11 +85,11 @@ export function CardInvoiceSettleDialog({
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("transactions")
-        .select("id, description, amount, due_date, installment_number, installment_total, account_id")
+        .select("id, description, amount, due_date, status, payment_date, installment_number, installment_total, account_id")
         .eq("center_cost", cardName)
-        .eq("status", "planned")
-        .gte("due_date", cycleStart)
-        .lte("due_date", cycleEnd)
+        .in("status", ["planned", "paid"])
+        .gte("due_date", cycle.start)
+        .lte("due_date", cycle.end)
         .order("due_date")
         .order("description");
       if (error) throw error;
@@ -85,246 +97,258 @@ export function CardInvoiceSettleDialog({
     },
   });
 
-  // Select all by default when items load
+  const pending = useMemo(() => items.filter((i) => i.status === "planned"), [items]);
+  const alreadyPaid = useMemo(() => items.filter((i) => i.status === "paid"), [items]);
+
+  // Nada vem selecionado: a baixa é sempre uma escolha explícita, item a item ou em lote.
   useEffect(() => {
-    if (items.length > 0) {
-      setSelected(new Set(items.map((i) => i.id)));
-      const defaults: Record<string, string> = {};
-      items.forEach((i) => { defaults[i.id] = nextDueDate; });
-      setReschedule(defaults);
-    } else {
-      setSelected(new Set());
-      setReschedule({});
-    }
-  }, [items, nextDueDate]);
+    const init: Record<string, RowState> = {};
+    pending.forEach((i) => {
+      init[i.id] = { selected: false, accountId: i.account_id, paymentDate: today(), reschedule: false, newDueDate: nextDueDate };
+    });
+    setRows(init);
+  }, [pending, nextDueDate]);
 
-  const totalSelected = useMemo(
-    () => items.filter((i) => selected.has(i.id)).reduce((s, i) => s + i.amount, 0),
-    [items, selected]
-  );
+  const patch = (id: string, p: Partial<RowState>) => setRows((prev) => ({ ...prev, [id]: { ...prev[id], ...p } }));
+  const selectedItems = pending.filter((i) => rows[i.id]?.selected);
+  const rescheduleItems = pending.filter((i) => !rows[i.id]?.selected && rows[i.id]?.reschedule);
+  const totalPending = pending.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalSelected = selectedItems.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalPaid = alreadyPaid.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const allSelected = pending.length > 0 && selectedItems.length === pending.length;
 
-  const totalNotSelected = useMemo(
-    () => items.filter((i) => !selected.has(i.id)).reduce((s, i) => s + i.amount, 0),
-    [items, selected]
-  );
+  const setAll = (selected: boolean) =>
+    setRows((prev) => {
+      const next = { ...prev };
+      pending.forEach((i) => { next[i.id] = { ...next[i.id], selected, reschedule: selected ? false : next[i.id].reschedule }; });
+      return next;
+    });
 
-  const toggleAll = () => {
-    if (selected.size === items.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(items.map((i) => i.id)));
-    }
+  const applyBulk = () => {
+    if (selectedItems.length === 0) { toast.info("Selecione os lançamentos antes de aplicar."); return; }
+    setRows((prev) => {
+      const next = { ...prev };
+      selectedItems.forEach((i) => {
+        next[i.id] = { ...next[i.id], paymentDate: bulkDate || next[i.id].paymentDate, accountId: bulkAccount || next[i.id].accountId };
+      });
+      return next;
+    });
   };
 
+  const calcResult = evaluateExpression(calcExpr);
+  const calcDiff = calcResult !== null ? Math.round((calcResult - totalSelected) * 100) / 100 : null;
+
+  const missingAccount = selectedItems.some((i) => !rows[i.id]?.accountId);
+  const missingDate = selectedItems.some((i) => !rows[i.id]?.paymentDate);
+  const badReschedule = rescheduleItems.some((i) => !rows[i.id]?.newDueDate || rows[i.id].newDueDate <= cycle.end);
+  const nothingToDo = selectedItems.length === 0 && rescheduleItems.length === 0;
+
   const handleConfirm = async () => {
-    if (selected.size === 0 && items.filter((i) => !selected.has(i.id)).length === 0) {
-      toast.info("Nenhum lançamento para processar.");
-      return;
-    }
+    if (nothingToDo) return;
+    if (missingAccount) { toast.error("Informe a conta bancária de todos os itens selecionados."); return; }
+    if (missingDate) { toast.error("Informe a data de pagamento de todos os itens selecionados."); return; }
+    if (badReschedule) { toast.error(`A nova data de vencimento deve ser posterior a ${formatIsoDateBR(cycle.end)}.`); return; }
     setSaving(true);
     try {
-      // 1. Settle selected items (mark as paid)
-      const toSettle = items.filter((i) => selected.has(i.id));
-      if (toSettle.length > 0) {
-        const updates = toSettle.map((i) => ({
-          id: i.id,
-          status: "paid",
-          payment_date: paymentDate,
-          amount: i.amount,
-          account_id: i.account_id,
-        }));
-        for (const upd of updates) {
-          const { error } = await (supabase as any)
-            .from("transactions")
-            .update({
-              status: upd.status,
-              payment_date: upd.payment_date,
-            })
-            .eq("id", upd.id);
-          if (error) throw error;
-        }
-      }
-
-      // 2. Reschedule unselected items
-      const toReschedule = items.filter((i) => !selected.has(i.id));
-      for (const item of toReschedule) {
-        const newDate = reschedule[item.id] || nextDueDate;
-        const [ny, nm] = newDate.split("-").map(Number);
-        const newCompetence = `${ny}-${String(nm).padStart(2, "0")}-01`;
-        const { error } = await (supabase as any)
-          .from("transactions")
-          .update({
-            due_date: newDate,
-            competence_date: newCompetence,
-          })
-          .eq("id", item.id);
-        if (error) throw error;
-      }
-
-      // 3. Recalculate balances
-      await (supabase as any).rpc("recalculate_account_balances_from_date", {
-        p_from_date: "2026-04-01",
+      const { data, error } = await (supabase as any).rpc("settle_card_invoice", {
+        p_card_id: cardId,
+        p_reference_month: referenceMonth,
+        p_settle: selectedItems.map((i) => ({ id: i.id, account_id: rows[i.id].accountId, payment_date: rows[i.id].paymentDate })),
+        p_reschedule: rescheduleItems.map((i) => ({ id: i.id, due_date: rows[i.id].newDueDate })),
       });
+      if (error) throw error;
 
-      // 4. Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["card_cycle_totals"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard_account_balances_split"] });
-      queryClient.invalidateQueries({ queryKey: ["card_invoice_items"] });
+      // Mantém o recálculo de saldos que já existia (regra de saldo será revista no módulo Contas).
+      const { error: recalcError } = await (supabase as any).rpc("recalculate_account_balances_from_date", { p_from_date: "2026-04-01" });
+      if (recalcError) toast.warning("Baixa registrada, mas o recálculo de saldos falhou. Recarregue a tela de Contas.");
 
-      const settledCount = toSettle.length;
-      const rescheduledCount = toReschedule.length;
-      let msg = "";
-      if (settledCount > 0) msg += `${settledCount} lançamento(s) baixado(s). `;
-      if (rescheduledCount > 0) msg += `${rescheduledCount} reagendado(s).`;
-      toast.success(msg || "Fatura processada com sucesso.");
+      ["transactions", "card_cycle_totals", "dashboard_account_balances_split", "card_invoice_items", "card_invoice_transactions", "accounts"]
+        .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+
+      const parts: string[] = [];
+      if (data?.settled) parts.push(`${data.settled} baixado(s)`);
+      if (data?.rescheduled) parts.push(`${data.rescheduled} reagendado(s)`);
+      if (data?.invoice_paid) parts.push("fatura quitada");
+      else if (data?.remaining) parts.push(`${data.remaining} ainda em aberto`);
+      toast.success(parts.join(" · ") || "Fatura processada.");
       onOpenChange(false);
     } catch (e: any) {
-      toast.error("Erro ao processar fatura: " + e.message);
+      toast.error("Não foi possível processar a fatura: " + (e?.message || "erro desconhecido"));
     } finally {
       setSaving(false);
     }
   };
 
-  const monthLabel = format(new Date(y, m - 1, 1), "MMMM yyyy", { locale: ptBR })
-    .replace(/^\w/, (c) => c.toUpperCase());
+  const accountName = (id: string | null) => accounts.find((a) => a.id === id)?.name || allAccounts.find((a) => a.id === id)?.name || "—";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className="flex items-center gap-2 flex-wrap">
             <Banknote className="h-5 w-5 text-primary" />
             Quitar Fatura — {cardName}
-            <Badge variant="outline" className="text-xs ml-1">{monthLabel}</Badge>
+            {referenceLabel && <Badge variant="outline" className="text-xs">{referenceLabel}</Badge>}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Ciclo: {cycleStart.split("-").reverse().join("/")} até {cycleEnd.split("-").reverse().join("/")}
+            Ciclo: {formatIsoDateBR(cycle.start)} a {formatIsoDateBR(cycle.end)} · Só os lançamentos marcados são baixados; os demais ficam como estão.
           </p>
         </DialogHeader>
 
-        {/* Payment date */}
-        <div className="flex items-center gap-3 py-2 border-b">
-          <Label className="whitespace-nowrap text-sm">Data do Pagamento:</Label>
-          <Input
-            type="date"
-            value={paymentDate}
-            onChange={(e) => setPaymentDate(e.target.value)}
-            className="w-44 h-8 text-sm"
-          />
+        {/* Ações em lote */}
+        <div className="flex flex-wrap items-end gap-3 py-2 border-b">
+          <div className="space-y-1">
+            <Label className="text-xs">Data de pagamento</Label>
+            <Input id="settle-bulk-date" type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} className="h-8 w-40 text-sm" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Conta bancária</Label>
+            <Select value={bulkAccount} onValueChange={setBulkAccount}>
+              <SelectTrigger id="settle-bulk-account" className="h-8 w-52 text-sm"><SelectValue placeholder="Manter a de cada item" /></SelectTrigger>
+              <SelectContent>
+                {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}{a.bank_name ? ` · ${a.bank_name}` : ""}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button size="sm" variant="secondary" onClick={applyBulk} disabled={selectedItems.length === 0}>Aplicar aos selecionados</Button>
+          <div className="flex gap-2 ml-auto">
+            <Button size="sm" variant="outline" onClick={() => setAll(!allSelected)} disabled={pending.length === 0}>
+              {allSelected ? "Desmarcar todos" : "Selecionar todos (baixa geral)"}
+            </Button>
+            <Button size="sm" variant={showCalc ? "default" : "outline"} onClick={() => setShowCalc((v) => !v)}>
+              <Calculator className="h-4 w-4 mr-1" />Calculadora
+            </Button>
+          </div>
         </div>
 
-        {/* Items list */}
-        <div className="flex-1 overflow-y-auto">
+        {showCalc && (
+          <div className="flex flex-wrap items-center gap-3 py-2 border-b text-sm">
+            <Input
+              id="settle-calc"
+              value={calcExpr}
+              onChange={(e) => setCalcExpr(e.target.value)}
+              placeholder="Ex.: 3.027,40 - 150 + 12,90"
+              className="h-8 w-64 font-mono"
+            />
+            <span className="font-mono">= {calcResult !== null ? fmt(calcResult) : "—"}</span>
+            <Button size="sm" variant="ghost" onClick={() => setCalcExpr(totalSelected.toFixed(2).replace(".", ","))}>Usar total selecionado</Button>
+            {calcDiff !== null && (
+              <span className={calcDiff === 0 ? "text-emerald-600" : "text-amber-600"}>
+                {calcDiff === 0 ? "Confere com o selecionado" : `Diferença para o selecionado: ${fmt(calcDiff)}`}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Itens */}
+        <div className="flex-1 overflow-auto">
           {isLoading ? (
             <p className="text-center text-muted-foreground py-8 text-sm">Carregando...</p>
           ) : items.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8 text-sm">
-              Nenhum lançamento pendente neste ciclo.
-            </p>
+            <p className="text-center text-muted-foreground py-8 text-sm">Nenhum lançamento neste ciclo.</p>
           ) : (
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[720px]">
               <thead className="border-b sticky top-0 bg-background">
-                <tr>
-                  <th className="text-left py-2 pl-2 w-8">
-                    <button onClick={toggleAll} className="text-muted-foreground hover:text-foreground">
-                      {selected.size === items.length
-                        ? <CheckSquare className="h-4 w-4 text-primary" />
-                        : <Square className="h-4 w-4" />}
-                    </button>
+                <tr className="text-muted-foreground">
+                  <th className="w-8 py-2 pl-2 text-left">
+                    <Checkbox checked={allSelected} onCheckedChange={(c) => setAll(!!c)} aria-label="Selecionar todos" disabled={pending.length === 0} />
                   </th>
-                  <th className="text-left py-2 font-medium text-muted-foreground">Descrição</th>
-                  <th className="text-right py-2 font-medium text-muted-foreground">Valor</th>
-                  <th className="text-right py-2 pr-2 font-medium text-muted-foreground w-36">
-                    <span className="flex items-center justify-end gap-1">
-                      <CalendarClock className="h-3.5 w-3.5" />Reagendar
-                    </span>
-                  </th>
+                  <th className="text-left py-2 font-medium">Descrição</th>
+                  <th className="text-left py-2 font-medium">Venc.</th>
+                  <th className="text-right py-2 font-medium">Valor</th>
+                  <th className="text-left py-2 pl-3 font-medium">Conta</th>
+                  <th className="text-left py-2 pr-2 font-medium">Pagamento / Reagendar</th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => {
-                  const isSelected = selected.has(item.id);
+                {pending.map((item) => {
+                  const r = rows[item.id];
+                  if (!r) return null;
                   return (
-                    <tr
-                      key={item.id}
-                      className={`border-b last:border-0 transition-colors ${isSelected ? "bg-emerald-50/30 dark:bg-emerald-950/10" : "bg-amber-50/30 dark:bg-amber-950/10"}`}
-                    >
+                    <tr key={item.id} className={`border-b ${r.selected ? "bg-emerald-50/40 dark:bg-emerald-950/20" : ""}`}>
                       <td className="py-2 pl-2">
                         <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={(checked) => {
-                            const next = new Set(selected);
-                            if (checked) next.add(item.id);
-                            else next.delete(item.id);
-                            setSelected(next);
-                          }}
+                          checked={r.selected}
+                          onCheckedChange={(c) => patch(item.id, { selected: !!c, reschedule: c ? false : r.reschedule })}
+                          aria-label={`Baixar ${item.description}`}
                         />
                       </td>
                       <td className="py-2 pr-2">
-                        <span className={isSelected ? "" : "text-muted-foreground"}>
-                          {item.description}
-                        </span>
+                        {item.description}
                         {item.installment_total && item.installment_total > 1 && (
-                          <span className="text-[10px] text-muted-foreground ml-1">
-                            ({item.installment_number}/{item.installment_total})
-                          </span>
+                          <span className="text-[10px] text-muted-foreground ml-1">({item.installment_number}/{item.installment_total})</span>
                         )}
                       </td>
-                      <td className="py-2 text-right font-mono text-sm">
-                        {fmt(item.amount)}
+                      <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
+                      <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Math.abs(item.amount))}</td>
+                      <td className="py-2 pl-3">
+                        {r.selected ? (
+                          <Select value={r.accountId ?? ""} onValueChange={(v) => patch(item.id, { accountId: v })}>
+                            <SelectTrigger id={`acc-${item.id}`} className="h-7 w-44 text-xs"><SelectValue placeholder="Escolha a conta" /></SelectTrigger>
+                            <SelectContent>
+                              {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">{accountName(r.accountId)}</span>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
-                        {!isSelected && (
-                          <Input
-                            type="date"
-                            value={reschedule[item.id] || nextDueDate}
-                            onChange={(e) =>
-                              setReschedule((prev) => ({ ...prev, [item.id]: e.target.value }))
-                            }
-                            className="h-7 text-xs w-full"
-                          />
+                        {r.selected ? (
+                          <Input id={`pay-${item.id}`} type="date" value={r.paymentDate} onChange={(e) => patch(item.id, { paymentDate: e.target.value })} className="h-7 w-36 text-xs" />
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              id={`res-${item.id}`}
+                              checked={r.reschedule}
+                              onCheckedChange={(c) => patch(item.id, { reschedule: !!c })}
+                              aria-label={`Reagendar ${item.description}`}
+                            />
+                            <Label htmlFor={`res-${item.id}`} className="text-xs text-muted-foreground flex items-center gap-1">
+                              <CalendarClock className="h-3 w-3" />Reagendar
+                            </Label>
+                            {r.reschedule && (
+                              <Input id={`due-${item.id}`} type="date" value={r.newDueDate} min={cycle.end} onChange={(e) => patch(item.id, { newDueDate: e.target.value })} className="h-7 w-36 text-xs" />
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
                   );
                 })}
+                {alreadyPaid.map((item) => (
+                  <tr key={item.id} className="border-b text-muted-foreground">
+                    <td className="py-2 pl-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /></td>
+                    <td className="py-2 pr-2">{item.description}</td>
+                    <td className="py-2 text-xs whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
+                    <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Math.abs(item.amount))}</td>
+                    <td className="py-2 pl-3 text-xs">{accountName(item.account_id)}</td>
+                    <td className="py-2 pr-2 text-xs">Pago em {formatIsoDateBR(item.payment_date)}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}
         </div>
 
-        {/* Summary footer */}
+        {/* Resumo */}
         {items.length > 0 && (
-          <div className="border-t pt-3 space-y-1 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">
-                Selecionados para baixa ({selected.size}/{items.length}):
-              </span>
-              <span className="font-semibold text-emerald-600">{fmt(totalSelected)}</span>
-            </div>
-            {totalNotSelected > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Reagendar ({items.length - selected.size}):</span>
-                <span className="font-semibold text-amber-600">{fmt(totalNotSelected)}</span>
-              </div>
-            )}
-            <div className="flex justify-between font-semibold border-t pt-1 mt-1">
-              <span>Total da Fatura:</span>
-              <span>{fmt(totalSelected + totalNotSelected)}</span>
-            </div>
+          <div className="border-t pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            <div><p className="text-xs text-muted-foreground">Já pago no ciclo</p><p className="font-semibold text-emerald-600">{fmt(totalPaid)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Em aberto</p><p className="font-semibold text-amber-600">{fmt(totalPending)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Selecionado ({selectedItems.length}/{pending.length})</p><p className="font-semibold">{fmt(totalSelected)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Fica em aberto após a baixa</p><p className="font-semibold">{fmt(totalPending - totalSelected)}</p></div>
           </div>
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleConfirm}
-            disabled={saving || items.length === 0}
-          >
-            {saving ? "Processando..." : `Confirmar${selected.size > 0 ? ` (${selected.size} baixas)` : ""}`}
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>Cancelar</Button>
+          <Button onClick={handleConfirm} disabled={saving || nothingToDo}>
+            {saving
+              ? "Processando..."
+              : nothingToDo
+                ? "Selecione lançamentos"
+                : `Confirmar${selectedItems.length ? ` ${selectedItems.length} baixa(s)` : ""}${rescheduleItems.length ? ` · ${rescheduleItems.length} reagend.` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

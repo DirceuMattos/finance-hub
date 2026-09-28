@@ -8,13 +8,13 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCards } from "@/hooks/useCards";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Info, AlertTriangle, CheckCircle2, Receipt } from "lucide-react";
-import { toast } from "sonner";
+import { cardCycleWindow, formatIsoDateBR } from "@/lib/cardCycle";
 import { CardInvoiceSettleDialog } from "@/components/cartoes/CardInvoiceSettleDialog";
 
 type FilterView = "all" | "personal" | "business";
@@ -50,17 +50,9 @@ interface CycleTotals {
 export default function Cartoes() {
   const { data: cards = [], isLoading } = useCards();
   const { data: entities = [] } = useFinancialEntities();
-  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<FilterView>("all");
   const [filterMonth, setFilterMonth] = useState(format(new Date(), "yyyy-MM"));
-
-  // Invoice payment dialog state
-  const [payingCard, setPayingCard] = useState<{ id: string; name: string; total: number } | null>(null);
-  const [payAmount, setPayAmount] = useState("");
-  const [payDate, setPayDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [payNotes, setPayNotes] = useState("");
-  const [paying, setPaying] = useState(false);
 
   // Settle dialog state
   const [settleCard, setSettleCard] = useState<{ id: string; name: string; dueDay: number } | null>(null);
@@ -83,7 +75,7 @@ export default function Cartoes() {
 
   const byCard = useMemo(() => {
     const map = new Map<string, CycleTotals>();
-    cycleTotals.forEach((r: CycleTotals) => map.set(r.card_name, r));
+    cycleTotals.forEach((r: CycleTotals) => map.set(r.card_id, r));
     return map;
   }, [cycleTotals]);
 
@@ -111,38 +103,6 @@ export default function Cartoes() {
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
   const selectedMonthLabel = monthOptions.find(o => o.value === filterMonth)?.label || filterMonth;
-
-  const handleOpenPayDialog = (cardId: string, cardName: string, totalPlanned: number, totalPaid: number) => {
-    setPayingCard({ id: cardId, name: cardName, total: totalPlanned + totalPaid });
-    setPayAmount(String((totalPlanned + totalPaid).toFixed(2)));
-    setPayDate(format(new Date(), "yyyy-MM-dd"));
-    setPayNotes("");
-  };
-
-  const handlePayInvoice = async () => {
-    if (!payingCard) return;
-    setPaying(true);
-    try {
-      const { error } = await (supabase as any)
-        .from("card_invoice_payments")
-        .upsert({
-          card_id: payingCard.id,
-          reference_month: referenceMonth,
-          due_date: `${y}-${String(m).padStart(2, "0")}-25`,
-          amount_paid: parseFloat(payAmount),
-          payment_date: payDate,
-          notes: payNotes || null,
-        }, { onConflict: "card_id,reference_month" });
-      if (error) throw error;
-      toast.success(`Fatura de ${payingCard.name} quitada com sucesso`);
-      queryClient.invalidateQueries({ queryKey: ["card_cycle_totals"] });
-      setPayingCard(null);
-    } catch (e: any) {
-      toast.error("Erro ao registrar pagamento: " + e.message);
-    } finally {
-      setPaying(false);
-    }
-  };
 
   return (
     <AppLayout>
@@ -181,16 +141,22 @@ export default function Cartoes() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((card) => {
-            const managerialLimit = card.managerial_limit || card.credit_limit;
+            // Teto gerencial: só o valor cadastrado; sem fallback para o limite real.
+            const managerialLimit = Number(card.managerial_limit) || 0;
+            const creditLimit = Number(card.credit_limit) || 0;
+            const cycle = cardCycleWindow(filterMonth, card.due_day);
             const entityType = entityMap.get(card.financial_entity_id);
-            const cycleData = byCard.get(card.name);
+            const cycleData = byCard.get(card.id);
             const totalPaid = cycleData?.total_paid || 0;
             const totalPlanned = cycleData?.total_planned || 0;
-            const usedAmount = totalPaid + totalPlanned;
-            const invoicePaid = cycleData?.invoice_paid || false;
-            const invoiceAmount = cycleData?.invoice_amount;
+            const cycleTotal = totalPaid + totalPlanned;
+            // Quitada: registro de pagamento da fatura ou nada pendente com algo pago no ciclo.
+            const invoicePaid = (cycleData?.invoice_paid || false) || (totalPlanned === 0 && totalPaid > 0);
+            // Uso do teto = o que ainda está em aberto no ciclo; zera quando a fatura é quitada.
+            const usedAmount = totalPlanned;
+            const invoiceAmount = cycleData?.invoice_amount ?? (invoicePaid ? totalPaid : null);
             const invoicePaymentDate = cycleData?.invoice_payment_date;
-            const managerialUsagePct = managerialLimit > 0 ? Math.min((usedAmount / managerialLimit) * 100, 100) : 0;
+            const managerialUsagePct = managerialLimit > 0 ? (usedAmount / managerialLimit) * 100 : 0;
             const usageLevel = getUsageLevel(managerialUsagePct);
 
             return (
@@ -218,12 +184,12 @@ export default function Cartoes() {
                   {invoicePaid && invoiceAmount && (
                     <div className="flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium bg-emerald-500/10 text-emerald-700 dark:text-emerald-400">
                       <CheckCircle2 className="h-4 w-4 shrink-0" />
-                      Fatura quitada em {invoicePaymentDate ? format(new Date(invoicePaymentDate + "T12:00:00"), "dd/MM/yyyy") : "—"} — {fmt(invoiceAmount)}
+                      Fatura quitada{invoicePaymentDate ? ` em ${formatIsoDateBR(invoicePaymentDate)}` : ""} — {fmt(invoiceAmount)}
                     </div>
                   )}
 
                   {/* Alert banner when usage is high */}
-                  {usageLevel !== "safe" && !invoicePaid && (
+                  {managerialLimit > 0 && usageLevel !== "safe" && !invoicePaid && (
                     <div className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
                       usageLevel === "danger"
                         ? "bg-destructive/10 text-destructive"
@@ -249,14 +215,14 @@ export default function Cartoes() {
                     </div>
                     <div>
                       <p className="text-muted-foreground text-xs">Total Ciclo</p>
-                      <p className="font-semibold">{fmt(usedAmount)}</p>
+                      <p className="font-semibold">{fmt(cycleTotal)}</p>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-muted-foreground text-xs">Teto Gerencial</p>
-                      <p className="font-semibold">{fmt(managerialLimit)}</p>
+                      <p className="font-semibold">{managerialLimit > 0 ? fmt(managerialLimit) : <span className="text-muted-foreground font-normal text-xs">Não cadastrado</span>}</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground text-xs">Fecha / Vence</p>
@@ -265,7 +231,7 @@ export default function Cartoes() {
                   </div>
 
                   {(() => {
-                    const limit = card.managerial_limit || 0;
+                    const limit = managerialLimit;
                     const pct = limit > 0 ? (usedAmount / limit) * 100 : 0;
                     const remaining = limit - usedAmount;
                     const isOver = pct > 100;
@@ -275,7 +241,7 @@ export default function Cartoes() {
                       return (
                         <div className="mt-2">
                           <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                            Sem teto definido
+                            Teto gerencial não cadastrado — defina em Configurações › Cartões
                           </span>
                         </div>
                       );
@@ -287,7 +253,7 @@ export default function Cartoes() {
                     return (
                       <div className="mt-3 space-y-1.5">
                         <div className="flex justify-between text-xs text-muted-foreground">
-                          <span>Teto gerencial: {fmt(limit)}</span>
+                          <span>Em aberto no ciclo: {fmt(usedAmount)} de {fmt(limit)}</span>
                           <span className={isOver ? "text-red-600 font-semibold dark:text-red-400" : "font-medium"}>
                             {pct.toFixed(1)}%
                           </span>
@@ -321,7 +287,7 @@ export default function Cartoes() {
 
                   <p className="text-[11px] text-muted-foreground italic flex items-center gap-1">
                     <Info className="h-3 w-3" />
-                    {selectedMonthLabel} · Limite real: {fmt(card.credit_limit)}
+                    {selectedMonthLabel} · Ciclo {formatIsoDateBR(cycle.start)} a {formatIsoDateBR(cycle.end)} · Limite real: {creditLimit > 0 ? fmt(creditLimit) : "não cadastrado"}
                   </p>
                 </CardContent>
               </Card>
@@ -338,6 +304,7 @@ export default function Cartoes() {
           cardId={settleCard.id}
           cardName={settleCard.name}
           dueDay={settleCard.dueDay}
+          referenceLabel={selectedMonthLabel}
           referenceMonth={referenceMonth}
         />
       )}
