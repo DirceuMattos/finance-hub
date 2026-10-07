@@ -10,6 +10,7 @@ import Recorrencias from "./pages/Recorrencias";
 import Cartoes from "./pages/Cartoes";
 import FaturasProjetadas from "./pages/FaturasProjetadas";
 import FluxoMensal from "./pages/FluxoMensal";
+import Conciliacao from "./pages/Conciliacao";
 import Configuracoes from "./pages/Configuracoes";
 import Patrimonio from "./pages/Patrimonio";
 import Investimentos from "./pages/Investimentos";
@@ -40,6 +41,7 @@ const App = () => (
           <Route path="/cartoes" element={<ProtectedRoute><Cartoes /></ProtectedRoute>} />
           <Route path="/faturas-projetadas" element={<ProtectedRoute><FaturasProjetadas /></ProtectedRoute>} />
           <Route path="/fluxo-mensal" element={<ProtectedRoute><FluxoMensal /></ProtectedRoute>} />
+          <Route path="/conciliacao" element={<ProtectedRoute><Conciliacao /></ProtectedRoute>} />
           <Route path="/patrimonio" element={<ProtectedRoute><Patrimonio /></ProtectedRoute>} />
           <Route path="/investimentos" element={<ProtectedRoute><Investimentos /></ProtectedRoute>} />
           <Route path="/configuracoes" element={<ProtectedRoute><Configuracoes /></ProtectedRoute>} />

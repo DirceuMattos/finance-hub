@@ -12,6 +12,7 @@ import {
   DollarSign,
   FileDown,
   Bell,
+  Scale,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useNavigate } from "react-router-dom";
@@ -44,6 +45,7 @@ const navGroups = [
       { title: "Lançamentos", url: "/lancamentos", icon: ArrowRightLeft },
       { title: "Recorrências", url: "/recorrencias", icon: Repeat },
       { title: "Fluxo Mensal", url: "/fluxo-mensal", icon: CalendarRange },
+      { title: "Conciliação", url: "/conciliacao", icon: Scale },
     ],
   },
   {
