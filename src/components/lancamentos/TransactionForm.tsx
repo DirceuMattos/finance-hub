@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { realizedDates } from "@/lib/realizedDates";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -109,6 +110,34 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       form.setValue("competence_date", month);
     }
   }, [watchDueDate, watchCenterCost, transaction]);
+
+  // LAN-01: ao marcar como Realizado, ou mudar o vencimento de um Realizado, a data de
+  // pagamento passa a ser igual ao vencimento; se só houver pagamento, o vencimento acompanha.
+  // Só reage a alterações feitas pelo usuário, nunca ao abrir um lançamento existente,
+  // e uma data de pagamento ajustada à mão depois disso é respeitada.
+  const watchStatus = form.watch("status");
+  const watchPaymentDate = form.watch("payment_date");
+  const prevSync = useRef<{ status?: string; due?: number; pay?: number }>({});
+  useEffect(() => {
+    const prev = prevSync.current;
+    const dueT = watchDueDate ? watchDueDate.getTime() : undefined;
+    const payT = watchPaymentDate ? watchPaymentDate.getTime() : undefined;
+    prevSync.current = { status: watchStatus, due: dueT, pay: payT };
+    if (watchStatus !== "paid") return;
+
+    const becamePaid = prev.status !== "paid" && form.getFieldState("status").isDirty;
+    const dueChanged = prev.due !== dueT && form.getFieldState("due_date").isDirty;
+    const payChanged = prev.pay !== payT && form.getFieldState("payment_date").isDirty;
+
+    if (becamePaid || dueChanged) {
+      const r = realizedDates(watchDueDate, watchPaymentDate, new Date());
+      if (dueT !== r.due.getTime()) form.setValue("due_date", r.due, { shouldDirty: true });
+      if (payT !== r.payment.getTime()) form.setValue("payment_date", r.payment, { shouldDirty: true });
+    } else if (payChanged && !watchDueDate && watchPaymentDate) {
+      form.setValue("due_date", watchPaymentDate, { shouldDirty: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watchStatus, watchDueDate, watchPaymentDate]);
 
   useEffect(() => {
     if (transaction) {
