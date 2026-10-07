@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
-import { subMonths, format } from "date-fns";
+import { prevMonthStart } from "@/lib/snapshots";
 
 export interface AssetCategory {
   id: string;
@@ -18,7 +18,7 @@ export interface PatrimonySnapshot {
   asset_category_id: string;
   financial_entity_id: string;
   opening_value: number;
-  closing_value: number;
+  closing_value: number | null;
   notes: string | null;
   created_at: string;
   updated_at: string;
@@ -126,7 +126,8 @@ export function usePreviousPatrimonyClosingValue(month?: string, itemName?: stri
     queryKey: ["prev_closing_patrimony", month, itemName, financialEntityId],
     enabled: !!month && !!itemName && !!financialEntityId && month.length >= 7,
     queryFn: async () => {
-      const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
+      // Mesmo ajuste de fuso do módulo Investimentos (mês anterior calculado sem UTC).
+      const prevMonth = prevMonthStart(month!);
       const { data, error } = await (supabase as any)
         .from("patrimony_snapshots" as any)
         .select("closing_value")

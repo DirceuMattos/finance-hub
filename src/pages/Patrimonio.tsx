@@ -14,11 +14,12 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Landmark, TrendingUp, TrendingDown, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
-import { usePatrimonySnapshots, usePatrimonyEvolution, usePatrimonyCrud, PatrimonySnapshot } from "@/hooks/usePatrimony";
+import { usePatrimonySnapshots, usePatrimonyCrud, PatrimonySnapshot } from "@/hooks/usePatrimony";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { PatrimonyForm } from "@/components/patrimonio/PatrimonyForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { currentValue, isClosed } from "@/lib/snapshots";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -41,7 +42,6 @@ type ViewType = "all" | "personal" | "business";
 export default function Patrimonio() {
   const [view, setView] = useState<ViewType>("all");
   const { data: snapshots = [], isLoading: loadingSnapshots } = usePatrimonySnapshots();
-  const { data: evolution = [] } = usePatrimonyEvolution();
   const { data: entities = [] } = useFinancialEntities();
   const { create, update, remove } = usePatrimonyCrud();
   const queryClient = useQueryClient();
@@ -75,40 +75,38 @@ export default function Patrimonio() {
     return data;
   }, [snapshots, activeMonth, view]);
 
-  const filteredEvolution = useMemo(() => filterByEntity(evolution), [evolution, view]);
 
-  // Aggregate evolution for chart — only months with valid data
-  const chartData = useMemo(() => {
-    if (view === "all") {
-      const byMonth = new Map<string, { reference_month: string; total_assets: number; total_liabilities: number; net_patrimony: number }>();
-      filteredEvolution.forEach((e) => {
-        if (!e.net_patrimony && e.net_patrimony !== 0) return; // skip null
-        const existing = byMonth.get(e.reference_month) || { reference_month: e.reference_month, total_assets: 0, total_liabilities: 0, net_patrimony: 0 };
-        existing.total_assets += e.total_assets || 0;
-        existing.total_liabilities += e.total_liabilities || 0;
-        existing.net_patrimony += e.net_patrimony || 0;
-        byMonth.set(e.reference_month, existing);
-      });
-      return Array.from(byMonth.values())
-        .filter((e) => e.net_patrimony !== 0)
-        .sort((a, b) => a.reference_month.localeCompare(b.reference_month));
-    }
-    return filteredEvolution
-      .filter((e) => e.net_patrimony !== null && e.net_patrimony !== undefined && e.net_patrimony !== 0)
-      .map((e) => ({
-        reference_month: e.reference_month,
-        total_assets: e.total_assets || 0,
-        total_liabilities: e.total_liabilities || 0,
-        net_patrimony: e.net_patrimony || 0,
-      }));
-  }, [filteredEvolution, view]);
+  // PAT-01: evolução calculada dos próprios lançamentos. Mês com item sem fechamento vira
+  // lacuna (antes o item em aberto contava como zero e o gráfico despencava no mês corrente).
+  const chartSeries = useMemo(() => {
+    const byMonth = new Map<string, { reference_month: string; total_assets: number; total_liabilities: number; net_patrimony: number; open: number; items: number }>();
+    filterByEntity(snapshots).forEach((sn) => {
+      const p = byMonth.get(sn.reference_month) || { reference_month: sn.reference_month, total_assets: 0, total_liabilities: 0, net_patrimony: 0, open: 0, items: 0 };
+      p.items += 1;
+      if (!isClosed(sn.closing_value)) p.open += 1;
+      else {
+        const v = Number(sn.closing_value);
+        if (v >= 0) p.total_assets += v; else p.total_liabilities += -v;
+        p.net_patrimony += v;
+      }
+      byMonth.set(sn.reference_month, p);
+    });
+    return Array.from(byMonth.values()).sort((a, b) => a.reference_month.localeCompare(b.reference_month));
+  }, [snapshots, view, personalIds, businessIds]);
+  const chartData = useMemo(() => chartSeries.map((p) => p.open > 0
+    ? { reference_month: p.reference_month, total_assets: null, total_liabilities: null, net_patrimony: null }
+    : p), [chartSeries]);
+  const openMonths = chartSeries.filter((p) => p.open > 0);
 
-  const hasEnoughHistory = chartData.length >= 2;
+  const hasEnoughHistory = chartSeries.filter((p) => p.open === 0).length >= 2;
 
   const totals = useMemo(() => {
-    const assets = filteredSnapshots.filter((s) => s.closing_value > 0).reduce((sum, s) => sum + s.closing_value, 0);
-    const liabilities = filteredSnapshots.filter((s) => s.closing_value < 0).reduce((sum, s) => sum + Math.abs(s.closing_value), 0);
-    return { assets, liabilities, net: assets - liabilities };
+    // PAT-03: item sem fechamento entra pela abertura (antes contava zero e distorcia a composição).
+    const vals = filteredSnapshots.map(currentValue);
+    const assets = vals.filter((v) => v > 0).reduce((sum, v) => sum + v, 0);
+    const liabilities = vals.filter((v) => v < 0).reduce((sum, v) => sum + Math.abs(v), 0);
+    const open = filteredSnapshots.filter((s) => !isClosed(s.closing_value)).length;
+    return { assets, liabilities, net: assets - liabilities, open };
   }, [filteredSnapshots]);
 
   // Previous month comparison
@@ -119,9 +117,15 @@ export default function Patrimonio() {
     const prevMonth = sortedMonths[currentIdx - 1];
     const prevSnapshots = filterByEntity(snapshots).filter((s) => s.reference_month === prevMonth);
     if (prevSnapshots.length === 0) return null;
-    const assets = prevSnapshots.filter((s) => s.closing_value > 0).reduce((sum, s) => sum + s.closing_value, 0);
-    const liabilities = prevSnapshots.filter((s) => s.closing_value < 0).reduce((sum, s) => sum + Math.abs(s.closing_value), 0);
-    return { assets, liabilities, net: assets - liabilities };
+    const vals = prevSnapshots.map(currentValue);
+    const assets = vals.filter((v) => v > 0).reduce((sum, v) => sum + v, 0);
+    const liabilities = vals.filter((v) => v < 0).reduce((sum, v) => sum + Math.abs(v), 0);
+    const byCat = new Map<string, number>();
+    prevSnapshots.forEach((sn) => {
+      const k = sn.asset_categories?.name || "Sem categoria";
+      byCat.set(k, (byCat.get(k) || 0) + currentValue(sn));
+    });
+    return { assets, liabilities, net: assets - liabilities, byCat };
   }, [snapshots, activeMonth, months, view]);
 
   const byCategory = useMemo(() => {
@@ -129,7 +133,7 @@ export default function Patrimonio() {
     filteredSnapshots.forEach((s) => {
       const catName = s.asset_categories?.name || "Sem categoria";
       const existing = map.get(catName) || { name: catName, total: 0, items: 0 };
-      existing.total += s.closing_value;
+      existing.total += currentValue(s);
       existing.items += 1;
       map.set(catName, existing);
     });
@@ -234,12 +238,14 @@ export default function Patrimonio() {
     },
     {
       key: "closing_value", header: "Fechamento", sortable: true,
-      sortValue: (r) => r.closing_value,
-      render: (r) => <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
+      sortValue: (r) => r.closing_value ?? Number.NEGATIVE_INFINITY,
+      render: (r) => r.closing_value === null || r.closing_value === undefined
+        ? <span className="text-muted-foreground text-xs italic">Em aberto</span>
+        : <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
     },
     {
       key: "variation", header: "Variação", sortable: true,
-      sortValue: (r) => r.closing_value - r.opening_value,
+      sortValue: (r) => (r.closing_value ?? r.opening_value) - r.opening_value,
       render: (r) => {
         if (r.closing_value === null || r.closing_value === undefined) {
           return <span className="text-muted-foreground">—</span>;
@@ -329,7 +335,7 @@ export default function Patrimonio() {
           })() : undefined}
         />
         <StatCard
-          title="Patrimônio Líquido"
+          title={totals.open > 0 ? `Patrimônio Líquido (parcial: ${totals.open} em aberto)` : "Patrimônio Líquido"}
           value={fmt(totals.net)}
           icon={Landmark}
           variant={totals.net < 0 ? "negative" : "neutral"}
@@ -352,11 +358,16 @@ export default function Patrimonio() {
                 <YAxis tickFormatter={(v) => fmt(v)} className="text-[10px]" width={100} />
                 <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={fmtMonth} />
                 <Legend />
-                <Line type="monotone" dataKey="total_assets" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="total_liabilities" name="Passivos" stroke="hsl(var(--destructive))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="net_patrimony" name="Patrimônio Líquido" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="total_assets" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                <Line type="monotone" dataKey="total_liabilities" name="Passivos" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                <Line type="monotone" dataKey="net_patrimony" name="Patrimônio Líquido" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
+            {openMonths.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Sem fechamento completo (fora do gráfico): {openMonths.map((p) => `${fmtMonth(p.reference_month)} (${p.open} de ${p.items} em aberto)`).join(" · ")}
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -376,6 +387,11 @@ export default function Patrimonio() {
                 <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{cat.name}</p>
                 <p className={`text-sm font-semibold font-mono mt-1 ${cat.total < 0 ? "text-destructive" : ""}`}>{fmt(cat.total)}</p>
                 <p className="text-[10px] text-muted-foreground">{cat.items} itens</p>
+                {prevTotals && (() => {
+                  const diff = cat.total - (prevTotals.byCat.get(cat.name) ?? 0);
+                  if (Math.abs(diff) < 0.005) return <p className="text-[10px] text-muted-foreground">= mês anterior</p>;
+                  return <p className={`text-[10px] font-mono ${diff > 0 ? "text-emerald-600" : "text-destructive"}`}>{diff > 0 ? "+" : ""}{fmt(diff)} vs mês anterior</p>;
+                })()}
               </CardContent>
             </Card>
           ))}
