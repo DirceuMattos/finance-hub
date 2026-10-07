@@ -7,7 +7,7 @@ import {
   CENTER_COST_ENTITY_MAP,
   CUTOFF_DATE,
 } from "@/lib/cardInvoiceRules";
-import { cardCycleMonthOf } from "@/lib/cardCycle";
+import { cardCycleMonthOf, cardCycleWindow } from "@/lib/cardCycle";
 
 interface CardInvoiceTransaction {
   id: string;
@@ -21,6 +21,10 @@ interface CardInvoiceTransaction {
   entity_type: "personal" | "business" | null;
   /** Mês (yyyy-MM) da fatura pela regra única de ciclo de vencimento. */
   cycle_month: string;
+  card_id: string | null;
+  card_due_day: number | null;
+  /** transactions = lançamentos atuais; installments = parcelas históricas; legacy = centro de custo sem cartão */
+  source: "transactions" | "installments" | "legacy";
 }
 
 export interface CardInvoiceProjection {
@@ -30,6 +34,9 @@ export interface CardInvoiceProjection {
   total_amount: number;
   invoices_count: number;
   status: string;
+  card_id: string | null;
+  card_due_day: number | null;
+  source: "transactions" | "installments" | "legacy";
 }
 
 export interface CardInvoiceSummary {
@@ -49,11 +56,13 @@ function useCardInvoiceTransactionsQuery() {
       // Load active cards to allow dynamic center_cost matching (any card name)
       const { data: cardsData } = await (supabase as any)
         .from("cards")
-        .select("name, due_day, financial_entities(entity_type)");
+        .select("id, name, due_day, financial_entities(entity_type)");
       const cardEntityMap = new Map<string, "personal" | "business" | null>();
       const cardDueDayMap = new Map<string, number | null>();
+      const cardIdMap = new Map<string, string>();
       (cardsData || []).forEach((c: any) => {
         cardDueDayMap.set(c.name, c.due_day ?? null);
+        cardIdMap.set(c.name, c.id);
         const t = c?.financial_entities?.entity_type;
         cardEntityMap.set(c.name, t === "personal" || t === "business" ? t : null);
       });
@@ -92,6 +101,9 @@ function useCardInvoiceTransactionsQuery() {
             cycle_month: t.due_date
               ? cardCycleMonthOf(t.due_date, cardDueDayMap.get(t.center_cost))
               : t.competence_date.substring(0, 7),
+            card_id: cardIdMap.get(t.center_cost) ?? null,
+            card_due_day: cardDueDayMap.get(t.center_cost) ?? null,
+            source: cardIdMap.has(t.center_cost) ? "transactions" : "legacy",
           };
         });
 
@@ -100,7 +112,7 @@ function useCardInvoiceTransactionsQuery() {
       try {
         const { data: instData, error: instError } = await (supabase as any)
           .from("card_installments")
-          .select("id, billing_month, due_date, amount, status, card_purchases(description, card_id, cards(name), financial_entities(entity_type))")
+          .select("id, billing_month, due_date, amount, status, card_purchases(description, card_id, cards(name, due_day), financial_entities(entity_type))")
           .order("due_date", { ascending: false })
           .limit(10000);
 
@@ -125,6 +137,9 @@ function useCardInvoiceTransactionsQuery() {
               card_name: cardName,
               entity_type: entityType,
               cycle_month: String(inst.billing_month).substring(0, 7),
+              card_id: inst.card_purchases?.card_id ?? null,
+              card_due_day: inst.card_purchases?.cards?.due_day ?? null,
+              source: "installments",
             };
           });
         }
@@ -220,6 +235,7 @@ export function useCardInvoiceProjections() {
       const existing = grouped.get(key);
 
       if (existing) {
+        if (inv.source === "transactions") existing.source = "transactions";
         existing.total_amount += inv.amount;
         existing.invoices_count += 1;
         if (inv.status === "paid") {
@@ -238,7 +254,11 @@ export function useCardInvoiceProjections() {
         grouped.set(key, {
           card_name: inv.card_name,
           billing_month: month,
-          due_date: inv.due_date,
+          // Vencimento da fatura = fim do ciclo do cartão (não o do primeiro item).
+          due_date: inv.card_id ? cardCycleWindow(month, inv.card_due_day).end : inv.due_date,
+          card_id: inv.card_id,
+          card_due_day: inv.card_due_day,
+          source: inv.source,
           total_amount: inv.amount,
           invoices_count: 1,
           status: inv.status,
