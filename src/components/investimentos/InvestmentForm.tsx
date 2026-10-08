@@ -16,7 +16,8 @@ const schema = z.object({
   investment_class_id: z.string().min(1, "Classe é obrigatória"),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
-  closing_value: z.coerce.number(),
+  // INV-03: vazio = "em aberto" (null); antes virava 0 ao salvar qualquer edição.
+  closing_value: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().nullable()),
   has_quick_liquidity: z.boolean().optional(),
 });
 
@@ -41,7 +42,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
       investment_class_id: "",
       financial_entity_id: "",
       opening_value: 0,
-      closing_value: 0,
+      closing_value: null,
       has_quick_liquidity: false,
     },
   });
@@ -79,7 +80,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
         investment_class_id: "",
         financial_entity_id: "",
         opening_value: 0,
-        closing_value: 0,
+        closing_value: null,
         has_quick_liquidity: false,
       });
     }
@@ -150,8 +151,8 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
 
             <FormField control={form.control} name="closing_value" render={({ field }) => (
               <FormItem>
-                <FormLabel>Valor Fechamento *</FormLabel>
-                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormLabel>Valor Fechamento</FormLabel>
+                <FormControl><Input type="number" step="0.01" placeholder="Em aberto" {...field} value={field.value ?? ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />

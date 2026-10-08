@@ -8,6 +8,8 @@ import { StatCard } from "@/components/shared/StatCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { isClosed, monthlySeries, parseMoneyInput } from "@/lib/snapshots";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -77,10 +79,16 @@ export default function Investimentos() {
   const filteredSnapshots = useMemo(() => {
     let data = filterByEntity(snapshots);
     if (activeMonth) data = data.filter((s) => s.reference_month === activeMonth);
-    return data.map((s) => ({
-      ...s,
-      closing_value: getEffectiveClosing(s, snapshots),
-    }));
+    return data.map((s) => {
+      const eff = getEffectiveClosing(s, snapshots);
+      return {
+        ...s,
+        raw_closing: s.closing_value,
+        closing_value: eff,
+        // Fechamento estimado pela abertura do mês seguinte (o mês não foi fechado).
+        estimated: !isClosed(s.closing_value) && eff !== null,
+      };
+    });
   }, [snapshots, activeMonth, view, personalIds, businessIds]);
 
   // Stat cards computed from snapshots
@@ -99,7 +107,7 @@ export default function Investimentos() {
       const name = s.investment_classes?.name || "Outros";
       const existing = classMap.get(name) || { opening: 0, closing: 0 };
       existing.opening += s.opening_value;
-      existing.closing += s.closing_value;
+      existing.closing += s.closing_value ?? s.opening_value;
       classMap.set(name, existing);
     });
     const totalClosing = totals.totalClosing;
@@ -114,27 +122,13 @@ export default function Investimentos() {
       .sort((a, b) => b.value - a.value);
   }, [filteredSnapshots, totals.totalClosing]);
 
-  // Evolution chart from all snapshots grouped by month
-  // Only include months where all snapshots have closing_value set
-  const chartData = useMemo(() => {
-    const entityFiltered = filterByEntity(snapshots);
-    const byMonth = new Map<string, { total: number; hasNull: boolean }>();
-    entityFiltered.forEach((s) => {
-      const existing = byMonth.get(s.reference_month) || { total: 0, hasNull: false };
-      if (s.closing_value == null) {
-        existing.hasNull = true;
-      } else {
-        existing.total += s.closing_value;
-      }
-      byMonth.set(s.reference_month, existing);
-    });
-    return Array.from(byMonth.entries())
-      .filter(([, v]) => !v.hasNull && v.total > 0)
-      .map(([month, v]) => ({ month, portfolio: v.total }))
-      .sort((a, b) => a.month.localeCompare(b.month));
-  }, [snapshots, view, personalIds, businessIds]);
+  // INV-05: evolução com todos os meses; mês sem fechamento completo vira lacuna no gráfico
+  // (antes sumia ou caía para zero) e é listado abaixo do gráfico.
+  const series = useMemo(() => monthlySeries(filterByEntity(snapshots)), [snapshots, view, personalIds, businessIds]);
+  const chartData = useMemo(() => series.map((p) => ({ month: p.month, portfolio: p.total })), [series]);
+  const openMonths = useMemo(() => series.filter((p) => p.total === null), [series]);
 
-  const hasEnoughHistory = chartData.length >= 2;
+  const hasEnoughHistory = series.filter((p) => p.total !== null).length >= 2;
 
   // Propagate to next month
   const handlePropagate = async () => {
@@ -222,9 +216,30 @@ export default function Investimentos() {
       header: "Fechamento",
       sortable: true,
       sortValue: (r) => r.closing_value ?? 0,
-      render: (r) => r.closing_value == null
-        ? <span className="text-muted-foreground text-xs italic">Em aberto</span>
-        : <span className={`font-mono font-medium ${r.closing_value < 0 ? "text-destructive" : ""}`}>{fmt(r.closing_value)}</span>,
+      // INV-04: fechamento lançado direto na lista (Enter ou sair do campo salva; vazio = em aberto).
+      render: (r) => {
+        const raw = (r as any).raw_closing as number | null;
+        const estimated = (r as any).estimated as boolean;
+        return (
+          <div className="flex flex-col items-end gap-0.5">
+            <Input
+              key={`${r.id}-${raw}`}
+              id={`closing-${r.id}`}
+              defaultValue={raw === null || raw === undefined ? "" : String(raw).replace(".", ",")}
+              placeholder={estimated && r.closing_value != null ? `≈ ${fmt(r.closing_value)}` : "Em aberto"}
+              className="h-7 w-32 text-right font-mono text-xs"
+              onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+              onBlur={(e) => {
+                const v = parseMoneyInput(e.target.value);
+                if (v === undefined) { toast.error("Valor inválido. Use, por exemplo, 12.345,67"); return; }
+                if (v === (raw ?? null)) return;
+                update.mutate({ id: r.id, closing_value: v });
+              }}
+            />
+            {estimated && <span className="text-[10px] text-muted-foreground">estimado pela abertura do mês seguinte</span>}
+          </div>
+        );
+      },
     },
     {
       key: "variation",
@@ -343,9 +358,14 @@ export default function Investimentos() {
                   labelFormatter={fmtMonth}
                 />
                 <Legend />
-                <Line type="monotone" dataKey="portfolio" name="Carteira" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="portfolio" name="Carteira" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
+            {openMonths.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Sem fechamento completo (fora do gráfico): {openMonths.map((p) => `${fmtMonth(p.month)} (${p.open} de ${p.items} em aberto)`).join(" · ")}
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (

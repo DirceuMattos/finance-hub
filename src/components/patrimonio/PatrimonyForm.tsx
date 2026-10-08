@@ -18,7 +18,8 @@ const schema = z.object({
   asset_category_name: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
-  closing_value: z.coerce.number().optional().nullable(),
+  // Vazio = "em aberto" (null); antes virava 0 ou copiava a abertura.
+  closing_value: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().nullable()).optional(),
   notes: z.string().optional(),
 });
 
@@ -44,7 +45,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       asset_category_name: "",
       financial_entity_id: "",
       opening_value: 0,
-      closing_value: 0,
+      closing_value: null,
       notes: "",
     },
   });
@@ -86,7 +87,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
         asset_category_name: "",
         financial_entity_id: "",
         opening_value: 0,
-        closing_value: 0,
+        closing_value: null,
         notes: "",
       });
     }
@@ -120,7 +121,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       asset_category_id: categoryId,
       financial_entity_id: data.financial_entity_id,
       opening_value: data.opening_value,
-      closing_value: data.closing_value ?? data.opening_value ?? 0,
+      closing_value: data.closing_value ?? null,
       notes: data.notes,
     };
 
@@ -204,7 +205,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
             <FormField control={form.control} name="closing_value" render={({ field }) => (
               <FormItem>
                 <FormLabel>Valor Fechamento</FormLabel>
-                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormControl><Input type="number" step="0.01" placeholder="Em aberto" {...field} value={field.value ?? ""} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />

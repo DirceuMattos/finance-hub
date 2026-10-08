@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 import { getUserErrorMessage } from "@/lib/errorMessages";
-import { subMonths, addMonths, format, parseISO } from "date-fns";
+import { nextMonthStart, prevMonthStart, isClosed } from "@/lib/snapshots";
 
 export interface InvestmentClass {
   id: string;
@@ -16,7 +16,8 @@ export interface InvestmentSnapshot {
   investment_class_id: string;
   financial_entity_id: string;
   opening_value: number;
-  closing_value: number;
+  closing_value: number | null;
+  has_quick_liquidity?: boolean;
   created_at: string;
   updated_at: string;
   investment_classes?: { name: string };
@@ -60,10 +61,10 @@ export function useInvestmentSnapshots(month?: string) {
 export function getEffectiveClosing(
   snapshot: InvestmentSnapshot,
   allSnapshots: InvestmentSnapshot[]
-): number {
-  if (snapshot.closing_value > 0) return snapshot.closing_value;
-  // Find the next month's opening for the same class+entity
-  const nextMonth = format(addMonths(parseISO(snapshot.reference_month), 1), "yyyy-MM-dd");
+): number | null {
+  // INV-03: zero é um fechamento válido; só "em aberto" (null) busca a abertura do mês seguinte.
+  if (isClosed(snapshot.closing_value)) return Number(snapshot.closing_value);
+  const nextMonth = nextMonthStart(snapshot.reference_month);
   const next = allSnapshots.find(
     (s) =>
       s.reference_month === nextMonth &&
@@ -78,7 +79,9 @@ export function usePreviousClosingValue(month?: string, investmentClassId?: stri
     queryKey: ["prev_closing_investment", month, investmentClassId, financialEntityId],
     enabled: !!month && !!investmentClassId && !!financialEntityId && month.length >= 7,
     queryFn: async () => {
-      const prevMonth = format(subMonths(new Date(month + "-01"), 1), "yyyy-MM-dd");
+      // INV-02: antes usava new Date("aaaa-mm-01") (UTC) e no Brasil caía no dia 30/31 do mês
+      // errado, então nunca achava o fechamento do mês anterior.
+      const prevMonth = prevMonthStart(month!);
       const { data, error } = await (supabase as any)
         .from("investment_snapshots" as any)
         .select("closing_value")
