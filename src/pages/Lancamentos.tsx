@@ -17,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Pencil, Trash2, Ban, CreditCard, CheckCircle, Copy, Upload, List, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
-import { isCardInvoiceByCenterCost, getCardNameFromCenterCost, isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
+import { isCardInvoice, getCardInvoiceLabel } from "@/lib/cardInvoiceRules";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useCardInstallments, useCardInstallmentStatusUpdate } from "@/hooks/useCardInstallments";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
@@ -326,11 +326,9 @@ export default function Lancamentos() {
         if (!containableIds.includes(t.category_id)) return false;
       }
       if (!t.is_card_installment) {
-        const isCCInvoice = isCardInvoiceByCenterCost(t.center_cost) || isCardInvoice(t.category_name || "");
+        const isCCInvoice = isCardInvoice(t.category_name || "");
         if (filterCardInvoice === "card_invoice" && !isCCInvoice) return false;
         if (filterCardInvoice === "non_card_invoice" && isCCInvoice) return false;
-        if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "BRA Pessoal")) return false;
-        if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "Nu Infotkt")) return false;
       }
       // Month filtering is now done server-side in the hooks; o período (LAN-02) é aplicado aqui.
       if ((appliedFrom || appliedTo) && !inRange(t, appliedFrom, appliedTo)) return false;
@@ -401,9 +399,9 @@ export default function Lancamentos() {
             </div>
           );
         }
-        const isCCInvoice = isCardInvoiceByCenterCost(r.center_cost) || isCardInvoice(r.category_name || "");
+        const isCCInvoice = isCardInvoice(r.category_name || "");
         if (isCCInvoice) {
-          const cardLabel = getCardNameFromCenterCost(r.center_cost) || getCardInvoiceLabel(r.category_name || "");
+          const cardLabel = getCardInvoiceLabel(r.category_name || "");
           return renderWithDiagnostic(
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-1.5">
@@ -715,8 +713,6 @@ export default function Lancamentos() {
               <SelectContent>
                 <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="card_invoice">Todas Faturas</SelectItem>
-                <SelectItem value="bra_pessoal">BRA Pessoal</SelectItem>
-                <SelectItem value="nu_infotkt">Nu Infotkt</SelectItem>
                 <SelectItem value="non_card_invoice">Outros lançamentos</SelectItem>
               </SelectContent>
             </Select>

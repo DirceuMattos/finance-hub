@@ -2,9 +2,6 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  CARD_INVOICE_CENTER_COSTS,
-  CENTER_COST_CARD_MAP,
-  CENTER_COST_ENTITY_MAP,
   CUTOFF_DATE,
 } from "@/lib/cardInvoiceRules";
 import { cardCycleMonthOf, cardCycleWindow } from "@/lib/cardCycle";
@@ -67,26 +64,29 @@ function useCardInvoiceTransactionsQuery() {
         cardEntityMap.set(c.name, t === "personal" || t === "business" ? t : null);
       });
 
-      // Source 1: transactions by center_cost (legacy hardcoded list + any registered card name)
-      const { data: txData, error: txError } = await (supabase as any)
-        .from("transactions")
-        .select("id, description, amount, competence_date, due_date, status, center_cost")
-        // Filtra no servidor só os centros de custo de cartão: evita o corte de linhas da API.
-        .in("center_cost", Array.from(new Set([...CARD_INVOICE_CENTER_COSTS, ...cardEntityMap.keys()])))
-        .neq("status", "cancelled")
-        .order("competence_date", { ascending: false })
-        .limit(10000);
-      if (txError) throw txError;
+      // Source 1: transactions whose center_cost is a registered card name
+      const cardNames = Array.from(cardEntityMap.keys());
+      let txData: any[] = [];
+      if (cardNames.length > 0) {
+        const { data, error: txError } = await (supabase as any)
+          .from("transactions")
+          .select("id, description, amount, competence_date, due_date, status, center_cost")
+          // Filtra no servidor só os centros de custo de cartão: evita o corte de linhas da API.
+          .in("center_cost", cardNames)
+          .neq("status", "cancelled")
+          .order("competence_date", { ascending: false })
+          .limit(10000);
+        if (txError) throw txError;
+        txData = data || [];
+      }
 
       const fromTransactions: CardInvoiceTransaction[] = (txData || [])
         .filter((t: any) => {
           if (!t.center_cost) return false;
           if (t.status === "cancelled") return false;
-          return CARD_INVOICE_CENTER_COSTS.includes(t.center_cost) || cardEntityMap.has(t.center_cost);
+          return cardEntityMap.has(t.center_cost);
         })
         .map((t: any): CardInvoiceTransaction => {
-          const mappedCard = CENTER_COST_CARD_MAP[t.center_cost];
-          const mappedEntity = CENTER_COST_ENTITY_MAP[t.center_cost];
           const dynamicEntity = cardEntityMap.get(t.center_cost) ?? null;
           return {
             id: t.id,
@@ -96,14 +96,14 @@ function useCardInvoiceTransactionsQuery() {
             due_date: t.due_date,
             status: t.status,
             center_cost: t.center_cost,
-            card_name: mappedCard || t.center_cost,
-            entity_type: mappedEntity || dynamicEntity,
+            card_name: t.center_cost,
+            entity_type: dynamicEntity,
             cycle_month: t.due_date
               ? cardCycleMonthOf(t.due_date, cardDueDayMap.get(t.center_cost))
               : t.competence_date.substring(0, 7),
             card_id: cardIdMap.get(t.center_cost) ?? null,
             card_due_day: cardDueDayMap.get(t.center_cost) ?? null,
-            source: cardIdMap.has(t.center_cost) ? "transactions" : "legacy",
+            source: "transactions",
           };
         });
 
