@@ -11,7 +11,9 @@
 --    (compras com parcela paga ficam: o histórico pago continua)
 -- 4. 5 tabelas de importação (3 com dados de compras, 2 vazias)                     -> arquivar e remover
 -- 5. 24 lançamentos importados em 24/04 ligados por engano à recorrência Supermercado
---    -> só desliga da recorrência (source_type/source_id = NULL). Nada é apagado.
+--    -> só desliga da recorrência (source_type = 'import', source_id = NULL). Nada é apagado.
+-- 6. 5 lançamentos pagos de abr/2026 com centro de custo antigo 'Cartões de Crédito - Pessoal'
+--    -> passam para 'Itaú 2223 - Pessoal' (decisão do Dirceu, 09/10). Não altera saldo.
 --    A recorrência semanal em si NÃO é alterada.
 
 BEGIN;
@@ -73,10 +75,21 @@ BEGIN
             WHERE source_type = ''recurrence'' AND source_id = ''c87ce8a6-04a0-4cce-aa4a-285465ae8367''
               AND extract(day FROM due_date) = 25
               AND created_at >= TIMESTAMPTZ ''2026-04-24 01:00+00'' AND created_at < TIMESTAMPTZ ''2026-04-24 02:00+00''';
-  UPDATE public.transactions t SET source_type = NULL, source_id = NULL
+  UPDATE public.transactions t SET source_type = 'import', source_id = NULL
     FROM archive.supermercado_vinculo_20261009 a WHERE a.id = t.id;
   GET DIAGNOSTICS v_n = ROW_COUNT;
   IF v_n <> 24 THEN RAISE EXCEPTION 'Desligados %, esperados 24', v_n; END IF;
+
+  -- ---------- 6. lançamentos antigos -> Itaú 2223 ----------
+  SELECT COUNT(*), SUM(amount) INTO v_n, v_sum FROM public.transactions WHERE center_cost = 'Cartões de Crédito - Pessoal';
+  IF v_n <> 5 OR v_sum <> 1473.32 THEN RAISE EXCEPTION 'Esperados 5 / 1473.32 em Cartões de Crédito - Pessoal, encontrados % / %', v_n, v_sum; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.cards WHERE id = '770aa888-5643-4ba7-8829-58328de652ec' AND name = 'Itaú 2223 - Pessoal') THEN
+    RAISE EXCEPTION 'Cartão Itaú 2223 - Pessoal não encontrado';
+  END IF;
+  EXECUTE 'CREATE TABLE archive.centro_custo_legado_20261009 AS SELECT id, center_cost FROM public.transactions WHERE center_cost = ''Cartões de Crédito - Pessoal''';
+  UPDATE public.transactions SET center_cost = 'Itaú 2223 - Pessoal' WHERE center_cost = 'Cartões de Crédito - Pessoal';
+  GET DIAGNOSTICS v_n = ROW_COUNT;
+  IF v_n <> 5 THEN RAISE EXCEPTION 'Movidos %, esperados 5', v_n; END IF;
 END;
 $fix$;
 
@@ -97,4 +110,5 @@ UNION ALL SELECT 'parcelas pagas (deve ser 1894)', COUNT(*) FROM public.card_ins
 UNION ALL SELECT 'arquivo: lançamentos', COUNT(*) FROM archive.transactions_cancelled_20261009
 UNION ALL SELECT 'arquivo: parcelas', COUNT(*) FROM archive.card_installments_20261009
 UNION ALL SELECT 'arquivo: compras', COUNT(*) FROM archive.card_purchases_20261009
-UNION ALL SELECT 'supermercado desligados', COUNT(*) FROM archive.supermercado_vinculo_20261009;
+UNION ALL SELECT 'supermercado desligados', COUNT(*) FROM archive.supermercado_vinculo_20261009
+UNION ALL SELECT 'movidos para Itaú 2223', COUNT(*) FROM archive.centro_custo_legado_20261009;
