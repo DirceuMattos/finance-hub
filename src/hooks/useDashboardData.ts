@@ -1,8 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
-import { format, addMonths, startOfMonth, parseISO } from "date-fns";
+import { format, addMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { FinancialEntity } from "@/types/database";
+import { currentValue, isClosed, monthlySeries, nextMonthStart } from "@/lib/snapshots";
 
 type ViewType = "consolidated" | "personal" | "business";
 
@@ -320,19 +321,16 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("patrimony_snapshots")
-        .select("closing_value, reference_month, asset_category_id, financial_entity_id, asset_categories(name)")
+        .select("opening_value, closing_value, reference_month, asset_category_id, financial_entity_id, asset_categories(name)")
         .order("reference_month", { ascending: false });
       if (error) throw error;
-      if (!data || data.length === 0) return { total: 0, byCategory: [], latestMonth: null };
+      if (!data || data.length === 0) return { total: 0, byCategory: [], latestMonth: null, openItems: 0 };
 
-      // Pegar o último mês com closing_value preenchido
-      const monthsWithData = [...new Set(
-        (data as any[])
-          .filter((d: any) => d.closing_value !== null && d.closing_value !== undefined)
-          .map((d: any) => d.reference_month)
-      )].sort().reverse();
+      // Último mês lançado. Itens ainda sem fechamento entram pela abertura (mesma regra da tela
+      // Patrimônio); antes bastava 1 item com fechamento para o mês ser usado e os demais contavam zero.
+      const monthsWithData = [...new Set((data as any[]).map((d: any) => d.reference_month))].sort().reverse();
 
-      if (monthsWithData.length === 0) return { total: 0, byCategory: [], latestMonth: null };
+      if (monthsWithData.length === 0) return { total: 0, byCategory: [], latestMonth: null, openItems: 0 };
 
       const latestMonth = monthsWithData[0];
       const latestItems = (data as any[]).filter((d: any) => d.reference_month === latestMonth);
@@ -341,44 +339,47 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         ? latestItems.filter((d: any) => filterIds.includes(d.financial_entity_id))
         : latestItems;
 
-      const total = filtered.reduce((s: number, d: any) => s + (d.closing_value || 0), 0);
+      const total = filtered.reduce((s: number, d: any) => s + currentValue(d), 0);
+      const openItems = filtered.filter((d: any) => !isClosed(d.closing_value)).length;
 
       const catMap = new Map<string, number>();
       filtered.forEach((d: any) => {
         const name = d.asset_categories?.name || "Outros";
-        catMap.set(name, (catMap.get(name) || 0) + (d.closing_value || 0));
+        catMap.set(name, (catMap.get(name) || 0) + currentValue(d));
       });
 
       const byCategory = Array.from(catMap.entries())
         .map(([name, total]) => ({ name, total }))
         .sort((a, b) => b.total - a.total);
 
-      return { total, byCategory, latestMonth };
+      return { total, byCategory, latestMonth, openItems };
     },
     enabled: entitiesQuery.isFetched,
   });
 
   // --- Patrimony evolution ---
+  // Calculada dos lançamentos (últimos 12 meses). Mês com item sem fechamento fica como lacuna
+  // (null); antes a view contava o item em aberto como zero e pegava os 12 primeiros meses, não os últimos.
   const patrimonyEvolution = useQuery({
-    queryKey: ["dashboard_patrimony_evolution"],
+    queryKey: ["dashboard_patrimony_evolution", view],
+    staleTime: 0,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from("vw_patrimony_evolution")
-        .select("reference_month, net_patrimony")
-        .order("reference_month")
-        .limit(12);
-      
+        .from("patrimony_snapshots")
+        .select("reference_month, closing_value, financial_entity_id");
       if (error) return [];
-      return (data || []).map((d: any) => ({
-        reference_month: d.reference_month,
-        net_patrimony: Number(d.net_patrimony) || 0,
+      const rows = ((data || []) as any[]).filter((d) => !(filterIds && filterIds.length > 0) || filterIds.includes(d.financial_entity_id));
+      return monthlySeries(rows).slice(-12).map((p) => ({
+        reference_month: p.month,
+        net_patrimony: p.total,
+        open: p.open,
         label: (() => {
-          const [y, m] = d.reference_month.split("-").map(Number);
-          const date = new Date(y, m - 1, 1);
-          return format(date, "MMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
+          const [y, m] = p.month.split("-").map(Number);
+          return format(new Date(y, m - 1, 1), "MMM yyyy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase());
         })(),
-      })) as { reference_month: string; net_patrimony: number; label: string }[];
+      })) as { reference_month: string; net_patrimony: number | null; open: number; label: string }[];
     },
+    enabled: entitiesQuery.isFetched,
   });
 
   // --- Investment evolution ---
@@ -392,25 +393,18 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         .order("reference_month");
       if (error) return [];
 
-      const monthMap = new Map<string, number>();
-      (data || []).forEach((d: any) => {
-        if (filterIds && filterIds.length > 0 && !filterIds.includes(d.financial_entity_id)) {
-          return;
-        }
-        const month = d.reference_month;
-        monthMap.set(month, (monthMap.get(month) || 0) + Number(d.closing_value || 0));
+      // Mês com item sem fechamento vira lacuna (null) em vez de despencar para zero.
+      const rows = ((data || []) as any[]).filter((d) => !(filterIds && filterIds.length > 0) || filterIds.includes(d.financial_entity_id));
+      return monthlySeries(rows).map((p) => {
+        const [y, mo] = p.month.split("-").map(Number);
+        const date = new Date(y, mo - 1, 1);
+        return {
+          month: p.month,
+          total: p.total,
+          open: p.open,
+          label: format(date, "MMM yy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase()),
+        };
       });
-      return Array.from(monthMap.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, total]) => {
-          const [y, mo] = month.split("-").map(Number);
-          const date = new Date(y, mo - 1, 1);
-          return {
-            month,
-            total,
-            label: format(date, "MMM yy", { locale: ptBR }).replace(/^\w/, c => c.toUpperCase()),
-          };
-        });
     },
     enabled: entitiesQuery.isFetched,
   });
@@ -436,16 +430,17 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         : latestItems;
 
       const getEffective = (item: any) => {
-        if (item.closing_value > 0) return item.closing_value;
-        const nextMonthStr = format(addMonths(parseISO(item.reference_month), 1), "yyyy-MM-dd");
+        // Zero é fechamento válido; só item em aberto usa a abertura do mês seguinte ou a própria abertura.
+        if (isClosed(item.closing_value)) return Number(item.closing_value);
+        const nextMonthStr = nextMonthStart(item.reference_month);
         const next = allData.find(
           (d: any) =>
             d.reference_month === nextMonthStr &&
             d.investment_class_id === item.investment_class_id &&
             d.financial_entity_id === item.financial_entity_id
         );
-        if (next?.opening_value > 0) return next.opening_value;
-        return item.opening_value > 0 ? item.opening_value : item.closing_value;
+        if (next && next.opening_value !== null && next.opening_value !== undefined) return Number(next.opening_value);
+        return Number(item.opening_value) || 0;
       };
 
       const total = filtered.reduce((s: number, d: any) => s + getEffective(d), 0);
@@ -472,7 +467,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     flow: monthlyFlow.data,
     forecast,
     expensesByCategory: expensesByCategory.data ?? [],
-    patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null },
+    patrimony: patrimonyData.data ?? { total: 0, byCategory: [], latestMonth: null, openItems: 0 },
     patrimonyEvolution: patrimonyEvolution.data ?? [],
     investment: investmentData.data ?? { total: 0, byClass: [] },
     investmentEvolution: investmentEvolution.data ?? [],
