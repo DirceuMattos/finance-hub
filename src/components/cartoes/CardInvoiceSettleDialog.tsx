@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import { AlertTriangle, Banknote, Calculator, CalendarClock, CheckCircle2, Lock } from "lucide-react";
+import { AlertTriangle, Banknote, Calculator, CalendarClock, CheckCircle2, HandCoins, Lock } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { cardCycleWindow, formatIsoDateBR, normalizeDueDay } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
+import { buildReimbursement } from "@/lib/reimbursement";
 
 interface Props {
   open: boolean;
@@ -72,8 +73,32 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
   const [calcExpr, setCalcExpr] = useState("");
   const [showCalc, setShowCalc] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Reembolso: vira receita prevista na conta escolhida, com vencimento da fatura.
+  const [showReimb, setShowReimb] = useState(false);
+  const [reimbAmount, setReimbAmount] = useState("");
+  const [reimbAccount, setReimbAccount] = useState("");
+  const [reimbConfirm, setReimbConfirm] = useState(false);
 
   useEffect(() => { setNewDueDate(nextCycle.end); }, [nextCycle.end]);
+  useEffect(() => {
+    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); }
+  }, [open]);
+
+  const { data: reimbCategoryId = null } = useQuery({
+    queryKey: ["category_reembolsos"],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("categories")
+        .select("id")
+        .eq("name", "Reembolsos")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.id as string) ?? null;
+    },
+  });
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["card_invoice_items", cardId, referenceMonth],
@@ -218,6 +243,41 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
       setConfirming(null);
     } catch (e: any) {
       toast.error("Não foi possível concluir: " + (e?.message || "erro desconhecido"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reimbAccountObj = allAccounts.find((a) => a.id === reimbAccount);
+  const reimb = buildReimbursement({
+    amountText: reimbAmount,
+    accountId: reimbAccount,
+    accountEntityId: reimbAccountObj?.financial_entity_id,
+    categoryId: reimbCategoryId,
+    cardName,
+    dueDate: cycle.end,
+    referenceLabel,
+  });
+
+  const requestReimbursement = () => {
+    if (!reimb.ok) { toast.error(reimb.error); return; }
+    setReimbConfirm(true);
+  };
+
+  const saveReimbursement = async () => {
+    if (!reimb.ok) { toast.error(reimb.error); return; }
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any).from("transactions").insert(reimb.payload);
+      if (error) throw error;
+      ["transactions", "dashboard_account_balances_split", "accounts"]
+        .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      toast.success(`Reembolso de ${fmt(reimb.amount)} lançado como receita prevista em ${accountName(reimbAccount)}, vencimento ${formatIsoDateBR(cycle.end)}.`);
+      setReimbAmount("");
+      setReimbConfirm(false);
+      setShowReimb(false);
+    } catch (e: any) {
+      toast.error("Não foi possível lançar o reembolso: " + (e?.message || "erro desconhecido"));
     } finally {
       setSaving(false);
     }
@@ -390,6 +450,48 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
             )}
           </div>
         )}
+
+        {/* Reembolso (receita prevista) */}
+        <div className="py-1">
+          {!showReimb ? (
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowReimb(true)}>
+              <HandCoins className="h-3.5 w-3.5 mr-1" />Lançar reembolso
+            </Button>
+          ) : (
+            <div className="rounded-md border p-2 space-y-2">
+              <p className="text-xs font-medium flex items-center gap-1">
+                <HandCoins className="h-3.5 w-3.5" />Reembolso — entra como receita prevista, vencimento {formatIsoDateBR(cycle.end)}, categoria Reembolsos
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="reimb-amount" className="text-[11px]">Valor</Label>
+                  <Input id="reimb-amount" inputMode="decimal" value={reimbAmount} placeholder="Ex.: 350,00"
+                    onChange={(e) => { setReimbConfirm(false); setReimbAmount(e.target.value); }} className="h-8 w-36 text-xs font-mono" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px]">Conta que recebe</Label>
+                  <Select value={reimbAccount} onValueChange={(v) => { setReimbConfirm(false); setReimbAccount(v); }}>
+                    <SelectTrigger id="reimb-account" className="h-8 w-52 text-xs"><SelectValue placeholder="Escolha a conta" /></SelectTrigger>
+                    <SelectContent>
+                      {accounts.map((a) => <SelectItem key={a.id} value={a.id}>{a.name}{a.bank_name ? ` · ${a.bank_name}` : ""}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button size="sm" className="h-8" onClick={requestReimbursement} disabled={saving}>Lançar</Button>
+                <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShowReimb(false); setReimbConfirm(false); }} disabled={saving}>Cancelar</Button>
+              </div>
+              {reimbConfirm && reimb.ok && (
+                <div className="rounded-md border border-primary/50 bg-primary/5 p-2 text-sm space-y-2">
+                  <p>Lançar receita prevista de <b>{fmt(reimb.amount)}</b> em <b>{accountName(reimbAccount)}</b>, vencimento {formatIsoDateBR(cycle.end)}?</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveReimbursement} disabled={saving}>{saving ? "Lançando..." : "Confirmar"}</Button>
+                    <Button size="sm" variant="outline" onClick={() => setReimbConfirm(false)} disabled={saving}>Voltar</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Itens */}
         <div className="flex-1 overflow-auto">
