@@ -143,12 +143,13 @@ export default function Dashboard() {
     ? `Pessoal: ${fmtCur(balanceSplit.personal)} | Empresa: ${fmtCur(balanceSplit.business)}`
     : undefined;
 
-  const patrimonyChartData = patrimonyEvolution
-    .filter(d => d.net_patrimony !== null && d.net_patrimony !== undefined && Number(d.net_patrimony) > 0)
-    .map(d => ({
-      month: fmtMonth(d.reference_month),
-      Patrimônio: Number(d.net_patrimony),
-    }));
+  // Mês com item sem fechamento fica como lacuna (null) e é listado abaixo do gráfico.
+  const patrimonyChartData = patrimonyEvolution.map(d => ({
+    month: fmtMonth(d.reference_month),
+    Patrimônio: d.net_patrimony === null ? null : Number(d.net_patrimony),
+  }));
+  const patrimonyOpenMonths = patrimonyEvolution.filter(d => d.net_patrimony === null).map(d => fmtMonth(d.reference_month));
+  const investmentOpenMonths = investmentEvolution.filter(d => d.total === null).map(d => d.label);
 
   const handleGenerateAnalysis = async () => {
     setAiLoading(true);
@@ -442,7 +443,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium">Evolução do Patrimônio</CardTitle>
           </CardHeader>
           <CardContent>
-            {patrimonyChartData.length === 0 ? (
+            {patrimonyChartData.every(d => d["Patrimônio"] === null) ? (
               <p className="text-sm text-muted-foreground text-center py-12">Sem dados de patrimônio.</p>
             ) : (
               <ResponsiveContainer width="100%" height={240}>
@@ -462,6 +463,9 @@ export default function Dashboard() {
                 </LineChart>
               </ResponsiveContainer>
             )}
+            {patrimonyOpenMonths.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">Sem fechamento completo: {patrimonyOpenMonths.join(", ")}</p>
+            )}
           </CardContent>
         </Card>
 
@@ -469,6 +473,11 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Composição do Patrimônio</CardTitle>
             <p className="text-lg font-bold text-foreground">{fmtCur(patrimony.total)}</p>
+            {patrimony.latestMonth && (
+              <p className="text-[11px] text-muted-foreground">
+                {fmtMonth(patrimony.latestMonth)}{patrimony.openItems > 0 ? ` · parcial: ${patrimony.openItems} item(ns) em aberto pela abertura` : ""}
+              </p>
+            )}
           </CardHeader>
           <CardContent>
             <HorizontalBreakdown items={patrimony.byCategory} label="patrimônio" />
@@ -492,7 +501,7 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium">Evolução dos Investimentos</CardTitle>
           </CardHeader>
           <CardContent>
-            {investmentEvolution.length === 0 ? (
+            {investmentEvolution.every(d => d.total === null) ? (
               <p className="text-sm text-muted-foreground text-center py-4">Sem dados disponíveis</p>
             ) : (
               <ResponsiveContainer width="100%" height={200}>
@@ -513,9 +522,13 @@ export default function Dashboard() {
                     stroke="#10b981"
                     strokeWidth={2}
                     dot={{ r: 3 }}
+                    connectNulls={false}
                   />
                 </LineChart>
               </ResponsiveContainer>
+            )}
+            {investmentOpenMonths.length > 0 && (
+              <p className="text-[11px] text-muted-foreground mt-1">Sem fechamento completo: {investmentOpenMonths.join(", ")}</p>
             )}
           </CardContent>
         </Card>
