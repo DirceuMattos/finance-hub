@@ -9,6 +9,8 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { DataTable, Column } from "@/components/shared/DataTable";
 import { FilterBar } from "@/components/shared/FilterBar";
 import { StatCard } from "@/components/shared/StatCard";
+import { Input } from "@/components/ui/input";
+import { inRange, validateRange } from "@/lib/dateRange";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -91,7 +93,20 @@ export default function Lancamentos() {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const initialMonth = searchParams.get("mes") || format(new Date(), "yyyy-MM");
-  const [filterMonth, setFilterMonth] = useState(initialMonth);
+  const [filterMonth, setFilterMonthState] = useState(initialMonth);
+  // LAN-02: período (vencimento) dentro do mês. Datas fora do mês são bloqueadas e não filtram.
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const setFilterMonth = (m: string) => { setFilterMonthState(m); setDateFrom(""); setDateTo(""); };
+  const rangeCheck = validateRange(filterMonth, dateFrom, dateTo);
+  const appliedFrom = rangeCheck.ok ? dateFrom : "";
+  const appliedTo = rangeCheck.ok ? dateTo : "";
+  const monthBounds = useMemo(() => {
+    if (!filterMonth || filterMonth === "all") return { min: undefined as string | undefined, max: undefined as string | undefined };
+    const [y, m] = filterMonth.split("-").map(Number);
+    const last = new Date(y, m, 0).getDate();
+    return { min: `${filterMonth}-01`, max: `${filterMonth}-${String(last).padStart(2, "0")}` };
+  }, [filterMonth]);
   const [filterStatus, setFilterStatus] = useState("all");
 
   const { data = [], isLoading, create, update, remove } = useTransactions(filterMonth);
@@ -317,16 +332,22 @@ export default function Lancamentos() {
         if (filterCardInvoice === "bra_pessoal" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "BRA Pessoal")) return false;
         if (filterCardInvoice === "nu_infotkt" && !(isCCInvoice && getCardNameFromCenterCost(t.center_cost) === "Nu Infotkt")) return false;
       }
-      // Month filtering is now done server-side in the hooks
+      // Month filtering is now done server-side in the hooks; o período (LAN-02) é aplicado aqui.
+      if ((appliedFrom || appliedTo) && !inRange(t, appliedFrom, appliedTo)) return false;
       return true;
     });
-  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment, filterContainable]);
+  }, [allRows, search, filterEntity, filterAccount, filterCategory, filterStatus, filterTypeTab, filterCardInvoice, filterCard, filterInstallment, filterContainable, appliedFrom, appliedTo]);
 
   const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
   const fmtDate = (d: string | null) => d ? format(parseISO(d), "dd/MM/yyyy") : "—";
   const fmtMonth = (d: string | null) => d ? format(parseISO(d), "MM/yyyy") : "—";
   const fmtDateTime = (d?: string | null) => d ? format(parseISO(d), "dd/MM/yyyy HH:mm") : "—";
   const isUpdatedToday = (d?: string | null) => d ? format(parseISO(d), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") : false;
+
+  const brDate = (iso: string) => iso.split("-").reverse().join("/");
+  const periodLabel = (appliedFrom || appliedTo)
+    ? `${appliedFrom ? brDate(appliedFrom) : brDate(monthBounds.min || "")} a ${appliedTo ? brDate(appliedTo) : brDate(monthBounds.max || "")}`
+    : "";
 
   const listSummary = useMemo(() => {
     return filtered
@@ -646,8 +667,8 @@ export default function Lancamentos() {
           searchValue={search}
           onSearchChange={setSearch}
           searchPlaceholder="Buscar por descrição, cartão, parcela, valor, observação..."
-          hasActiveFilters={filterMonth !== "all" || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all" || filterContainable}
-          onClear={() => { setFilterMonth("all"); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); setFilterContainable(false); }}
+          hasActiveFilters={filterMonth !== "all" || !!dateFrom || !!dateTo || filterSource !== "all" || filterCardInvoice !== "all" || filterStatus !== "all" || filterEntity !== "all" || filterAccount !== "all" || filterCategory !== "all" || filterCard !== "all" || filterInstallment !== "all" || filterContainable}
+          onClear={() => { setFilterMonth("all"); setDateFrom(""); setDateTo(""); setFilterSource("all"); setFilterCardInvoice("all"); setFilterStatus("all"); setFilterEntity("all"); setFilterAccount("all"); setFilterCategory("all"); setFilterCard("all"); setFilterInstallment("all"); setFilterContainable(false); }}
         />
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
           <div className="flex flex-col gap-1">
@@ -661,6 +682,20 @@ export default function Lancamentos() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="lanc-date-from" className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Vencimento de</label>
+            <Input id="lanc-date-from" type="date" className={`h-9 text-xs ${dateFrom && !rangeCheck.ok ? "border-destructive" : ""}`}
+              value={dateFrom} min={monthBounds.min} max={monthBounds.max}
+              disabled={filterMonth === "all"} title={filterMonth === "all" ? "Escolha um mês primeiro" : undefined}
+              onChange={(e) => setDateFrom(e.target.value)} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="lanc-date-to" className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Vencimento até</label>
+            <Input id="lanc-date-to" type="date" className={`h-9 text-xs ${dateTo && !rangeCheck.ok ? "border-destructive" : ""}`}
+              value={dateTo} min={dateFrom || monthBounds.min} max={monthBounds.max}
+              disabled={filterMonth === "all"} title={filterMonth === "all" ? "Escolha um mês primeiro" : undefined}
+              onChange={(e) => setDateTo(e.target.value)} />
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Origem</label>
@@ -798,26 +833,31 @@ export default function Lancamentos() {
         </div>
       )}
 
+      {!rangeCheck.ok && (
+        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive mb-4">
+          Período bloqueado: {rangeCheck.error} A lista e os totais continuam mostrando o mês inteiro.
+        </div>
+      )}
       {filterMonth !== "all" && (
         <div className="grid gap-3 mb-4 md:grid-cols-3">
           <StatCard
             title="Quantidade"
             value={String(listSummary.count)}
             icon={List}
-            subLabel="Lançamentos exibidos"
+            subLabel={periodLabel ? `Lançamentos de ${periodLabel}` : "Lançamentos exibidos"}
           />
           <StatCard
             title="Receitas"
             value={fmt(listSummary.income)}
             icon={ArrowUpCircle}
-            subLabel="Total filtrado em tela"
+            subLabel={periodLabel ? `Período ${periodLabel}` : "Total filtrado em tela"}
             variant="positive"
           />
           <StatCard
             title="Despesas"
             value={fmt(listSummary.expense)}
             icon={ArrowDownCircle}
-            subLabel="Total filtrado em tela"
+            subLabel={periodLabel ? `Período ${periodLabel}` : "Total filtrado em tela"}
             variant="negative"
           />
         </div>
