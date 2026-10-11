@@ -22,6 +22,8 @@ import { format, subMonths, addMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useQuery } from "@tanstack/react-query";
 import { useDashboardData } from "@/hooks/useDashboardData";
+import { useDashboardOutlook } from "@/hooks/useDashboardOutlook";
+import { OutlookCards } from "@/components/dashboard/OutlookCards";
 import { cn } from "@/lib/utils";
 
 type ViewType = "consolidated" | "personal" | "business";
@@ -96,6 +98,7 @@ export default function Dashboard() {
     expensesByCategory,
     patrimony, patrimonyEvolution, investment, investmentEvolution, riskData,
   } = useDashboardData(view, selectedMonth);
+  const { outlook, outlookLoading, limits, limitsLoading } = useDashboardOutlook(view, selectedMonth);
 
   const { data: dailyPattern = [] } = useQuery({
     queryKey: ["daily_spending_pattern", view],
@@ -319,6 +322,15 @@ export default function Dashboard() {
           description="Despesas conteníveis"
         />
       </div>
+
+      {/* ===== SALDO PREVISTO NAS CONTAS E LIMITES DOS CARTÕES ===== */}
+      <OutlookCards
+        outlook={outlook}
+        outlookLoading={outlookLoading}
+        limits={limits}
+        limitsLoading={limitsLoading}
+        monthLabel={format(selectedMonth, "MMMM/yy", { locale: ptBR })}
+      />
 
       {/* ===== PREVISÃO DE FECHAMENTO ===== */}
       <Card className={cn(
