@@ -172,7 +172,10 @@ export default function Patrimonio() {
     }
   };
 
-  const lastMonth = months[months.length - 1];
+  // months está em ordem decrescente: o mais recente é months[0]. Antes usava o mais ANTIGO:
+  // o botão só habilitava com o primeiro mês selecionado, a mensagem citava esse mês e a
+  // função do banco apagava o mês mais RECENTE.
+  const lastMonth = months[0];
   const isLastMonthSelected = activeMonth === lastMonth;
   const canUndo = months.length > 1 && isLastMonthSelected;
 
@@ -188,7 +191,7 @@ export default function Patrimonio() {
       if (error) throw error;
       toast.success(`Registros de ${fmtMonth(lastMonth)} excluídos com sucesso`);
       queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
-      setSelectedMonth(months[months.length - 2]);
+      setSelectedMonth(months[1]);
     } catch (e: any) {
       toast.error("Erro ao desfazer: " + e.message);
     } finally {
