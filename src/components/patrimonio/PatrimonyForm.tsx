@@ -16,6 +16,7 @@ const schema = z.object({
   reference_month: z.string().min(1, "Mês de referência é obrigatório"),
   item_name: z.string().min(1, "Nome do item é obrigatório"),
   asset_category_name: z.string().optional().nullable(),
+  asset_type: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
   opening_value: z.coerce.number(),
   // Vazio = "em aberto" (null); antes virava 0 ou copiava a abertura.
@@ -24,6 +25,20 @@ const schema = z.object({
 });
 
 type FormData = z.infer<typeof schema>;
+
+// Tipos aceitos em asset_categories.asset_type (CHECK no banco). Passivo subtrai do patrimônio.
+const ASSET_TYPES: { value: string; label: string }[] = [
+  { value: "cash", label: "Ativo · Conta / caixa" },
+  { value: "investment", label: "Ativo · Investimento" },
+  { value: "property", label: "Ativo · Imóvel" },
+  { value: "vehicle", label: "Ativo · Veículo" },
+  { value: "crypto", label: "Ativo · Cripto" },
+  { value: "pension", label: "Ativo · Previdência" },
+  { value: "international", label: "Ativo · Conta internacional" },
+  { value: "receivable", label: "Ativo · Valores a receber" },
+  { value: "other", label: "Ativo · Outros" },
+  { value: "liability", label: "Passivo · Dívida, financiamento, cartão" },
+];
 
 interface Props {
   open: boolean;
@@ -43,6 +58,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       reference_month: "",
       item_name: "",
       asset_category_name: "",
+      asset_type: "other",
       financial_entity_id: "",
       opening_value: 0,
       closing_value: null,
@@ -53,6 +69,16 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
   const watchMonth = form.watch("reference_month");
   const watchItem = form.watch("item_name");
   const watchEntity = form.watch("financial_entity_id");
+  const watchCategory = form.watch("asset_category_name");
+  const watchType = form.watch("asset_type");
+  const matchedCategory = categories.find(
+    (c) => c.name.toLowerCase().trim() === (watchCategory || "").toLowerCase().trim()
+  );
+
+  // Ao escolher uma categoria existente, assume o tipo dela.
+  useEffect(() => {
+    if (matchedCategory) form.setValue("asset_type", matchedCategory.asset_type || "other");
+  }, [matchedCategory?.id]);
 
   const { data: prevClosing } = usePreviousPatrimonyClosingValue(
     !snapshot ? watchMonth : undefined,
@@ -75,6 +101,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
         asset_category_name: snapshot.asset_category_id
           ? categories.find((c) => c.id === snapshot.asset_category_id)?.name || ""
           : "",
+        asset_type: categories.find((c) => c.id === snapshot.asset_category_id)?.asset_type || "other",
         financial_entity_id: snapshot.financial_entity_id,
         opening_value: snapshot.opening_value,
         closing_value: snapshot.closing_value,
@@ -85,6 +112,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
         reference_month: "",
         item_name: "",
         asset_category_name: "",
+        asset_type: "other",
         financial_entity_id: "",
         opening_value: 0,
         closing_value: null,
@@ -100,12 +128,17 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
       const existing = categories.find(
         (c) => c.name.toLowerCase().trim() === data.asset_category_name!.toLowerCase().trim()
       );
+      const assetType = data.asset_type || "other";
       if (existing) {
         categoryId = existing.id;
+        // Tipo alterado vale para a categoria inteira (todos os meses).
+        if (existing.asset_type !== assetType) {
+          await (supabase as any).from("asset_categories").update({ asset_type: assetType }).eq("id", existing.id);
+        }
       } else {
         const { data: newCat, error } = await (supabase as any)
           .from("asset_categories")
-          .insert({ name: data.asset_category_name.trim() })
+          .insert({ name: data.asset_category_name.trim(), asset_type: assetType })
           .select("id")
           .single();
         if (!error && newCat) {
@@ -172,6 +205,27 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
                   </datalist>
                 </>
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )} />
+
+          <FormField control={form.control} name="asset_type" render={({ field }) => (
+            <FormItem>
+              <FormLabel>Tipo da categoria</FormLabel>
+              <FormControl>
+                <Select onValueChange={field.onChange} value={field.value || "other"}>
+                  <SelectTrigger id="patrimony-asset-type"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {ASSET_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </FormControl>
+              {watchType === "liability" && (
+                <p className="text-[11px] text-muted-foreground">Passivo: informe o saldo devedor como valor positivo; ele é subtraído do patrimônio.</p>
+              )}
+              {matchedCategory && matchedCategory.asset_type !== (watchType || "other") && (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">O novo tipo vale para todos os itens da categoria "{matchedCategory.name}".</p>
+              )}
               <FormMessage />
             </FormItem>
           )} />

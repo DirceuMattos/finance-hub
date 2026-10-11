@@ -26,6 +26,25 @@ export function currentValue(s: { opening_value: number | null; closing_value: n
   return isClosed(s.closing_value) ? Number(s.closing_value) : Number(s.opening_value) || 0;
 }
 
+/** Categoria de patrimônio do tipo passivo (dívida). O valor é lançado positivo: o saldo devedor. */
+export function isLiabilityType(assetType: string | null | undefined): boolean {
+  return assetType === "liability";
+}
+
+/** Valor com sinal para o patrimônio: passivo sempre subtrai; nos demais vale o sinal lançado. */
+export function signedPatrimonyValue(value: number, assetType: string | null | undefined): number {
+  return isLiabilityType(assetType) ? -Math.abs(value) : value;
+}
+
+/** Valor do item no mês já com o sinal de ativo/passivo. */
+export function patrimonyItemValue(s: {
+  opening_value: number | null;
+  closing_value: number | null;
+  asset_categories?: { asset_type?: string | null } | null;
+}): number {
+  return signedPatrimonyValue(currentValue(s), s.asset_categories?.asset_type);
+}
+
 export interface MonthPoint {
   month: string;       // yyyy-MM-dd (como gravado)
   total: number | null; // null = mês com item sem fechamento (fica fora do gráfico)

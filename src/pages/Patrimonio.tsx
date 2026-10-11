@@ -19,7 +19,7 @@ import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { PatrimonyForm } from "@/components/patrimonio/PatrimonyForm";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
-import { currentValue, isClosed } from "@/lib/snapshots";
+import { isClosed, patrimonyItemValue, signedPatrimonyValue } from "@/lib/snapshots";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -85,7 +85,7 @@ export default function Patrimonio() {
       p.items += 1;
       if (!isClosed(sn.closing_value)) p.open += 1;
       else {
-        const v = Number(sn.closing_value);
+        const v = signedPatrimonyValue(Number(sn.closing_value), sn.asset_categories?.asset_type);
         if (v >= 0) p.total_assets += v; else p.total_liabilities += -v;
         p.net_patrimony += v;
       }
@@ -102,7 +102,7 @@ export default function Patrimonio() {
 
   const totals = useMemo(() => {
     // PAT-03: item sem fechamento entra pela abertura (antes contava zero e distorcia a composição).
-    const vals = filteredSnapshots.map(currentValue);
+    const vals = filteredSnapshots.map(patrimonyItemValue);
     const assets = vals.filter((v) => v > 0).reduce((sum, v) => sum + v, 0);
     const liabilities = vals.filter((v) => v < 0).reduce((sum, v) => sum + Math.abs(v), 0);
     const open = filteredSnapshots.filter((s) => !isClosed(s.closing_value)).length;
@@ -117,13 +117,13 @@ export default function Patrimonio() {
     const prevMonth = sortedMonths[currentIdx - 1];
     const prevSnapshots = filterByEntity(snapshots).filter((s) => s.reference_month === prevMonth);
     if (prevSnapshots.length === 0) return null;
-    const vals = prevSnapshots.map(currentValue);
+    const vals = prevSnapshots.map(patrimonyItemValue);
     const assets = vals.filter((v) => v > 0).reduce((sum, v) => sum + v, 0);
     const liabilities = vals.filter((v) => v < 0).reduce((sum, v) => sum + Math.abs(v), 0);
     const byCat = new Map<string, number>();
     prevSnapshots.forEach((sn) => {
       const k = sn.asset_categories?.name || "Sem categoria";
-      byCat.set(k, (byCat.get(k) || 0) + currentValue(sn));
+      byCat.set(k, (byCat.get(k) || 0) + patrimonyItemValue(sn));
     });
     return { assets, liabilities, net: assets - liabilities, byCat };
   }, [snapshots, activeMonth, months, view]);
@@ -133,7 +133,7 @@ export default function Patrimonio() {
     filteredSnapshots.forEach((s) => {
       const catName = s.asset_categories?.name || "Sem categoria";
       const existing = map.get(catName) || { name: catName, total: 0, items: 0 };
-      existing.total += currentValue(s);
+      existing.total += patrimonyItemValue(s);
       existing.items += 1;
       map.set(catName, existing);
     });
@@ -172,7 +172,10 @@ export default function Patrimonio() {
     }
   };
 
-  const lastMonth = months[months.length - 1];
+  // months está em ordem decrescente: o mais recente é months[0]. Antes usava o mais ANTIGO:
+  // o botão só habilitava com o primeiro mês selecionado, a mensagem citava esse mês e a
+  // função do banco apagava o mês mais RECENTE.
+  const lastMonth = months[0];
   const isLastMonthSelected = activeMonth === lastMonth;
   const canUndo = months.length > 1 && isLastMonthSelected;
 
@@ -188,7 +191,7 @@ export default function Patrimonio() {
       if (error) throw error;
       toast.success(`Registros de ${fmtMonth(lastMonth)} excluídos com sucesso`);
       queryClient.invalidateQueries({ queryKey: ["patrimony_snapshots"] });
-      setSelectedMonth(months[months.length - 2]);
+      setSelectedMonth(months[1]);
     } catch (e: any) {
       toast.error("Erro ao desfazer: " + e.message);
     } finally {
@@ -355,12 +358,13 @@ export default function Patrimonio() {
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="reference_month" tickFormatter={fmtMonth} className="text-[10px]" />
-                <YAxis tickFormatter={(v) => fmt(v)} className="text-[10px]" width={100} />
+                <YAxis yAxisId="left" tickFormatter={(v) => fmt(v)} className="text-[10px]" width={100} />
+                <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => fmt(v)} className="text-[10px]" width={90} />
                 <Tooltip formatter={(v: number) => fmt(v)} labelFormatter={fmtMonth} />
                 <Legend />
-                <Line type="monotone" dataKey="total_assets" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-                <Line type="monotone" dataKey="total_liabilities" name="Passivos" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
-                <Line type="monotone" dataKey="net_patrimony" name="Patrimônio Líquido" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                <Line type="monotone" yAxisId="left" dataKey="total_assets" name="Ativos" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                <Line type="monotone" yAxisId="right" dataKey="total_liabilities" name="Passivos (eixo à direita)" stroke="hsl(var(--destructive))" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
+                <Line type="monotone" yAxisId="left" dataKey="net_patrimony" name="Patrimônio Líquido" stroke="hsl(142, 76%, 36%)" strokeWidth={2} dot={{ r: 3 }} connectNulls={false} />
               </LineChart>
             </ResponsiveContainer>
             {openMonths.length > 0 && (

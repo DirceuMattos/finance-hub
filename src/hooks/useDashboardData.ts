@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { format, addMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { FinancialEntity } from "@/types/database";
-import { currentValue, isClosed, monthlySeries, nextMonthStart } from "@/lib/snapshots";
+import { isClosed, monthlySeries, nextMonthStart, patrimonyItemValue, signedPatrimonyValue } from "@/lib/snapshots";
 
 type ViewType = "consolidated" | "personal" | "business";
 
@@ -321,7 +321,7 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("patrimony_snapshots")
-        .select("opening_value, closing_value, reference_month, asset_category_id, financial_entity_id, asset_categories(name)")
+        .select("opening_value, closing_value, reference_month, asset_category_id, financial_entity_id, asset_categories(name, asset_type)")
         .order("reference_month", { ascending: false });
       if (error) throw error;
       if (!data || data.length === 0) return { total: 0, byCategory: [], latestMonth: null, openItems: 0 };
@@ -339,13 +339,13 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
         ? latestItems.filter((d: any) => filterIds.includes(d.financial_entity_id))
         : latestItems;
 
-      const total = filtered.reduce((s: number, d: any) => s + currentValue(d), 0);
+      const total = filtered.reduce((s: number, d: any) => s + patrimonyItemValue(d), 0);
       const openItems = filtered.filter((d: any) => !isClosed(d.closing_value)).length;
 
       const catMap = new Map<string, number>();
       filtered.forEach((d: any) => {
         const name = d.asset_categories?.name || "Outros";
-        catMap.set(name, (catMap.get(name) || 0) + currentValue(d));
+        catMap.set(name, (catMap.get(name) || 0) + patrimonyItemValue(d));
       });
 
       const byCategory = Array.from(catMap.entries())
@@ -366,10 +366,10 @@ export function useDashboardData(view: ViewType = "consolidated", selectedMonth:
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("patrimony_snapshots")
-        .select("reference_month, closing_value, financial_entity_id");
+        .select("reference_month, closing_value, financial_entity_id, asset_categories(asset_type)");
       if (error) return [];
       const rows = ((data || []) as any[]).filter((d) => !(filterIds && filterIds.length > 0) || filterIds.includes(d.financial_entity_id));
-      return monthlySeries(rows).slice(-12).map((p) => ({
+      return monthlySeries(rows, (r: any) => signedPatrimonyValue(Number(r.closing_value) || 0, r.asset_categories?.asset_type)).slice(-12).map((p) => ({
         reference_month: p.month,
         net_patrimony: p.total,
         open: p.open,

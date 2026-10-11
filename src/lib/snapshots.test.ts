@@ -33,3 +33,22 @@ describe("snapshots", () => {
     expect(parseMoneyInput("abc")).toBeUndefined();
   });
 });
+
+import { isLiabilityType, patrimonyItemValue, signedPatrimonyValue } from "./snapshots";
+
+describe("passivos no patrimônio", () => {
+  it("categoria liability sempre subtrai, mesmo lançada positiva", () => {
+    expect(isLiabilityType("liability")).toBe(true);
+    expect(signedPatrimonyValue(120000, "liability")).toBe(-120000);
+    expect(signedPatrimonyValue(-500, "liability")).toBe(-500);
+  });
+  it("ativo mantém o sinal lançado (conta negativa continua negativa)", () => {
+    expect(signedPatrimonyValue(-1305.27, "cash")).toBe(-1305.27);
+    expect(signedPatrimonyValue(150000, "vehicle")).toBe(150000);
+    expect(signedPatrimonyValue(10, undefined)).toBe(10);
+  });
+  it("valor do item usa fechamento ou abertura com o sinal da categoria", () => {
+    expect(patrimonyItemValue({ opening_value: 50000, closing_value: null, asset_categories: { asset_type: "liability" } })).toBe(-50000);
+    expect(patrimonyItemValue({ opening_value: 1, closing_value: 0, asset_categories: { asset_type: "investment" } })).toBe(0);
+  });
+});
