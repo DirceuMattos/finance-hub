@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils";
 
 type ViewType = "consolidated" | "personal" | "business";
 
+const AI_ENABLED = false;
+
 const fmtCur = (v: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const fmtShort = (v: number) =>
@@ -374,7 +376,14 @@ export default function Dashboard() {
 
           {/* AI Analysis */}
           <div className="mt-4 pt-4 border-t border-border">
-            {!aiAnalysis && !aiLoading && (
+            {/* Análise por IA desligada na migração para a Cloudflare (usava o gateway do Lovable).
+                Religar só depois de escolher o provedor e decidir sobre LGPD. */}
+            {!AI_ENABLED && (
+              <p className="text-xs text-muted-foreground flex items-center gap-2">
+                <Sparkles className="h-4 w-4" />Análise por IA desativada temporariamente.
+              </p>
+            )}
+            {AI_ENABLED && !aiAnalysis && !aiLoading && (
               <Button
                 variant="outline"
                 size="sm"
