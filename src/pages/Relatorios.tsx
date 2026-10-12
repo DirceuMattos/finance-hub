@@ -73,7 +73,8 @@ export default function Relatorios() {
 
   const loadRecurrences = async () => {
     if (recLoaded) return;
-    const { supabase } = await import("@/integrations/supabase/client");
+    // Banco do próprio projeto (antes lia o banco do Lovable Cloud por engano)
+    const { supabase } = await import("@/lib/supabaseClient");
     const { data } = await (supabase as any).from("recurrences").select("*").order("description");
     setRecurrences(data || []);
     setRecLoaded(true);
