@@ -114,6 +114,18 @@ export function reconcileMonth(account: ReconAccount, txs: ReconTransaction[], m
   };
 }
 
+/** Saldo pela regra oficial no fim do dia `date` (yyyy-MM-dd). */
+export function balanceAt(account: ReconAccount, txs: ReconTransaction[], date: string): number {
+  const base = (account.opening_balance_date || "1900-01-01").slice(0, 10);
+  let s = Number(account.opening_balance) || 0;
+  for (const t of txs) {
+    if (!counts(t, base)) continue;
+    const d = effectiveDate(t);
+    if (d && d <= date) s += signedAmount(t);
+  }
+  return round2(s);
+}
+
 /** Saldo pela regra oficial considerando tudo até hoje (deve bater com current_balance). */
 export function officialBalance(account: ReconAccount, txs: ReconTransaction[]): number {
   const base = (account.opening_balance_date || "1900-01-01").slice(0, 10);

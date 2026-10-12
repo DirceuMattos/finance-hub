@@ -14,6 +14,7 @@ import { useReconciliationData } from "@/hooks/useReconciliation";
 import { officialBalance, reconcileMonth, reconciliationCsv } from "@/lib/reconciliation";
 import { formatIsoDateBR } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
+import { StatementImportPanel } from "@/components/conciliacao/StatementImportPanel";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const monthLabel = (m: string) => {
@@ -95,6 +96,8 @@ export default function Conciliacao() {
       </div>
 
       {error && <p className="text-sm text-destructive mb-4">Não foi possível carregar os dados: {(error as Error).message}</p>}
+
+      {data && <StatementImportPanel accounts={data.accounts} byAccount={data.byAccount} />}
 
       {/* Visão geral: todas as contas no mês */}
       <Card className="mb-6">
