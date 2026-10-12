@@ -9,12 +9,15 @@ DECLARE
   c_bra  CONSTANT uuid := '32c74cda-2fcf-46a6-b5af-197a53a1e489';
   c_itpf CONSTANT uuid := 'f48f81d0-8272-420f-ad5d-38d024621665';
   c_apo  CONSTANT uuid := '74a3d247-8a0f-4359-a550-9a4ec33062b0';
+  c_itpj CONSTANT uuid := 'adb2665f-a7d2-46bb-bcf7-10d997be97a3';
+  e_pj   CONSTANT uuid := 'bc33f107-216c-455f-a698-89c847b7a393';
   e_pf   CONSTANT uuid := '7235f36b-97c2-4d9f-8467-3d205fc6952b';
   k_itau CONSTANT text := 'Itaú 2223 - Pessoal';
   nota   CONSTANT text := 'Conciliação com extrato em 12/10/2026 (passo 3)';
   aj_nupj CONSTANT uuid := '7a4c6658-1c11-44cf-b713-584ecbcdd34b';
   aj_bra  CONSTANT uuid := '04f0070b-251c-4dbb-aff4-560f89684204';
   aj_itpf CONSTANT uuid := '15331d12-0fcd-4371-b28a-c4aacf66dfd2';
+  aj_itpj CONSTANT uuid := 'fda2e9bf-ce14-472c-9b09-5b087d8952cf';
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.transactions WHERE notes LIKE 'Conciliação com extrato em 12/10/2026 (passo 2)%') THEN
     RAISE EXCEPTION 'Passo 2 não foi executado. Nada foi alterado.';
@@ -23,12 +26,14 @@ BEGIN
     RAISE EXCEPTION 'Passo 3 já executado. Nada foi alterado.';
   END IF;
 
-  EXECUTE format($q$CREATE TABLE archive.conciliacao3_20261012 AS SELECT * FROM public.transactions
+  EXECUTE $q$CREATE TABLE archive.conciliacao3_20261012 AS SELECT * FROM public.transactions
    WHERE id IN ('ea0558f6-f4e0-4af5-99ab-9dba46b8938e','b73602a8-4e2f-4dbb-81f0-28c316dd780a','3e69d631-9011-40cc-b372-ff0a2a1c2ba0',
                 '7929a883-0d0b-45b0-809d-02ec4f2ca200','7d867399-d10c-4f2d-9db2-7d589b774915','40a4e392-6b49-4e4c-9db5-6c092f55475c',
                 '12983b8e-b65b-49cc-8fba-fc1d03010e55','50ed2c2a-f175-4122-8951-6b87a9ae137c','afab4166-6225-4442-b2c7-e1f5b8d598d9',
                 '1a5a189f-d43c-4014-967f-27a5c4895518','c6d74595-1469-49db-8580-b389d3691670','185893a5-aa2d-465e-9e95-043fa2ba746c',
-                '798fdbe8-d922-46fb-921e-bab002abf637', %L, %L, %L)$q$, aj_nupj, aj_bra, aj_itpf);
+                '798fdbe8-d922-46fb-921e-bab002abf637', '7a4c6658-1c11-44cf-b713-584ecbcdd34b', '04f0070b-251c-4dbb-aff4-560f89684204',
+                '15331d12-0fcd-4371-b28a-c4aacf66dfd2', 'fda2e9bf-ce14-472c-9b09-5b087d8952cf')
+      OR (status = 'planned' AND (description LIKE 'Contratação Dr. Multas - Recurso 7979 (%' OR description LIKE 'Recurso Judicial Detran (%'))$q$;
   REVOKE ALL ON archive.conciliacao3_20261012 FROM PUBLIC, anon, authenticated;
 
   -- 1. Itens pagos em julho (fatura anterior, antes da PJ pagar): voltam para a conta original
@@ -38,10 +43,19 @@ BEGIN
      AND t.id IN ('ea0558f6-f4e0-4af5-99ab-9dba46b8938e','b73602a8-4e2f-4dbb-81f0-28c316dd780a','3e69d631-9011-40cc-b372-ff0a2a1c2ba0','7929a883-0d0b-45b0-809d-02ec4f2ca200');
   GET DIAGNOSTICS v_n = ROW_COUNT; IF v_n <> 4 THEN RAISE EXCEPTION '1: esperados 4, alterados %', v_n; END IF;
 
-  -- 2. Dr. Multas (4/10) e Recurso Detran (1/5) não estão nas faturas Itaú: pagos pela Aposenta-PF
-  UPDATE public.transactions SET account_id = c_apo, notes = concat_ws(' | ', notes, nota || ': não consta nas faturas Itaú')
+  -- 2. Dr. Multas e Recurso Detran estão no cartão de empresas do Itaú, debitado na conta Itaú-PJ.
+  --    A Nu-Bank PJ mandou R$ 500 por Pix para a Itaú-PJ em 25/09 para cobrir esse pagamento e outros custos.
+  UPDATE public.transactions SET account_id = c_itpj, center_cost = NULL, notes = concat_ws(' | ', notes, nota || ': cartão de empresas Itaú, débito na Itaú-PJ')
    WHERE id IN ('7d867399-d10c-4f2d-9db2-7d589b774915','40a4e392-6b49-4e4c-9db5-6c092f55475c') AND account_id = c_nupj;
-  GET DIAGNOSTICS v_n = ROW_COUNT; IF v_n <> 2 THEN RAISE EXCEPTION '2: esperados 2, alterados %', v_n; END IF;
+  GET DIAGNOSTICS v_n = ROW_COUNT; IF v_n <> 2 THEN RAISE EXCEPTION '2a: esperados 2, alterados %', v_n; END IF;
+  UPDATE public.transactions SET account_id = c_itpj, center_cost = NULL, notes = concat_ws(' | ', notes, nota || ': cartão de empresas Itaú, débito na Itaú-PJ')
+   WHERE status = 'planned' AND account_id = c_apo
+     AND (description LIKE 'Contratação Dr. Multas - Recurso 7979 (%' OR description LIKE 'Recurso Judicial Detran (%');
+  GET DIAGNOSTICS v_n = ROW_COUNT; IF v_n <> 10 THEN RAISE EXCEPTION '2b: esperadas 10 parcelas futuras, alteradas %', v_n; END IF;
+  INSERT INTO public.transactions (description, transaction_type, category_id, financial_entity_id, account_id, amount,
+                                   competence_date, due_date, payment_date, status, source_type, notes)
+  VALUES ('Pix recebido da Nu-Bank PJ (cobertura cartão de empresas)', 'income', NULL, e_pj, c_itpj, 500.00,
+          '2026-09-25', '2026-09-25', '2026-09-25', 'paid', 'manual', nota || ': par da saída "Transf. Valor para Itaú Empresa" na Nu-Bank PJ');
 
   -- 3. iPhone (2/21) está na fatura Itaú 3027 de ago, paga pela Nu-Bank PJ
   UPDATE public.transactions SET account_id = c_nupj WHERE id = '12983b8e-b65b-49cc-8fba-fc1d03010e55' AND account_id = c_apo AND amount = 248.52;
@@ -86,7 +100,7 @@ BEGIN
   PERFORM public.recalculate_account_balances_from_date('2026-04-01');
 
   -- 7. Recalcula os ajustes de conciliação para cada conta continuar igual ao extrato
-  FOR r IN SELECT * FROM (VALUES (aj_nupj, c_nupj, 4748.24, 888.26), (aj_bra, c_bra, -3993.92, -5318.15), (aj_itpf, c_itpf, -1060.41, -335.13)) AS x(aj, conta, extrato, esperado) LOOP
+  FOR r IN SELECT * FROM (VALUES (aj_nupj, c_nupj, 4748.24, 888.26), (aj_bra, c_bra, -3993.92, -5318.15), (aj_itpf, c_itpf, -1060.41, -335.13), (aj_itpj, c_itpj, 32.71, 1.71)) AS x(aj, conta, extrato, esperado) LOOP
     SELECT current_balance INTO v_bal FROM public.accounts WHERE id = r.conta;
     SELECT CASE WHEN transaction_type = 'income' THEN amount ELSE -amount END INTO v_signed FROM public.transactions WHERE id = r.aj;
     v_new := v_signed + (r.extrato - v_bal);
@@ -111,7 +125,7 @@ COMMIT;
 
 SELECT a.name AS conta, a.current_balance AS saldo_app, x.extrato, round(a.current_balance - x.extrato, 2) AS diferenca
   FROM public.accounts a
-  JOIN (VALUES ('Nu-Bank - PJ', 4748.24), ('BRA - PF', -3993.92), ('Itaú - PF', -1060.41), ('XP - Digital', 35.23)) AS x(nome, extrato) ON x.nome = a.name
+  JOIN (VALUES ('Nu-Bank - PJ', 4748.24), ('BRA - PF', -3993.92), ('Itaú - PF', -1060.41), ('XP - Digital', 35.23), ('Ítau - PJ', 32.71)) AS x(nome, extrato) ON x.nome = a.name
 UNION ALL
 SELECT 'previstos gerados: ' || r.description, COUNT(t.*)::numeric, NULL, NULL
   FROM public.recurrences r LEFT JOIN public.transactions t ON t.source_type = 'recurrence' AND t.source_id = r.id
