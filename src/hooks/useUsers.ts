@@ -1,8 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase as extSupabase } from "@/lib/supabaseClient";
+import { supabase as extSupabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabaseClient";
 import { toast } from "sonner";
 
-const FUNCTIONS_BASE = `https://${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co/functions/v1`;
+// Função publicada no próprio projeto Supabase (antes ficava no Lovable Cloud).
+const FUNCTIONS_BASE = `${SUPABASE_URL}/functions/v1`;
 
 interface AppUser {
   id: string;
@@ -25,7 +26,7 @@ async function invokeManageUsers(method: string, body?: any) {
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
-      apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      apikey: SUPABASE_ANON_KEY,
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
