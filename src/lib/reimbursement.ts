@@ -8,6 +8,7 @@ export interface ReimbursementInput {
   accountId: string;
   accountEntityId: string | null | undefined;
   categoryId: string | null | undefined;
+  cardId?: string;
   cardName: string;
   dueDate: string; // vencimento da fatura, yyyy-MM-dd
   referenceLabel?: string;
@@ -21,6 +22,51 @@ export interface ReimbursementResult {
 }
 
 const fail = (error: string): ReimbursementResult => ({ ok: false, error, amount: 0, payload: null });
+
+/** Marcador gravado nas observações para ligar o reembolso ao cartão (sem coluna nova no banco). */
+export const reimbursementMarker = (cardId: string) => `[reembolso-cartao:${cardId}]`;
+
+export interface ReimbursementTx {
+  id: string;
+  description: string | null;
+  notes: string | null;
+  amount: number;
+  due_date: string;
+  status: string;
+  payment_date: string | null;
+  account_id: string | null;
+}
+
+/**
+ * O reembolso pertence à fatura quando vence no mesmo dia da fatura e
+ * tem o marcador do cartão (novos) ou a descrição padrão do modal (lançados antes do marcador).
+ */
+export function isReimbursementOf(tx: ReimbursementTx, card: { id: string; name: string }, invoiceDueDate: string): boolean {
+  if (tx.status === "cancelled" || tx.due_date !== invoiceDueDate) return false;
+  if ((tx.notes || "").includes(reimbursementMarker(card.id))) return true;
+  const prefix = `Reembolso — ${card.name}`;
+  const desc = tx.description || "";
+  return desc === prefix || desc.startsWith(`${prefix} (`);
+}
+
+export interface ReimbursementSummary {
+  planned: number;  // previsto (a receber)
+  received: number; // já recebido (pago)
+  total: number;
+  count: number;
+}
+
+export function summarizeReimbursements(txs: ReimbursementTx[]): ReimbursementSummary {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  let planned = 0, received = 0, count = 0;
+  for (const t of txs) {
+    if (t.status === "cancelled") continue;
+    const v = Math.abs(Number(t.amount) || 0);
+    if (t.status === "paid") received += v; else planned += v;
+    count++;
+  }
+  return { planned: r2(planned), received: r2(received), total: r2(planned + received), count };
+}
 
 export function buildReimbursement(input: ReimbursementInput): ReimbursementResult {
   const amount = evaluateExpression(input.amountText);
@@ -48,7 +94,7 @@ export function buildReimbursement(input: ReimbursementInput): ReimbursementResu
       status: "planned",
       source_type: "manual",
       center_cost: null,
-      notes: `Lançado pelo modal da fatura do cartão ${input.cardName}.`,
+      notes: `Lançado pelo modal da fatura do cartão ${input.cardName}.${input.cardId ? ` ${reimbursementMarker(input.cardId)}` : ""}`,
     },
   };
 }

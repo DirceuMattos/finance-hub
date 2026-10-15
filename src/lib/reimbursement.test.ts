@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReimbursement } from "./reimbursement";
+import { buildReimbursement, isReimbursementOf, reimbursementMarker, summarizeReimbursements, type ReimbursementTx } from "./reimbursement";
 
 const base = {
   amountText: "1.234,56",
@@ -49,5 +49,38 @@ describe("buildReimbursement", () => {
     const r = buildReimbursement({ ...base, ...patch });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toContain(msg);
+  });
+});
+
+describe("vínculo do reembolso com a fatura", () => {
+  const card = { id: "card-1", name: "Nu Bank 4747 - Empresarial" };
+  const tx = (p: Partial<ReimbursementTx>): ReimbursementTx => ({
+    id: "t", description: "", notes: null, amount: 100, due_date: "2026-10-25", status: "planned", payment_date: null, account_id: "a", ...p,
+  });
+
+  it("grava o marcador do cartão nas observações", () => {
+    const r = buildReimbursement({ ...base, cardId: "card-1" });
+    expect(String(r.payload!.notes)).toContain(reimbursementMarker("card-1"));
+  });
+
+  it("reconhece pelo marcador, mesmo com descrição alterada", () => {
+    expect(isReimbursementOf(tx({ description: "Outro texto", notes: "x [reembolso-cartao:card-1]" }), card, "2026-10-25")).toBe(true);
+  });
+
+  it("reconhece reembolsos antigos pela descrição padrão", () => {
+    expect(isReimbursementOf(tx({ description: "Reembolso — Nu Bank 4747 - Empresarial (fatura Outubro 2026)" }), card, "2026-10-25")).toBe(true);
+    expect(isReimbursementOf(tx({ description: "Reembolso — Nu Bank 4747 - Empresarial" }), card, "2026-10-25")).toBe(true);
+  });
+
+  it("ignora outro cartão, outro vencimento e cancelados", () => {
+    expect(isReimbursementOf(tx({ description: "Reembolso — Nu Bank 4747 - Empresarial 2 (fatura X)" }), card, "2026-10-25")).toBe(false);
+    expect(isReimbursementOf(tx({ notes: "[reembolso-cartao:card-2]" }), card, "2026-10-25")).toBe(false);
+    expect(isReimbursementOf(tx({ notes: "[reembolso-cartao:card-1]", due_date: "2026-11-25" }), card, "2026-10-25")).toBe(false);
+    expect(isReimbursementOf(tx({ notes: "[reembolso-cartao:card-1]", status: "cancelled" }), card, "2026-10-25")).toBe(false);
+  });
+
+  it("soma previsto e recebido", () => {
+    const s = summarizeReimbursements([tx({ amount: 100.1 }), tx({ amount: 50.2, status: "paid" }), tx({ amount: 9, status: "cancelled" })]);
+    expect(s).toEqual({ planned: 100.1, received: 50.2, total: 150.3, count: 2 });
   });
 });

@@ -14,7 +14,8 @@ import { AlertTriangle, Banknote, Calculator, CalendarClock, CheckCircle2, HandC
 import { useAccounts } from "@/hooks/useAccounts";
 import { cardCycleWindow, formatIsoDateBR, normalizeDueDay } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
-import { buildReimbursement } from "@/lib/reimbursement";
+import { buildReimbursement, isReimbursementOf, summarizeReimbursements } from "@/lib/reimbursement";
+import { useCardReimbursements } from "@/hooks/useCardReimbursements";
 
 interface Props {
   open: boolean;
@@ -81,24 +82,17 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
 
   useEffect(() => { setNewDueDate(nextCycle.end); }, [nextCycle.end]);
   useEffect(() => {
-    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); }
+    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); setCancelReimbId(null); }
   }, [open]);
 
-  const { data: reimbCategoryId = null } = useQuery({
-    queryKey: ["category_reembolsos"],
-    enabled: open,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("categories")
-        .select("id")
-        .eq("name", "Reembolsos")
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return (data?.id as string) ?? null;
-    },
-  });
+  // Reembolsos já lançados para esta fatura (vencimento = vencimento da fatura).
+  const { data: reimbTxs = [], categoryId: reimbCategoryId } = useCardReimbursements(cycle.end, cycle.end, open);
+  const reimbursements = useMemo(
+    () => reimbTxs.filter((t) => isReimbursementOf(t, { id: cardId, name: cardName }, cycle.end)),
+    [reimbTxs, cardId, cardName, cycle.end],
+  );
+  const reimbSummary = useMemo(() => summarizeReimbursements(reimbursements), [reimbursements]);
+  const [cancelReimbId, setCancelReimbId] = useState<string | null>(null);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["card_invoice_items", cardId, referenceMonth],
@@ -254,6 +248,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     accountId: reimbAccount,
     accountEntityId: reimbAccountObj?.financial_entity_id,
     categoryId: reimbCategoryId,
+    cardId,
     cardName,
     dueDate: cycle.end,
     referenceLabel,
@@ -270,14 +265,37 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     try {
       const { error } = await (supabase as any).from("transactions").insert(reimb.payload);
       if (error) throw error;
-      ["transactions", "dashboard_account_balances_split", "accounts"]
-        .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+      invalidateReimb();
       toast.success(`Reembolso de ${fmt(reimb.amount)} lançado como receita prevista em ${accountName(reimbAccount)}, vencimento ${formatIsoDateBR(cycle.end)}.`);
       setReimbAmount("");
       setReimbConfirm(false);
       setShowReimb(false);
     } catch (e: any) {
       toast.error("Não foi possível lançar o reembolso: " + (e?.message || "erro desconhecido"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const invalidateReimb = () =>
+    ["transactions", "card_reimbursements", "dashboard_account_balances_split", "accounts"]
+      .forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
+
+  // Cancelar só reembolso ainda previsto (status vira "cancelled"; reversível em Lançamentos).
+  const cancelReimbursement = async (id: string) => {
+    setSaving(true);
+    try {
+      const { error } = await (supabase as any)
+        .from("transactions")
+        .update({ status: "cancelled" })
+        .eq("id", id)
+        .eq("status", "planned");
+      if (error) throw error;
+      invalidateReimb();
+      toast.success("Reembolso cancelado.");
+      setCancelReimbId(null);
+    } catch (e: any) {
+      toast.error("Não foi possível cancelar o reembolso: " + (e?.message || "erro desconhecido"));
     } finally {
       setSaving(false);
     }
@@ -491,6 +509,35 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
               )}
             </div>
           )}
+          {reimbursements.length > 0 && (
+            <div className="mt-2 rounded-md border p-2 space-y-1">
+              <p className="text-xs font-medium flex items-center gap-1">
+                <HandCoins className="h-3.5 w-3.5" />Reembolsos desta fatura ({reimbursements.length})
+              </p>
+              <ul className="text-xs divide-y">
+                {reimbursements.map((r) => (
+                  <li key={r.id} className="py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-mono w-24 text-right">{fmt(Math.abs(r.amount))}</span>
+                    <span className="text-muted-foreground min-w-0 flex-1">{accountName(r.account_id)}</span>
+                    {r.status === "paid" ? (
+                      <span className="text-emerald-700 dark:text-emerald-400">Recebido em {formatIsoDateBR(r.payment_date)}</span>
+                    ) : cancelReimbId === r.id ? (
+                      <span className="flex items-center gap-2">
+                        <span>Cancelar este reembolso?</span>
+                        <Button size="sm" variant="destructive" className="h-6 text-xs" onClick={() => cancelReimbursement(r.id)} disabled={saving}>Confirmar</Button>
+                        <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => setCancelReimbId(null)} disabled={saving}>Voltar</Button>
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <span className="text-amber-700 dark:text-amber-400">Previsto</span>
+                        <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setCancelReimbId(r.id)} disabled={saving}>Cancelar</Button>
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Itens */}
@@ -573,6 +620,13 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
             <div><p className="text-xs text-muted-foreground">Em aberto</p><p className="font-semibold text-amber-600">{fmt(totalPending)}</p></div>
             <div><p className="text-xs text-muted-foreground">Selecionado ({selectedItems.length}/{pending.length})</p><p className="font-semibold">{fmt(totalSelected)}</p></div>
             <div><p className="text-xs text-muted-foreground">Total do ciclo</p><p className="font-semibold">{fmt(totalPaid + totalPending)}</p></div>
+            {reimbSummary.count > 0 && (
+              <>
+                <div><p className="text-xs text-muted-foreground">Reembolso recebido</p><p className="font-semibold text-emerald-600">{fmt(reimbSummary.received)}</p></div>
+                <div><p className="text-xs text-muted-foreground">Reembolso previsto</p><p className="font-semibold text-sky-700 dark:text-sky-400">{fmt(reimbSummary.planned)}</p></div>
+                <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Custo líquido (total − reembolsos)</p><p className="font-semibold">{fmt(totalPaid + totalPending - reimbSummary.total)}</p></div>
+              </>
+            )}
           </div>
         )}
 
