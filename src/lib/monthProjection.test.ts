@@ -108,46 +108,55 @@ describe("projectMonth", () => {
 
 describe("suggestActions", () => {
   const entityType = (id: string) => (id === "E_PJ" ? "business" : "personal");
-  it("sugere transferência quando outra conta cobre, com alerta PF/PJ, e aponta teto", () => {
+  const cards = [{ name: "Nu PJ", entityId: "E_PJ", managerialLimit: 1000, dueDay: 25 }];
+
+  it("agrupa contas negativas no mês com transferência possível e alerta PF/PJ; faturas acima do teto", () => {
     const planned = [
       tx({ amount: 900, date: "2026-11-05" }),
-      tx({ amount: 1500, date: "2026-11-25", accountId: "pj", entityId: "E_PJ", cardName: "Nu PJ", categoryId: "food" }),
+      tx({ amount: 700, date: "2026-11-02", accountId: "pj", entityId: "E_PJ", cardName: "Nu PJ", categoryId: "food" }),
+      tx({ amount: 800, date: "2026-11-20", accountId: "pj", entityId: "E_PJ", cardName: "Nu PJ", categoryId: "food" }),
     ];
-    const p = projectMonth({ accounts, categories, cards: [{ name: "Nu PJ", entityId: "E_PJ", managerialLimit: 1000 }], planned, estimates: [], month: "2026-11", today: "2026-10-30" });
+    const p = projectMonth({ accounts, categories, cards, planned, estimates: [], month: "2026-11", today: "2026-10-30" });
+    expect(p.invoiceList).toHaveLength(1);
+    expect(p.invoiceList[0]).toMatchObject({ dueDate: "2026-11-25", total: 1500, count: 2 });
     const s = suggestActions({ projection: p, planned, estimates: [], entityType, today: "2026-10-30" });
-    const neg = s.find((x) => x.id === "neg-pf")!;
-    expect(neg.level).toBe("critical");
-    expect(neg.detail).toContain("Transferir R$");
-    expect(neg.detail).toContain("Nu-Bank PJ");
-    expect(neg.detail).toContain("contador");
-    expect(s.some((x) => x.id.startsWith("teto-Nu PJ"))).toBe(true);
-    expect(s.some((x) => x.level === "positive")).toBe(false);
+    expect(s.map((x) => x.id)).toEqual(["accounts", "cards"]);
+    expect(s[0].title).toBe("1 conta(s) ficam negativas no mês");
+    expect(s[0].detail).toContain("Nu-Bank PJ → BRA-PF R$");
+    expect(s[0].detail).toContain("contador");
   });
 
-  it("aponta falta de caixa consolidada e sobra quando tudo fica positivo", () => {
+  it("caixa total: falta no pior dia com a maior saída antes e entrada depois; sobra quando positivo", () => {
     const small: ProjAccount[] = [{ id: "pf", name: "BRA-PF", entityId: "E_PF", balance: 100 }];
     const planned = [tx({ amount: 600, date: "2026-11-05", description: "Aluguel" }), tx({ type: "income", amount: 2000, date: "2026-11-20", description: "Cliente A" })];
     const p = projectMonth({ accounts: small, categories, cards: [], planned, estimates: [], month: "2026-11", today: "2026-10-30" });
     const s = suggestActions({ projection: p, planned, estimates: [], entityType, today: "2026-10-30" });
-    const w = s.find((x) => x.id === "worst")!;
-    expect(w.title).toContain("05/11");
-    expect(w.detail).toContain("Cliente A");
+    expect(s[0].id).toBe("cash");
+    expect(s[0].title).toContain("05/11");
+    expect(s[0].detail).toContain("Aluguel");
+    expect(s[0].detail).toContain("Cliente A");
 
     const ok = projectMonth({ accounts, categories, cards: [], planned: [tx({ amount: 100 })], estimates: [], month: "2026-11", today: "2026-10-30" });
     expect(suggestActions({ projection: ok, planned: [], estimates: [], entityType, today: "2026-10-30" }).map((x) => x.level)).toEqual(["positive"]);
   });
 
-  it("categoria lançada muito acima da média", () => {
-    const p = projectMonth({ accounts, categories, cards: [], planned: [], estimates: [], month: "2026-11", today: "2026-10-30" });
-    const est = [{ categoryId: "food", name: "Alimentação", average: 1000, inMonth: 1600, gap: 0, months: 3 }];
-    const s = suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" });
-    expect(s.find((x) => x.id === "cat-food")?.detail).toContain("600,00");
+  it("estimativa só pesa nas decisões quando pedida", () => {
+    const est = [{ categoryId: "food", name: "Alimentação", average: 9000, inMonth: 0, gap: 9000, months: 3 }];
+    const p = projectMonth({ accounts, categories, cards: [], planned: [], estimates: est, month: "2026-11", today: "2026-10-30" });
+    expect(suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" })[0].id).toBe("surplus");
+    expect(suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30", useEstimate: true })[0].id).toBe("cash");
   });
 
-  it("não acusa categoria quando o excesso é um único lançamento grande", () => {
+  it("categorias acima do típico agregadas, ignorando lançamento único grande", () => {
     const p = projectMonth({ accounts, categories, cards: [], planned: [], estimates: [], month: "2026-11", today: "2026-10-30" });
-    const est = [{ categoryId: "loan", name: "Empréstimos", average: 2300, inMonth: 29200, gap: 0, months: 3, largest: 28000 }];
-    expect(suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" }).some((x) => x.id === "cat-loan")).toBe(false);
+    const est = [
+      { categoryId: "food", name: "Alimentação", average: 1000, inMonth: 1600, gap: 0, months: 3, largest: 300 },
+      { categoryId: "loan", name: "Empréstimos", average: 2300, inMonth: 29200, gap: 0, months: 3, largest: 28000 },
+    ];
+    const s = suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" });
+    const c = s.find((x) => x.id === "categories")!;
+    expect(c.title).toContain("600,00");
+    expect(c.detail).not.toContain("Empréstimos");
   });
 });
 
