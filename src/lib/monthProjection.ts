@@ -1,3 +1,6 @@
+// cardCycle: agrupa itens de cartão pela fatura (ciclo), não pela data de cada item.
+import { cardCycleMonthOf, cardCycleWindow } from "@/lib/cardCycle";
+
 // Projeção de caixa de curto prazo (mês atual ou próximos), dia a dia e por conta.
 // Funções puras: as consultas ficam em hooks/useMonthProjection.ts.
 // Nada aqui altera dados; o simulador só recalcula em memória.
@@ -39,6 +42,7 @@ export interface ProjCard {
   name: string;
   entityId: string;
   managerialLimit: number;
+  dueDay?: number | null;
 }
 
 export interface VariableEstimate {
@@ -62,6 +66,9 @@ export interface DayPoint {
   launched: number;      // saldo consolidado só com o que está lançado
   withEstimate: number;  // saldo consolidado com a estimativa de variáveis
   inMonth: boolean;
+  inflow: number;        // entradas lançadas no dia
+  outflow: number;       // saídas lançadas no dia
+  events: { description: string; amount: number }[]; // maiores movimentos do dia (saída negativa)
 }
 
 export interface AccountProjection {
@@ -76,6 +83,8 @@ export interface AccountProjection {
   firstNegative: string | null;
   income: number;
   expense: number;
+  monthMin: number;      // menor saldo dentro do mês projetado
+  monthMinDate: string;
 }
 
 export interface InvoiceProjection {
@@ -235,8 +244,13 @@ export function projectMonth(args: {
 
   // Movimento por dia e por conta.
   const byDay = new Map<string, Map<string, number>>();
+  const flows = new Map<string, { inflow: number; outflow: number; events: { description: string; amount: number }[] }>();
   for (const t of active) {
     const d = effDate(t);
+    const f = flows.get(d) ?? { inflow: 0, outflow: 0, events: [] };
+    if (t.type === "income") f.inflow += t.amount; else f.outflow += t.amount;
+    f.events.push({ description: t.cardName ? `Cartão ${t.cardName}` : t.description, amount: t.type === "income" ? t.amount : -t.amount });
+    flows.set(d, f);
     const key = t.accountId && accIds.has(t.accountId) ? t.accountId : "__sem_conta";
     const m = byDay.get(d) ?? new Map<string, number>();
     m.set(key, (m.get(key) || 0) + (t.type === "income" ? t.amount : -t.amount));
@@ -248,7 +262,8 @@ export function projectMonth(args: {
   const acc: Record<string, AccountProjection> = {};
   for (const a of accounts) {
     acc[a.id] = { id: a.id, name: a.name, entityId: a.entityId, current: r2(Number(a.balance) || 0), start: 0, end: 0,
-      min: Number(a.balance) || 0, minDate: today, firstNegative: (Number(a.balance) || 0) < 0 ? today : null, income: 0, expense: 0 };
+      min: Number(a.balance) || 0, minDate: today, firstNegative: (Number(a.balance) || 0) < 0 ? today : null, income: 0, expense: 0,
+      monthMin: Number.POSITIVE_INFINITY, monthMinDate: monthStart };
   }
 
   const days: DayPoint[] = [];
@@ -271,15 +286,20 @@ export function projectMonth(args: {
       if (b < acc[a.id].min - 0.004) { acc[a.id].min = b; acc[a.id].minDate = d; }
       if (b < -0.004 && !acc[a.id].firstNegative) acc[a.id].firstNegative = d;
       if (futureMonth && d === eve) acc[a.id].start = r2(b);
+      if (inMonth && b < acc[a.id].monthMin - 0.004) { acc[a.id].monthMin = b; acc[a.id].monthMinDate = d; }
     }
     const t = total();
     if (futureMonth && d === eve) { startBalance = r2(t); startWithEstimate = r2(t - estAcc); }
-    days.push({ date: d, launched: r2(t), withEstimate: r2(t - estAcc), inMonth });
+    const f = flows.get(d);
+    const events = f ? mergeEvents(f.events) : [];
+    days.push({ date: d, launched: r2(t), withEstimate: r2(t - estAcc), inMonth,
+      inflow: r2(f?.inflow ?? 0), outflow: r2(f?.outflow ?? 0), events });
   }
   for (const a of accounts) {
     if (!futureMonth) acc[a.id].start = acc[a.id].current;
     acc[a.id].end = r2(bal.get(a.id) || 0);
     acc[a.id].min = r2(acc[a.id].min);
+    acc[a.id].monthMin = Number.isFinite(acc[a.id].monthMin) ? r2(acc[a.id].monthMin) : acc[a.id].end;
   }
 
   // Totais do mês projetado (só o que vence dentro do mês; atrasados contam no mês atual).
@@ -298,8 +318,10 @@ export function projectMonth(args: {
   const inv = new Map<string, { cardName: string; dueDate: string; total: number; count: number; accounts: Set<string>; cats: Map<string, number> }>();
   for (const t of inMonthTx) {
     if (t.type !== "expense" || !t.cardName) continue;
-    const k = `${t.cardName}|${t.date}`;
-    const g = inv.get(k) ?? { cardName: t.cardName, dueDate: effDate(t), total: 0, count: 0, accounts: new Set<string>(), cats: new Map<string, number>() };
+    const card = cardMap.get(t.cardName);
+    const due = card ? cardCycleWindow(cardCycleMonthOf(t.date, card.dueDay), card.dueDay).end : t.date;
+    const k = `${t.cardName}|${due}`;
+    const g = inv.get(k) ?? { cardName: t.cardName, dueDate: due, total: 0, count: 0, accounts: new Set<string>(), cats: new Map<string, number>() };
     g.total += t.amount; g.count++;
     if (t.accountId) g.accounts.add(accName.get(t.accountId) || "—");
     const cn = (t.categoryId && catName.get(t.categoryId)) || "Sem categoria";
@@ -366,155 +388,111 @@ export function suggestActions(args: {
   estimates: VariableEstimate[];
   entityType: (entityId: string) => string | null; // personal | business
   today: string;
-  avgIncome?: number; // média mensal recebida nos meses de referência
+  avgIncome?: number;      // média mensal recebida nos meses de referência
+  useEstimate?: boolean;   // decisões com a estimativa de variáveis (padrão: só lançado)
 }): Suggestion[] {
-  const { projection: p, planned, estimates, entityType, today } = args;
+  const { projection: p, estimates, entityType } = args;
+  const worst = args.useEstimate ? p.worstWithEstimate : p.worstLaunched;
+  const end = args.useEstimate ? p.endWithEstimate : p.endLaunched;
   const out: Suggestion[] = [];
 
-  // 0. Receitas do mês bem abaixo do que costuma entrar: projeção incompleta.
+  // 1. Caixa somando as contas: pior dia ou fechamento negativo.
+  if (worst.balance < -0.5) {
+    const outs = p.days.filter((d) => d.inMonth && d.date <= worst.date)
+      .flatMap((d) => d.events.filter((e) => e.amount < 0).map((e) => ({ ...e, date: d.date })))
+      .sort((x, y) => x.amount - y.amount);
+    const ins = p.incomeList.filter((t) => t.date > worst.date);
+    const parts: string[] = [];
+    if (outs[0]) parts.push(`Maior saída antes: ${outs[0].description} ${brl(-outs[0].amount)} (${br(outs[0].date)}).`);
+    if (ins[0]) parts.push(`Maior entrada depois: ${ins[0].description} ${brl(ins[0].amount)} (${br(ins[0].date)}): antecipar ou mudar datas resolve o descasamento.`);
+    else parts.push("Não há entradas previstas depois desse dia: será preciso cortar, adiar ou renegociar.");
+    out.push({ id: "cash", level: "critical", title: `Faltam ${brl(-worst.balance)} no pior dia (${br(worst.date)})`, detail: parts.join(" ") });
+  } else if (end < -0.5) {
+    out.push({ id: "cash", level: "critical", title: `O mês fecha em ${brl(end)}`, detail: "Use o simulador para escolher o que adiar ou reduzir." });
+  }
+
+  // 2. Contas que ficam negativas dentro do mês, com transferências possíveis entre contas com folga.
+  const negs = p.accounts.filter((a) => a.monthMin < -0.5).sort((x, y) => x.monthMin - y.monthMin);
+  if (negs.length) {
+    const capacity = new Map(p.accounts.filter((a) => Math.min(a.min, a.monthMin) > 50).map((a) => [a.id, Math.min(a.min, a.monthMin)]));
+    const moves: string[] = [];
+    let cross = false;
+    for (const a of negs) {
+      const need = r2(-a.monthMin);
+      const donor = p.accounts
+        .filter((o) => o.id !== a.id && (capacity.get(o.id) ?? 0) >= need)
+        .sort((x, y) => Number(y.entityId === a.entityId) - Number(x.entityId === a.entityId) || (capacity.get(y.id)! - capacity.get(x.id)!))[0];
+      if (!donor) continue;
+      capacity.set(donor.id, capacity.get(donor.id)! - need);
+      if (donor.entityId !== a.entityId && entityType(donor.entityId) !== entityType(a.entityId)) cross = true;
+      moves.push(`${donor.name} → ${a.name} ${brl(need)} até ${br(a.monthMinDate)}`);
+    }
+    const list = negs.slice(0, 3).map((a) => `${a.name} ${brl(a.monthMin)} (${br(a.monthMinDate)})`).join("; ");
+    out.push({
+      id: "accounts",
+      level: "warning",
+      title: `${negs.length} conta(s) ficam negativas no mês`,
+      detail: `${list}${negs.length > 3 ? ` e mais ${negs.length - 3}` : ""}. `
+        + (moves.length ? `Transferências que cobrem: ${moves.join("; ")}.${cross ? " Entre PF e PJ, registre conforme orientação do contador." : ""}` : "Nenhuma conta tem folga para cobrir; ver o caixa total acima."),
+    });
+  }
+
+  // 3. Faturas acima do teto gerencial.
+  const over = p.invoiceList.filter((f) => f.managerialLimit > 0 && f.total > f.managerialLimit);
+  if (over.length) {
+    out.push({
+      id: "cards",
+      level: "warning",
+      title: `${over.length} fatura(s) acima do teto`,
+      detail: over.map((f) => `${f.cardName} ${brl(f.total)} (+${brl(r2(f.total - f.managerialLimit))})`).join("; ") + ". Segure novas compras nesses cartões até o fechamento.",
+    });
+  }
+
+  // 4. Receitas lançadas bem abaixo do que costuma entrar.
   if (args.avgIncome && args.avgIncome > 0 && p.income < args.avgIncome * 0.5) {
     out.push({
       id: "low-income",
       level: "warning",
-      title: `Receitas lançadas para o mês (${brl(p.income)}) estão bem abaixo da média recebida (${brl(args.avgIncome)})`,
-      detail: "Se há recebimentos esperados que ainda não estão no app, lance-os como previstos (ou crie recorrências). Sem isso, a projeção deste mês fica pessimista.",
+      title: `Receitas lançadas (${brl(p.income)}) bem abaixo da média recebida (${brl(args.avgIncome)})`,
+      detail: "Lance os recebimentos esperados (ou crie recorrências); sem isso a projeção fica pessimista.",
     });
   }
 
-  // 1. Higiene: previstos atrasados distorcem a projeção.
+  // 5. Categorias variáveis acima do valor típico (sem contar lançamento único grande).
+  const high = estimates
+    .filter((e) => !((e.largest ?? 0) > e.inMonth * 0.7) && e.average > 0 && e.inMonth > e.average * 1.3 && e.inMonth - e.average >= 200)
+    .sort((x, y) => (y.inMonth - y.average) - (x.inMonth - x.average));
+  if (high.length) {
+    const free = r2(high.reduce((s, e) => s + e.inMonth - e.average, 0));
+    out.push({
+      id: "categories",
+      level: "info",
+      title: `Gastos acima do habitual: voltar ao típico libera ${brl(free)}`,
+      detail: high.slice(0, 3).map((e) => `${e.name} ${brl(e.inMonth)} (típico ${brl(e.average)})`).join("; ") + ".",
+    });
+  }
+
+  // 6. Previstos vencidos.
   if (p.overdue.count > 0) {
     out.push({
       id: "overdue",
-      level: "warning",
-      title: `${p.overdue.count} lançamento(s) previstos já venceram`,
-      detail: `Eles entram como se fossem pagos hoje (efeito líquido ${brl(p.overdue.net)}). Se já foram pagos ou recebidos, baixe em Lançamentos; se não, reagende para a data real.`,
-    });
-  }
-
-  // 2. Contas que ficam negativas: transferência de outra conta ou adiamento.
-  const negatives = p.accounts.filter((a) => a.min < -0.5);
-  for (const a of negatives) {
-    const need = r2(-a.min);
-    const sameEntity = (o: AccountProjection) => o.entityId === a.entityId;
-    const donors = p.accounts
-      .filter((o) => o.id !== a.id && o.min > 50)
-      .sort((x, y) => Number(sameEntity(y)) - Number(sameEntity(x)) || y.min - x.min);
-    const full = donors.find((o) => o.min >= need);
-    const when = a.firstNegative ?? a.minDate;
-    if (full) {
-      const cross = !sameEntity(full);
-      out.push({
-        id: `neg-${a.id}`,
-        level: "critical",
-        title: `${a.name} fica negativa a partir de ${br(when)} (pior: ${brl(a.min)} em ${br(a.minDate)})`,
-        detail: `Transferir ${brl(need)} de ${full.name} até ${br(when)} cobre o buraco sem deixar ${full.name} negativa (fica com no mínimo ${brl(r2(full.min - need))}).`
-          + (cross ? ` Atenção: é uma transferência entre ${entityLabel(entityType(full.entityId))} e ${entityLabel(entityType(a.entityId))}; registre como aporte, pró-labore, distribuição ou empréstimo, conforme orientação do seu contador.` : ""),
-      });
-    } else {
-      const cands = planned
-        .filter((t) => t.type === "expense" && !t.cardName && t.accountId === a.id && t.date >= today && t.date <= a.minDate)
-        .sort((x, y) => y.amount - x.amount)
-        .slice(0, 3);
-      const partial = donors[0];
-      out.push({
-        id: `neg-${a.id}`,
-        level: "critical",
-        title: `${a.name} fica negativa a partir de ${br(when)} (pior: ${brl(a.min)} em ${br(a.minDate)})`,
-        detail: (partial ? `Nenhuma conta cobre sozinha; ${partial.name} pode ceder até ${brl(r2(partial.min))}. ` : "Nenhuma outra conta tem folga para cobrir. ")
-          + (cands.length ? `Candidatos a negociar data ou adiar: ${cands.map((t) => `${t.description} (${brl(t.amount)}, ${br(t.date)})`).join("; ")}.` : "Veja no simulador o que adiar ou antecipar."),
-      });
-    }
-  }
-
-  // 3. Caixa consolidado: pior dia do mês.
-  const worst = p.worstWithEstimate;
-  if (worst.balance < -0.5) {
-    const before = planned.filter((t) => t.type === "expense" && !t.cardName && t.date >= p.monthStart && t.date <= worst.date)
-      .sort((x, y) => y.amount - x.amount).slice(0, 3);
-    const later = p.incomeList.filter((t) => t.date > worst.date).slice(0, 2);
-    out.push({
-      id: "worst",
-      level: "critical",
-      title: `Falta de caixa de ${brl(-worst.balance)} em ${br(worst.date)}, somando todas as contas`,
-      detail: [
-        before.length ? `Maiores saídas até essa data: ${before.map((t) => `${t.description} (${brl(t.amount)}, ${br(t.date)})`).join("; ")}.` : "",
-        later.length ? `Receitas que chegam depois: ${later.map((t) => `${t.description} (${brl(t.amount)}, ${br(t.date)})`).join("; ")}; antecipar uma delas ou mudar o vencimento das saídas resolve o descasamento.` : "Sem receitas previstas depois desse dia: será preciso cortar, adiar ou renegociar.",
-      ].filter(Boolean).join(" "),
-    });
-  } else if (p.endWithEstimate < -0.5) {
-    out.push({
-      id: "end-neg",
-      level: "critical",
-      title: `O mês fecha negativo em ${brl(p.endWithEstimate)} (com estimativa)`,
-      detail: "Use o simulador para escolher o que adiar ou reduzir até o saldo final ficar positivo.",
-    });
-  }
-
-  // 4. Faturas acima do teto gerencial.
-  for (const f of p.invoiceList) {
-    if (f.managerialLimit > 0 && f.total > f.managerialLimit) {
-      out.push({
-        id: `teto-${f.cardName}-${f.dueDate}`,
-        level: "warning",
-        title: `Fatura ${f.cardName} (${br(f.dueDate)}) passa do teto em ${brl(r2(f.total - f.managerialLimit))}`,
-        detail: `Fatura de ${brl(f.total)} para teto de ${brl(f.managerialLimit)}. Mais pesaram: ${f.topCategories.map((c) => `${c.name} ${brl(c.total)}`).join(", ")}. Segure novas compras neste cartão até o fechamento.`,
-      });
-    }
-  }
-
-  // 5. Categorias variáveis já acima da média dos últimos meses.
-  for (const e of estimates) {
-    // Um único lançamento grande (quitação, imposto anual) não é hábito de consumo: fica de fora.
-    const oneOff = (e.largest ?? 0) > e.inMonth * 0.7;
-    if (!oneOff && e.average > 0 && e.inMonth > e.average * 1.3 && e.inMonth - e.average >= 200) {
-      out.push({
-        id: `cat-${e.categoryId}`,
-        level: "warning",
-        title: `${e.name}: ${brl(e.inMonth)} lançados, ${Math.round((e.inMonth / e.average - 1) * 100)}% acima da média`,
-        detail: `O valor típico dos últimos meses é ${brl(e.average)}. Voltar a esse patamar libera ${brl(r2(e.inMonth - e.average))}.`,
-      });
-    }
-  }
-
-  // 6. Estimativa de variáveis.
-  if (p.estimate > 0) {
-    const top = estimates.filter((e) => e.gap > 0).slice(0, 3);
-    out.push({
-      id: "estimate",
       level: "info",
-      title: `Gastos variáveis ainda não lançados: cerca de ${brl(p.estimate)}`,
-      detail: `Pelo valor típico (mediana) dos últimos 3 meses, sem transferências entre contas. Maiores: ${top.map((e) => `${e.name} ${brl(e.gap)}`).join(", ")}. Lançar uma previsão ou fixar um limite por categoria deixa a projeção mais fiel.`,
+      title: `${p.overdue.count} previsto(s) já vencido(s)`,
+      detail: "Entram como se fossem pagos hoje. Baixe em Lançamentos se já foram pagos, ou reagende.",
     });
   }
 
-  // 7. Dependência de uma receita.
-  const totalIncome = p.incomeList.reduce((s, t) => s + t.amount, 0);
-  const biggest = p.incomeList[0];
-  if (biggest && totalIncome > 0 && biggest.amount / totalIncome >= 0.5 && p.incomeList.length > 1) {
-    out.push({
-      id: "income-dep",
-      level: "info",
-      title: `${Math.round((biggest.amount / totalIncome) * 100)}% das entradas dependem de ${biggest.description}`,
-      detail: `Previsto para ${br(biggest.date)} (${brl(biggest.amount)}). Marque "E se atrasar?" no simulador para ver o impacto.`,
-    });
-  }
-
-  // 8. Sobra.
-  if (worst.balance >= 0 && p.endWithEstimate > 0.5 && negatives.length === 0) {
+  // 7. Folga.
+  if (worst.balance >= 0 && end > 0.5 && negs.length === 0) {
     out.push({
       id: "surplus",
       level: "positive",
-      title: `Sobra prevista de ${brl(p.endWithEstimate)} no fim do mês`,
-      detail: `O caixa não fica negativo em nenhum dia (menor saldo ${brl(worst.balance)} em ${br(worst.date)}). Antes de gastar, defina o destino: reserva para o mês seguinte e, havendo folga, amortização das dívidas mais caras.`,
+      title: `Sobra prevista de ${brl(end)}`,
+      detail: `Menor saldo do mês ${brl(worst.balance)} (${br(worst.date)}). Defina o destino antes de gastar: reserva e, havendo folga, amortizar a dívida mais cara.`,
     });
   }
 
-  const order: Record<SuggestionLevel, number> = { critical: 0, warning: 1, info: 2, positive: 3 };
-  return out.sort((a, b) => order[a.level] - order[b.level]);
-}
-
-function entityLabel(t: string | null) {
-  return t === "business" ? "a empresa (PJ)" : t === "personal" ? "a pessoa física (PF)" : "entidades diferentes";
+  return out;
 }
 
 /**
@@ -600,7 +578,8 @@ export interface MonthSummary {
   estimate: number;
   endLaunched: number;
   endWithEstimate: number;
-  worst: { date: string; balance: number };
+  worst: { date: string; balance: number };        // com estimativa
+  worstLaunched: { date: string; balance: number }; // só lançado
   lowIncome: boolean; // receitas lançadas bem abaixo da média recebida
 }
 
@@ -619,7 +598,18 @@ export function projectHorizon(
       endLaunched: p.endLaunched,
       endWithEstimate: p.endWithEstimate,
       worst: p.worstWithEstimate,
+      worstLaunched: p.worstLaunched,
       lowIncome: avgIncome > 0 && p.income < avgIncome * 0.5,
     };
   });
+}
+
+/** Junta movimentos de mesma descrição no dia e devolve os 4 maiores em valor absoluto. */
+function mergeEvents(list: { description: string; amount: number }[]) {
+  const m = new Map<string, number>();
+  for (const e of list) m.set(e.description, (m.get(e.description) || 0) + e.amount);
+  return Array.from(m.entries())
+    .map(([description, amount]) => ({ description, amount: r2(amount) }))
+    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
+    .slice(0, 4);
 }

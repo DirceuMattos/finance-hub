@@ -33,7 +33,7 @@ export interface ProjectionData {
 }
 
 /** Dados da projeção para os próximos `horizon` meses, filtrados pela visão PF/PJ. Somente leitura. */
-export function useMonthProjection(view: ProjectionView, today: string, horizon = 12) {
+export function useMonthProjection(view: ProjectionView, today: string, horizon = 3) {
   return useQuery({
     queryKey: ["month_projection", view, today, horizon],
     staleTime: 60_000,
@@ -50,7 +50,7 @@ export function useMonthProjection(view: ProjectionView, today: string, horizon 
       const [ents, accs, cardsRes, cats, recs] = await Promise.all([
         (supabase as any).from("financial_entities").select("id, entity_type").eq("is_active", true),
         (supabase as any).from("accounts").select("id, name, current_balance, financial_entity_id").eq("is_active", true).order("name"),
-        (supabase as any).from("cards").select("name, managerial_limit, financial_entity_id").eq("is_active", true),
+        (supabase as any).from("cards").select("name, managerial_limit, due_day, financial_entity_id").eq("is_active", true),
         (supabase as any).from("categories").select("id, name, category_group, transaction_nature"),
         (supabase as any).from("recurrences")
           .select("id, description, amount, transaction_type, financial_entity_id, account_id, category_id, center_cost, frequency, due_day, day_of_week, starts_on, ends_on")
@@ -67,7 +67,7 @@ export function useMonthProjection(view: ProjectionView, today: string, horizon 
         .map((a: any) => ({ id: a.id, name: a.name, entityId: a.financial_entity_id, balance: Number(a.current_balance) || 0 }));
       const cards: ProjCard[] = (cardsRes.data || [])
         .filter((c: any) => inView(c.financial_entity_id))
-        .map((c: any) => ({ name: c.name, entityId: c.financial_entity_id, managerialLimit: Number(c.managerial_limit) || 0 }));
+        .map((c: any) => ({ name: c.name, entityId: c.financial_entity_id, managerialLimit: Number(c.managerial_limit) || 0, dueDay: c.due_day }));
       const categories: ProjCategory[] = (cats.data || [])
         .map((c: any) => ({ id: c.id, name: c.name, group: c.category_group, nature: c.transaction_nature }));
 
