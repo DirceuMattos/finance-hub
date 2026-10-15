@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  monthBounds, recurrenceOccurrences, referenceMonths, variableEstimates,
+  dropInternalTransfers, monthBounds, recurrenceOccurrences, referenceMonths, variableEstimates,
   type PaidExpense, type ProjAccount, type ProjCard, type ProjCategory, type ProjRecurrence, type ProjTx, type VariableEstimate,
 } from "@/lib/monthProjection";
 
@@ -140,7 +140,11 @@ export function useMonthProjection(view: ProjectionView, today: string, horizon 
           date: (t.payment_date || t.competence_date || t.due_date) as string,
         }))
         .filter((t) => !!t.date);
-      const paid: PaidExpense[] = paidView.filter((t) => t.type !== "income");
+      // Transferências entre contas próprias (despesa + receita do mesmo valor) não entram na estimativa.
+      const paid: PaidExpense[] = dropInternalTransfers(
+        paidView.filter((t) => t.type !== "income"),
+        paidView.filter((t) => t.type === "income"),
+      );
       const incomeRef = paidView
         .filter((t) => t.type === "income" && refMonths.includes(t.date.slice(0, 7)))
         .reduce((s, t) => s + t.amount, 0);
@@ -149,10 +153,15 @@ export function useMonthProjection(view: ProjectionView, today: string, horizon 
       for (const ym of months) {
         const { start, end } = monthBounds(ym);
         const inMonth: Record<string, number> = {};
-        const add = (cat: string | null, v: number) => { if (cat) inMonth[cat] = (inMonth[cat] || 0) + v; };
+        const largest: Record<string, number> = {};
+        const add = (cat: string | null, v: number) => {
+          if (!cat) return;
+          inMonth[cat] = (inMonth[cat] || 0) + v;
+          largest[cat] = Math.max(largest[cat] || 0, v);
+        };
         paid.filter((p) => p.date >= start && p.date <= end).forEach((p) => add(p.categoryId, p.amount));
         planned.filter((t) => t.type === "expense" && t.date >= start && t.date <= end).forEach((t) => add(t.categoryId, t.amount));
-        estimatesByMonth[ym] = variableEstimates(paid, inMonth, categories, refMonths);
+        estimatesByMonth[ym] = variableEstimates(paid, inMonth, categories, refMonths, largest);
       }
 
       return {

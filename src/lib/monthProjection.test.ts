@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  monthBounds, projectHorizon, projectMonth, recurrenceOccurrences, referenceMonths, suggestActions, variableEstimates,
+  dropInternalTransfers, monthBounds, projectHorizon, projectMonth, recurrenceOccurrences, referenceMonths, suggestActions, variableEstimates,
   type ProjAccount, type ProjCategory, type ProjRecurrence, type ProjTx,
 } from "./monthProjection";
 
@@ -39,7 +39,22 @@ describe("variableEstimates", () => {
       { categoryId: "food", entityId: "E_PF", amount: 5000, date: "2026-06-05" }, // fora da janela
     ];
     const e = variableEstimates(paid, { food: 400 }, categories, ref);
-    expect(e).toEqual([{ categoryId: "food", name: "Alimentação", average: 1000, inMonth: 400, gap: 600, months: 3 }]);
+    expect(e).toEqual([{ categoryId: "food", name: "Alimentação", average: 900, inMonth: 400, gap: 500, months: 3, largest: 0 }]);
+  });
+
+  it("mediana ignora um mês fora da curva", () => {
+    const paid = [
+      { categoryId: "food", entityId: "E_PF", amount: 500, date: "2026-07-05" },
+      { categoryId: "food", entityId: "E_PF", amount: 24000, date: "2026-08-05" },
+      { categoryId: "food", entityId: "E_PF", amount: 700, date: "2026-09-05" },
+    ];
+    expect(variableEstimates(paid, {}, categories, ref)[0].average).toBe(700);
+  });
+
+  it("transferência entre contas próprias sai da base", () => {
+    const exp = [{ amount: 23866.97, date: "2026-08-10", id: 1 }, { amount: 100, date: "2026-08-10", id: 2 }, { amount: 50, date: "2026-08-01", id: 3 }];
+    const inc = [{ amount: 23866.97, date: "2026-08-11" }, { amount: 50, date: "2026-08-20" }];
+    expect(dropInternalTransfers(exp, inc).map((e) => e.id)).toEqual([2, 3]);
   });
 });
 
@@ -127,6 +142,12 @@ describe("suggestActions", () => {
     const est = [{ categoryId: "food", name: "Alimentação", average: 1000, inMonth: 1600, gap: 0, months: 3 }];
     const s = suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" });
     expect(s.find((x) => x.id === "cat-food")?.detail).toContain("600,00");
+  });
+
+  it("não acusa categoria quando o excesso é um único lançamento grande", () => {
+    const p = projectMonth({ accounts, categories, cards: [], planned: [], estimates: [], month: "2026-11", today: "2026-10-30" });
+    const est = [{ categoryId: "loan", name: "Empréstimos", average: 2300, inMonth: 29200, gap: 0, months: 3, largest: 28000 }];
+    expect(suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" }).some((x) => x.id === "cat-loan")).toBe(false);
   });
 });
 
