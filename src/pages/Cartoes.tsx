@@ -16,6 +16,8 @@ import { Button } from "@/components/ui/button";
 import { CreditCard, Info, AlertTriangle, CheckCircle2, Receipt } from "lucide-react";
 import { cardCycleMonthOf, cardCycleWindow, formatIsoDateBR } from "@/lib/cardCycle";
 import { CardInvoiceSettleDialog } from "@/components/cartoes/CardInvoiceSettleDialog";
+import { useCardReimbursements } from "@/hooks/useCardReimbursements";
+import { isReimbursementOf, summarizeReimbursements } from "@/lib/reimbursement";
 
 type FilterView = "all" | "personal" | "business";
 
@@ -95,6 +97,10 @@ export default function Cartoes() {
     },
   });
 
+  // Reembolsos com vencimento no mês da fatura (o vencimento de cada cartão cai neste mês).
+  const monthLastDay = format(new Date(y, m, 0), "yyyy-MM-dd");
+  const { data: monthReimbursements = [] } = useCardReimbursements(referenceMonth, monthLastDay);
+
   const byCard = useMemo(() => {
     const map = new Map<string, CycleTotals>();
     cycleTotals.forEach((r: CycleTotals) => map.set(r.card_id, r));
@@ -172,6 +178,10 @@ export default function Cartoes() {
             const totalPaid = cycleData?.total_paid || 0;
             const totalPlanned = cycleData?.total_planned || 0;
             const cycleTotal = totalPaid + totalPlanned;
+            // Reembolsos informativos: não mexem em Pago/A Pagar nem no teto (teto segue o bruto).
+            const reimb = summarizeReimbursements(
+              monthReimbursements.filter((t) => isReimbursementOf(t, { id: card.id, name: card.name }, cycle.end)),
+            );
             // Fechada: operador conferiu e virou a fatura. Paga sem fechamento: nada pendente, falta conferir.
             const invoiceClosed = cycleData?.invoice_paid || false;
             const paidNotClosed = !invoiceClosed && totalPlanned === 0 && totalPaid > 0;
@@ -271,6 +281,23 @@ export default function Cartoes() {
                       <p className="font-semibold">{fmt(cycleTotal)}</p>
                     </div>
                   </div>
+
+                  {reimb.count > 0 && (
+                    <div className="grid grid-cols-3 gap-2 text-sm rounded-md bg-muted/50 px-2 py-1.5">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Reembolso recebido</p>
+                        <p className="font-semibold text-emerald-600 dark:text-emerald-400">{fmt(reimb.received)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Reembolso previsto</p>
+                        <p className="font-semibold text-sky-700 dark:text-sky-400">{fmt(reimb.planned)}</p>
+                      </div>
+                      <div>
+                        <p className="text-muted-foreground text-xs">Custo líquido</p>
+                        <p className="font-semibold">{fmt(cycleTotal - reimb.total)}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
