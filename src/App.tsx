@@ -16,6 +16,7 @@ import Patrimonio from "./pages/Patrimonio";
 import Investimentos from "./pages/Investimentos";
 import Relatorios from "./pages/Relatorios";
 import Alertas from "./pages/Alertas";
+import Projecao from "./pages/Projecao";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
@@ -35,6 +36,7 @@ const App = () => (
 
           {/* Protected routes */}
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/projecao" element={<ProtectedRoute><Projecao /></ProtectedRoute>} />
           <Route path="/alertas" element={<ProtectedRoute><Alertas /></ProtectedRoute>} />
           <Route path="/lancamentos" element={<ProtectedRoute><Lancamentos /></ProtectedRoute>} />
           <Route path="/recorrencias" element={<ProtectedRoute><Recorrencias /></ProtectedRoute>} />
