@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  monthBounds, projectMonth, referenceMonths, suggestActions, variableEstimates,
-  type ProjAccount, type ProjCategory, type ProjTx,
+  monthBounds, projectHorizon, projectMonth, recurrenceOccurrences, referenceMonths, suggestActions, variableEstimates,
+  type ProjAccount, type ProjCategory, type ProjRecurrence, type ProjTx,
 } from "./monthProjection";
 
 const accounts: ProjAccount[] = [
@@ -127,5 +127,47 @@ describe("suggestActions", () => {
     const est = [{ categoryId: "food", name: "Alimentação", average: 1000, inMonth: 1600, gap: 0, months: 3 }];
     const s = suggestActions({ projection: p, planned: [], estimates: est, entityType, today: "2026-10-30" });
     expect(s.find((x) => x.id === "cat-food")?.detail).toContain("600,00");
+  });
+});
+
+describe("meses à frente", () => {
+  const rec = (p: Partial<ProjRecurrence>): ProjRecurrence => ({
+    id: "r1", description: "Aluguel", amount: 1000, type: "expense", entityId: "E_PF", accountId: "pf", categoryId: null,
+    cardName: null, frequency: "monthly", dueDay: 31, dayOfWeek: null, startsOn: "2026-01-10", endsOn: null, ...p,
+  });
+
+  it("gera ocorrências mensais que faltam, respeitando fim e dia curto", () => {
+    const occ = recurrenceOccurrences([rec({ endsOn: "2027-03-15" })], new Set(["r1|2026-11-30"]), "2026-10-30", "2027-06-30");
+    expect(occ.map((o) => o.date)).toEqual(["2026-10-31", "2026-12-31", "2027-01-31", "2027-02-28"]);
+    expect(occ[0]).toMatchObject({ id: "rec:r1:2026-10-31", description: "Aluguel (recorrência)", type: "expense" });
+  });
+
+  it("gera ocorrências semanais no dia da semana", () => {
+    const occ = recurrenceOccurrences([rec({ frequency: "weekly", dayOfWeek: 1 })], new Set(), "2026-11-01", "2026-11-20");
+    expect(occ.map((o) => o.date)).toEqual(["2026-11-02", "2026-11-09", "2026-11-16"]);
+  });
+
+  it("estimativa dos meses anteriores pesa no saldo inicial e a visão de meses marca receita baixa", () => {
+    const est = (gap: number) => [{ categoryId: "food", name: "Alimentação", average: gap, inMonth: 0, gap, months: 3 }];
+    const args = {
+      accounts, categories, cards: [], today: "2026-10-31",
+      planned: [tx({ type: "income", amount: 4000, date: "2026-11-05", accountId: "pj", entityId: "E_PJ" })],
+      estimatesByMonth: { "2026-10": est(310), "2026-11": est(300), "2026-12": est(310) },
+    };
+    const dez = projectMonth({ ...args, month: "2026-12" });
+    expect(dez.startBalance).toBe(9300);
+    expect(dez.startWithEstimate).toBe(8690);  // −10 (1 dia de outubro) −300 (novembro)
+    expect(dez.endWithEstimate).toBe(8380);
+    const h = projectHorizon(args, ["2026-11", "2026-12"], 3000);
+    expect(h.map((r) => [r.month, r.income, r.estimate, r.endWithEstimate, r.lowIncome])).toEqual([
+      ["2026-11", 4000, 300, 8690, false],
+      ["2026-12", 0, 310, 8380, true],
+    ]);
+  });
+
+  it("avisa quando as receitas do mês estão muito abaixo da média", () => {
+    const p = projectMonth({ accounts, categories, cards: [], planned: [], estimates: [], month: "2026-12", today: "2026-10-30" });
+    const s = suggestActions({ projection: p, planned: [], estimates: [], entityType: () => "personal", today: "2026-10-30", avgIncome: 5000 });
+    expect(s[0].id).toBe("low-income");
   });
 });

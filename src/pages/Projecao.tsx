@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useMonthProjection, type ProjectionView } from "@/hooks/useMonthProjection";
-import { projectMonth, suggestActions, type Simulation, type Suggestion } from "@/lib/monthProjection";
+import { projectHorizon, projectMonth, suggestActions, type Simulation, type Suggestion } from "@/lib/monthProjection";
 import { formatIsoDateBR } from "@/lib/cardCycle";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -41,7 +41,7 @@ function loadSim(key: string): Required<Simulation> {
 
 export default function Projecao() {
   const today = format(new Date(), "yyyy-MM-dd");
-  const months = useMemo(() => [0, 1, 2].map((i) => {
+  const months = useMemo(() => Array.from({ length: 12 }, (_, i) => i).map((i) => {
     const d = addMonths(startOfMonth(new Date()), i);
     return { value: format(d, "yyyy-MM"), label: label(d) };
   }), []);
@@ -55,13 +55,15 @@ export default function Projecao() {
   useEffect(() => { setSim(loadSim(simKey)); }, [simKey]);
   useEffect(() => { try { localStorage.setItem(simKey, JSON.stringify(sim)); } catch { /* sem armazenamento */ } }, [simKey, sim]);
 
-  const { data, isLoading, error } = useMonthProjection(view, month, today);
+  const { data, isLoading, error } = useMonthProjection(view, today);
+  const estimates = useMemo(() => data?.estimatesByMonth[month] ?? [], [data, month]);
 
   const base = useMemo(() => data && projectMonth({ ...data, month, today }), [data, month, today]);
   const proj = useMemo(() => data && projectMonth({ ...data, month, today, sim }), [data, month, today, sim]);
+  const horizonRows = useMemo(() => data ? projectHorizon({ ...data, today, sim }, data.months, data.avgIncome) : [], [data, today, sim]);
   const suggestions = useMemo(() => data && proj
-    ? suggestActions({ projection: proj, planned: data.planned.filter((t) => !sim.postponedTxIds.includes(t.id) && !sim.delayedIncomeIds.includes(t.id)), estimates: data.estimates, entityType: (id) => data.entityTypes[id] ?? null, today })
-    : [], [data, proj, sim, today]);
+    ? suggestActions({ projection: proj, planned: data.planned.filter((t) => !sim.postponedTxIds.includes(t.id) && !sim.delayedIncomeIds.includes(t.id)), estimates, entityType: (id) => data.entityTypes[id] ?? null, today, avgIncome: data.avgIncome })
+    : [], [data, proj, sim, today, estimates]);
 
   const simActive = sim.postponedTxIds.length + sim.delayedIncomeIds.length + Object.values(sim.estimateCuts).filter((v) => v > 0).length;
   const toggle = (list: "postponedTxIds" | "delayedIncomeIds", id: string) =>
@@ -113,7 +115,7 @@ export default function Projecao() {
           {/* Resumo */}
           <div className="grid gap-3 grid-cols-2 lg:grid-cols-5">
             <Kpi title={month === months[0].value ? "Saldo hoje" : "Saldo inicial"} icon={Wallet}
-              value={fmt(proj.startBalance)} sub={month === months[0].value ? "Contas, saldo atual" : `Previsto em ${ddmm(proj.monthStart)}`} />
+              value={fmt(proj.startBalance)} sub={month === months[0].value ? "Contas, saldo atual" : `Em ${ddmm(proj.monthStart)} · com estimativa ${fmt(proj.startWithEstimate)}`} />
             <Kpi title="Entradas previstas" icon={ArrowUpRight} tone="text-emerald-600"
               value={<>{fmt(proj.income)}{delta(proj.income, base.income)}</>} sub={`${proj.incomeList.length} lançamento(s)`} />
             <Kpi title="Saídas lançadas" icon={ArrowDownRight} tone="text-destructive"
@@ -218,6 +220,40 @@ export default function Projecao() {
             </Card>
           </div>
 
+          {/* Próximos meses */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Próximos 12 meses</CardTitle>
+              <p className="text-xs text-muted-foreground">Clique num mês para detalhar. Saldo final e pior dia já descontam a estimativa de variáveis{simActive ? " e consideram a simulação" : ""}.</p>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[620px]">
+                <thead><tr className="text-xs text-muted-foreground border-b">
+                  <th className="text-left py-1 font-medium">Mês</th><th className="text-right font-medium">Entradas</th><th className="text-right font-medium">Saídas</th>
+                  <th className="text-right font-medium">Estimativa</th><th className="text-right font-medium">Saldo final</th><th className="text-right font-medium">Pior dia</th>
+                </tr></thead>
+                <tbody>
+                  {horizonRows.map((r) => (
+                    <tr key={r.month} onClick={() => setMonth(r.month)}
+                      className={`border-b last:border-0 cursor-pointer hover:bg-muted/50 ${r.month === month ? "bg-primary/5" : ""}`}>
+                      <td className="py-1.5">{months.find((m) => m.value === r.month)?.label ?? r.month}
+                        {r.lowIncome && <Badge variant="outline" className="ml-2 text-[10px] border-amber-500 text-amber-700 dark:text-amber-400">receitas não lançadas?</Badge>}</td>
+                      <td className="text-right font-mono text-xs text-emerald-600">{fmt(r.income)}</td>
+                      <td className="text-right font-mono text-xs text-destructive">{fmt(r.expense)}</td>
+                      <td className="text-right font-mono text-xs text-muted-foreground">{r.estimate ? `−${fmt(r.estimate)}` : "—"}</td>
+                      <td className={`text-right font-mono text-xs ${r.endWithEstimate < 0 ? "text-destructive font-medium" : ""}`}>{fmt(r.endWithEstimate)}</td>
+                      <td className={`text-right text-xs ${r.worst.balance < 0 ? "text-destructive" : "text-muted-foreground"}`}>{fmt(r.worst.balance)} <span className="text-[10px]">{ddmm(r.worst.date)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Média recebida nos últimos 3 meses: {fmt(data.avgIncome)}/mês. "Receitas não lançadas?" indica mês com menos da metade disso lançado; ali a projeção tende a ser pessimista.
+                {data.virtualCount > 0 && ` Inclui ${data.virtualCount} ocorrência(s) de recorrências ainda não geradas como lançamento.`}
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Simulador */}
           <Card>
             <CardHeader className="pb-2">
@@ -245,9 +281,9 @@ export default function Projecao() {
               </div>
               <div>
                 <p className="text-xs font-medium mb-1">Reduzir gastos variáveis (estimativa)</p>
-                {data.estimates.filter((e) => e.gap > 0).length === 0 && <p className="text-xs text-muted-foreground">Sem estimativa de variáveis para o mês.</p>}
+                {estimates.filter((e) => e.gap > 0).length === 0 && <p className="text-xs text-muted-foreground">Sem estimativa de variáveis para o mês.</p>}
                 <ul className="text-xs divide-y">
-                  {data.estimates.filter((e) => e.gap > 0).map((e) => (
+                  {estimates.filter((e) => e.gap > 0).map((e) => (
                     <li key={e.categoryId} className="py-1 flex items-center gap-2">
                       <span className="flex-1 min-w-0 truncate">{e.name} <span className="text-muted-foreground">· média {fmt(e.average)}</span></span>
                       <span className="font-mono">{fmt(e.gap)}</span>

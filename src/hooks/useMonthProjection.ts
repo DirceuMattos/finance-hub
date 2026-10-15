@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import {
-  monthBounds, referenceMonths, variableEstimates,
-  type PaidExpense, type ProjAccount, type ProjCard, type ProjCategory, type ProjTx, type VariableEstimate,
+  monthBounds, recurrenceOccurrences, referenceMonths, variableEstimates,
+  type PaidExpense, type ProjAccount, type ProjCard, type ProjCategory, type ProjRecurrence, type ProjTx, type VariableEstimate,
 } from "@/lib/monthProjection";
 
 export type ProjectionView = "consolidated" | "personal" | "business";
@@ -21,31 +21,42 @@ async function fetchAll<T>(build: (from: number, to: number) => any): Promise<T[
 
 export interface ProjectionData {
   accounts: ProjAccount[];
-  planned: ProjTx[];
+  planned: ProjTx[];          // lançados + ocorrências de recorrências ainda não geradas
   cards: ProjCard[];
   categories: ProjCategory[];
-  estimates: VariableEstimate[];
+  estimatesByMonth: Record<string, VariableEstimate[]>;
   entityTypes: Record<string, string>;
   refMonths: string[];
+  months: string[];           // horizonte (yyyy-MM), do mês atual em diante
+  avgIncome: number;          // média mensal recebida nos meses de referência
+  virtualCount: number;       // ocorrências de recorrência projetadas
 }
 
-/** Dados da projeção do mês `month` (yyyy-MM), filtrados pela visão PF/PJ. Somente leitura. */
-export function useMonthProjection(view: ProjectionView, month: string, today: string) {
+/** Dados da projeção para os próximos `horizon` meses, filtrados pela visão PF/PJ. Somente leitura. */
+export function useMonthProjection(view: ProjectionView, today: string, horizon = 12) {
   return useQuery({
-    queryKey: ["month_projection", view, month, today],
+    queryKey: ["month_projection", view, today, horizon],
     staleTime: 60_000,
     queryFn: async (): Promise<ProjectionData> => {
-      const { start: monthStart, end: monthEnd } = monthBounds(month);
+      const [ty, tm] = today.split("-").map(Number);
+      const months = Array.from({ length: horizon }, (_, i) => {
+        const d = new Date(ty, tm - 1 + i, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      });
+      const horizonEnd = monthBounds(months[months.length - 1]).end;
       const refMonths = referenceMonths(today, 3);
       const refStart = `${refMonths[0]}-01`;
 
-      const [ents, accs, cardsRes, cats] = await Promise.all([
+      const [ents, accs, cardsRes, cats, recs] = await Promise.all([
         (supabase as any).from("financial_entities").select("id, entity_type").eq("is_active", true),
         (supabase as any).from("accounts").select("id, name, current_balance, financial_entity_id").eq("is_active", true).order("name"),
         (supabase as any).from("cards").select("name, managerial_limit, financial_entity_id").eq("is_active", true),
         (supabase as any).from("categories").select("id, name, category_group, transaction_nature"),
+        (supabase as any).from("recurrences")
+          .select("id, description, amount, transaction_type, financial_entity_id, account_id, category_id, center_cost, frequency, due_day, day_of_week, starts_on, ends_on")
+          .eq("is_active", true),
       ]);
-      for (const r of [ents, accs, cardsRes, cats]) if (r.error) throw r.error;
+      for (const r of [ents, accs, cardsRes, cats, recs]) if (r.error) throw r.error;
 
       const entityTypes: Record<string, string> = {};
       (ents.data || []).forEach((e: any) => { entityTypes[e.id] = e.entity_type; });
@@ -60,16 +71,16 @@ export function useMonthProjection(view: ProjectionView, month: string, today: s
       const categories: ProjCategory[] = (cats.data || [])
         .map((c: any) => ({ id: c.id, name: c.name, group: c.category_group, nature: c.transaction_nature }));
 
-      // Previstos até o fim do mês projetado (inclui atrasados).
+      // Previstos até o fim do horizonte (inclui atrasados).
       const plannedRaw = await fetchAll<any>((from, to) =>
         (supabase as any)
           .from("transactions")
           .select("id, description, amount, transaction_type, financial_entity_id, account_id, category_id, center_cost, due_date, competence_date")
           .eq("status", "planned")
-          .or(`due_date.lte.${monthEnd},and(due_date.is.null,competence_date.lte.${monthEnd})`)
+          .or(`due_date.lte.${horizonEnd},and(due_date.is.null,competence_date.lte.${horizonEnd})`)
           .order("id")
           .range(from, to));
-      const planned: ProjTx[] = plannedRaw
+      const launched: ProjTx[] = plannedRaw
         .filter((t) => inView(t.financial_entity_id))
         .map((t): ProjTx => ({
           id: t.id,
@@ -84,39 +95,77 @@ export function useMonthProjection(view: ProjectionView, month: string, today: s
         }))
         .filter((t) => !!t.date);
 
-      // Despesas pagas: meses de referência (média) e o próprio mês projetado (o que já saiu conta como lançado).
+      // Recorrências ativas: ocorrências do horizonte que ainda não viraram lançamento (qualquer status).
+      const recurrences: ProjRecurrence[] = (recs.data || [])
+        .filter((r: any) => inView(r.financial_entity_id) && r.starts_on)
+        .map((r: any) => ({
+          id: r.id, description: r.description || "", amount: Number(r.amount) || 0,
+          type: r.transaction_type === "income" ? "income" : "expense",
+          entityId: r.financial_entity_id, accountId: r.account_id, categoryId: r.category_id,
+          cardName: r.center_cost ? String(r.center_cost) : null,
+          frequency: r.frequency, dueDay: r.due_day, dayOfWeek: r.day_of_week, startsOn: r.starts_on, endsOn: r.ends_on,
+        }));
+      let virtual: ProjTx[] = [];
+      if (recurrences.length) {
+        const generated = await fetchAll<any>((from, to) =>
+          (supabase as any)
+            .from("transactions")
+            .select("source_id, due_date")
+            .eq("source_type", "recurrence")
+            .in("source_id", recurrences.map((r) => r.id))
+            .gte("due_date", today)
+            .order("id")
+            .range(from, to));
+        const existing = new Set<string>(generated.map((g) => `${g.source_id}|${g.due_date}`));
+        virtual = recurrenceOccurrences(recurrences, existing, today, horizonEnd);
+      }
+      const planned = [...launched, ...virtual];
+
+      // Pagos desde o 1º mês de referência: média de variáveis e o que já saiu no mês atual.
       const paidRaw = await fetchAll<any>((from, to) =>
         (supabase as any)
           .from("transactions")
-          .select("category_id, amount, financial_entity_id, payment_date, competence_date, due_date")
+          .select("category_id, amount, transaction_type, financial_entity_id, payment_date, competence_date, due_date")
           .eq("status", "paid")
-          .eq("transaction_type", "expense")
           .or(`payment_date.gte.${refStart},and(payment_date.is.null,competence_date.gte.${refStart})`)
           .order("id")
           .range(from, to));
-      const paid: PaidExpense[] = paidRaw
+      const paidView = paidRaw
         .filter((t) => inView(t.financial_entity_id))
         .map((t) => ({
-          categoryId: t.category_id,
-          entityId: t.financial_entity_id,
+          type: t.transaction_type,
+          categoryId: t.category_id as string | null,
+          entityId: t.financial_entity_id as string,
           amount: Math.abs(Number(t.amount) || 0),
           date: (t.payment_date || t.competence_date || t.due_date) as string,
         }))
         .filter((t) => !!t.date);
+      const paid: PaidExpense[] = paidView.filter((t) => t.type !== "income");
+      const incomeRef = paidView
+        .filter((t) => t.type === "income" && refMonths.includes(t.date.slice(0, 7)))
+        .reduce((s, t) => s + t.amount, 0);
 
-      const inMonth: Record<string, number> = {};
-      const add = (cat: string | null, v: number) => { if (cat) inMonth[cat] = (inMonth[cat] || 0) + v; };
-      paid.filter((p) => p.date >= monthStart && p.date <= monthEnd).forEach((p) => add(p.categoryId, p.amount));
-      planned.filter((t) => t.type === "expense" && t.date >= monthStart && t.date <= monthEnd).forEach((t) => add(t.categoryId, t.amount));
+      const estimatesByMonth: Record<string, VariableEstimate[]> = {};
+      for (const ym of months) {
+        const { start, end } = monthBounds(ym);
+        const inMonth: Record<string, number> = {};
+        const add = (cat: string | null, v: number) => { if (cat) inMonth[cat] = (inMonth[cat] || 0) + v; };
+        paid.filter((p) => p.date >= start && p.date <= end).forEach((p) => add(p.categoryId, p.amount));
+        planned.filter((t) => t.type === "expense" && t.date >= start && t.date <= end).forEach((t) => add(t.categoryId, t.amount));
+        estimatesByMonth[ym] = variableEstimates(paid, inMonth, categories, refMonths);
+      }
 
       return {
         accounts,
         planned,
         cards,
         categories,
-        estimates: variableEstimates(paid, inMonth, categories, refMonths),
+        estimatesByMonth,
         entityTypes,
         refMonths,
+        months,
+        avgIncome: Math.round((incomeRef / refMonths.length) * 100) / 100,
+        virtualCount: virtual.length,
       };
     },
   });

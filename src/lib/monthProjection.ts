@@ -91,6 +91,7 @@ export interface MonthProjection {
   monthStart: string;
   monthEnd: string;
   startBalance: number;
+  startWithEstimate: number; // saldo inicial descontando a estimativa dos meses anteriores
   income: number;
   expense: number;
   invoices: number;
@@ -184,14 +185,17 @@ export function projectMonth(args: {
   planned: ProjTx[];
   cards: ProjCard[];
   categories: ProjCategory[];
-  estimates: VariableEstimate[];
+  /** Estimativa do mês projetado (atalho) ou de cada mês até ele (yyyy-MM → estimativas). */
+  estimates?: VariableEstimate[];
+  estimatesByMonth?: Record<string, VariableEstimate[]>;
   month: string; // yyyy-MM
   today: string;
   sim?: Simulation;
 }): MonthProjection {
-  const { accounts, planned, cards, categories, estimates, month, today } = args;
+  const { accounts, planned, cards, categories, month, today } = args;
   const sim = args.sim ?? {};
-  const { start: monthStart, end: monthEnd, days: monthDays } = monthBounds(month);
+  const { start: monthStart, end: monthEnd } = monthBounds(month);
+  const estByMonth: Record<string, VariableEstimate[]> = args.estimatesByMonth ?? { [month]: args.estimates ?? [] };
   const postponed = new Set(sim.postponedTxIds ?? []);
   const delayed = new Set(sim.delayedIncomeIds ?? []);
   const cuts = sim.estimateCuts ?? {};
@@ -213,11 +217,17 @@ export function projectMonth(args: {
     if (t.date < today) { overdueCount++; overdueNet += t.type === "income" ? t.amount : -t.amount; }
   }
 
-  // Estimativa diária (só no mês projetado e só nos dias a partir de hoje).
-  const estTotal = r2(estimates.reduce((s, e) => s + e.gap * (1 - Math.min(1, Math.max(0, cuts[e.categoryId] ?? 0))), 0));
-  const firstEstDay = monthStart < today ? today : monthStart;
-  const estDays = monthEnd >= firstEstDay ? monthDays - (Number(firstEstDay.slice(8)) - 1) : 0;
-  const estPerDay = estDays > 0 ? estTotal / estDays : 0;
+  // Estimativa diária: cada mês até o projetado distribui a sua estimativa nos dias a partir de hoje.
+  const estPlan = new Map<string, { perDay: number; firstDay: string; total: number }>();
+  for (const [ym, list] of Object.entries(estByMonth)) {
+    const b = monthBounds(ym);
+    if (b.end < today || b.start > monthEnd) continue;
+    const total = r2(list.reduce((s, e) => s + e.gap * (1 - Math.min(1, Math.max(0, cuts[e.categoryId] ?? 0))), 0));
+    const firstDay = b.start < today ? today : b.start;
+    const nDays = b.days - (Number(firstDay.slice(8)) - 1);
+    estPlan.set(ym, { perDay: nDays > 0 ? total / nDays : 0, firstDay, total });
+  }
+  const estTotal = estPlan.get(month)?.total ?? 0;
 
   // Movimento por dia e por conta.
   const byDay = new Map<string, Map<string, number>>();
@@ -242,6 +252,7 @@ export function projectMonth(args: {
   const total = () => { let s = 0; bal.forEach((v) => { s += v; }); return s; };
   // Mês em curso: começa no saldo de hoje. Mês futuro: saldo no fim da véspera do dia 1.
   let startBalance = r2(total());
+  let startWithEstimate = startBalance;
   const futureMonth = monthStart > today;
   const eve = addDaysIso(monthStart, -1);
 
@@ -249,7 +260,8 @@ export function projectMonth(args: {
     const mv = byDay.get(d);
     mv?.forEach((v, k) => bal.set(k, (bal.get(k) || 0) + v));
     const inMonth = d >= monthStart;
-    if (inMonth && d >= firstEstDay) estAcc += estPerDay;
+    const ep = estPlan.get(d.slice(0, 7));
+    if (ep && d >= ep.firstDay) estAcc += ep.perDay;
     for (const a of accounts) {
       const b = bal.get(a.id) || 0;
       if (b < acc[a.id].min - 0.004) { acc[a.id].min = b; acc[a.id].minDate = d; }
@@ -257,7 +269,7 @@ export function projectMonth(args: {
       if (futureMonth && d === eve) acc[a.id].start = r2(b);
     }
     const t = total();
-    if (futureMonth && d === eve) startBalance = r2(t);
+    if (futureMonth && d === eve) { startBalance = r2(t); startWithEstimate = r2(t - estAcc); }
     days.push({ date: d, launched: r2(t), withEstimate: r2(t - estAcc), inMonth });
   }
   for (const a of accounts) {
@@ -311,6 +323,7 @@ export function projectMonth(args: {
     monthStart,
     monthEnd,
     startBalance,
+    startWithEstimate,
     income: r2(income),
     expense: r2(expense),
     invoices: r2(invoices),
@@ -349,9 +362,20 @@ export function suggestActions(args: {
   estimates: VariableEstimate[];
   entityType: (entityId: string) => string | null; // personal | business
   today: string;
+  avgIncome?: number; // média mensal recebida nos meses de referência
 }): Suggestion[] {
   const { projection: p, planned, estimates, entityType, today } = args;
   const out: Suggestion[] = [];
+
+  // 0. Receitas do mês bem abaixo do que costuma entrar: projeção incompleta.
+  if (args.avgIncome && args.avgIncome > 0 && p.income < args.avgIncome * 0.5) {
+    out.push({
+      id: "low-income",
+      level: "warning",
+      title: `Receitas lançadas para o mês (${brl(p.income)}) estão bem abaixo da média recebida (${brl(args.avgIncome)})`,
+      detail: "Se há recebimentos esperados que ainda não estão no app, lance-os como previstos (ou crie recorrências). Sem isso, a projeção deste mês fica pessimista.",
+    });
+  }
 
   // 1. Higiene: previstos atrasados distorcem a projeção.
   if (p.overdue.count > 0) {
@@ -485,4 +509,93 @@ export function suggestActions(args: {
 
 function entityLabel(t: string | null) {
   return t === "business" ? "a empresa (PJ)" : t === "personal" ? "a pessoa física (PF)" : "entidades diferentes";
+}
+
+// ---------------------------------------------------------------------------
+// Recorrências: ocorrências futuras ainda não geradas como lançamento.
+
+export interface ProjRecurrence {
+  id: string;
+  description: string;
+  amount: number;
+  type: "income" | "expense";
+  entityId: string;
+  accountId: string | null;
+  categoryId: string | null;
+  cardName: string | null;
+  frequency: string;        // monthly | weekly
+  dueDay: number | null;
+  dayOfWeek: number | null; // 0 = domingo
+  startsOn: string;
+  endsOn: string | null;
+}
+
+/**
+ * Datas de cada recorrência entre `from` e `until` que ainda não existem como lançamento
+ * (`existing` = "recurrenceId|yyyy-MM-dd" de qualquer status). Viram previstos virtuais.
+ */
+export function recurrenceOccurrences(recs: ProjRecurrence[], existing: Set<string>, from: string, until: string): ProjTx[] {
+  const out: ProjTx[] = [];
+  for (const r of recs) {
+    const end = r.endsOn && r.endsOn < until ? r.endsOn : until;
+    const begin = r.startsOn > from ? r.startsOn : from;
+    if (begin > end) continue;
+    const push = (date: string) => {
+      if (date < begin || date > end || existing.has(`${r.id}|${date}`)) return;
+      out.push({
+        id: `rec:${r.id}:${date}`, description: `${r.description} (recorrência)`, amount: Math.abs(r.amount), type: r.type,
+        entityId: r.entityId, accountId: r.accountId, categoryId: r.categoryId, cardName: r.cardName, date,
+      });
+    };
+    if (r.frequency === "weekly") {
+      const dow = r.dayOfWeek ?? new Date(`${r.startsOn}T12:00:00Z`).getUTCDay();
+      let d = begin;
+      while (new Date(`${d}T12:00:00Z`).getUTCDay() !== dow) d = addDaysIso(d, 1);
+      for (; d <= end; d = addDaysIso(d, 7)) push(d);
+    } else if (r.frequency === "monthly") {
+      const day = r.dueDay ?? Number(r.startsOn.slice(8, 10));
+      let [y, m] = begin.split("-").map(Number);
+      for (;;) {
+        const ym = `${y}-${pad(m)}`;
+        if (`${ym}-01` > end) break;
+        push(`${ym}-${pad(Math.min(day, monthBounds(ym).days))}`);
+        m++; if (m > 12) { m = 1; y++; }
+      }
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Visão de vários meses.
+
+export interface MonthSummary {
+  month: string;
+  income: number;
+  expense: number;
+  estimate: number;
+  endLaunched: number;
+  endWithEstimate: number;
+  worst: { date: string; balance: number };
+  lowIncome: boolean; // receitas lançadas bem abaixo da média recebida
+}
+
+export function projectHorizon(
+  args: Omit<Parameters<typeof projectMonth>[0], "month">,
+  months: string[],
+  avgIncome: number,
+): MonthSummary[] {
+  return months.map((month) => {
+    const p = projectMonth({ ...args, month });
+    return {
+      month,
+      income: p.income,
+      expense: p.expense,
+      estimate: p.estimate,
+      endLaunched: p.endLaunched,
+      endWithEstimate: p.endWithEstimate,
+      worst: p.worstWithEstimate,
+      lowIncome: avgIncome > 0 && p.income < avgIncome * 0.5,
+    };
+  });
 }
