@@ -44,10 +44,11 @@ export interface ProjCard {
 export interface VariableEstimate {
   categoryId: string;
   name: string;
-  average: number;   // média mensal paga nos meses de referência
+  average: number;   // valor típico mensal pago (mediana dos meses de referência)
   inMonth: number;   // já lançado (pago + previsto) no mês projetado
   gap: number;       // estimativa ainda não lançada = max(0, média − lançado)
   months: number;    // em quantos meses de referência a categoria apareceu
+  largest?: number;  // maior lançamento único da categoria no mês
 }
 
 export interface Simulation {
@@ -144,6 +145,7 @@ export function variableEstimates(
   inMonthByCategory: Record<string, number>,
   categories: ProjCategory[],
   refMonths: string[],
+  largestByCategory: Record<string, number> = {},
 ): VariableEstimate[] {
   const variable = new Map(categories
     .filter((c) => c.group === "variable" && c.nature !== "income")
@@ -160,9 +162,10 @@ export function variableEstimates(
   const out: VariableEstimate[] = [];
   perCat.forEach((byMonth, catId) => {
     if (byMonth.size < 2) return;
-    let sum = 0;
-    byMonth.forEach((v) => { sum += v; });
-    const average = r2(sum / refMonths.length);
+    // Mediana dos meses (mês sem gasto conta zero): um gasto pontual alto não infla a estimativa.
+    const values = refMonths.map((m) => byMonth.get(m) || 0).sort((a, b) => a - b);
+    const mid = Math.floor(values.length / 2);
+    const average = r2(values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2);
     const inMonth = r2(inMonthByCategory[catId] || 0);
     out.push({
       categoryId: catId,
@@ -171,6 +174,7 @@ export function variableEstimates(
       inMonth,
       gap: r2(Math.max(0, average - inMonth)),
       months: byMonth.size,
+      largest: r2(largestByCategory[catId] || 0),
     });
   });
   return out.sort((a, b) => b.gap - a.gap || b.average - a.average);
@@ -460,12 +464,14 @@ export function suggestActions(args: {
 
   // 5. Categorias variáveis já acima da média dos últimos meses.
   for (const e of estimates) {
-    if (e.average > 0 && e.inMonth > e.average * 1.3 && e.inMonth - e.average >= 200) {
+    // Um único lançamento grande (quitação, imposto anual) não é hábito de consumo: fica de fora.
+    const oneOff = (e.largest ?? 0) > e.inMonth * 0.7;
+    if (!oneOff && e.average > 0 && e.inMonth > e.average * 1.3 && e.inMonth - e.average >= 200) {
       out.push({
         id: `cat-${e.categoryId}`,
         level: "warning",
         title: `${e.name}: ${brl(e.inMonth)} lançados, ${Math.round((e.inMonth / e.average - 1) * 100)}% acima da média`,
-        detail: `A média dos últimos meses é ${brl(e.average)}. Reduzir para a média libera ${brl(r2(e.inMonth - e.average))}.`,
+        detail: `O valor típico dos últimos meses é ${brl(e.average)}. Voltar a esse patamar libera ${brl(r2(e.inMonth - e.average))}.`,
       });
     }
   }
@@ -477,7 +483,7 @@ export function suggestActions(args: {
       id: "estimate",
       level: "info",
       title: `Gastos variáveis ainda não lançados: cerca de ${brl(p.estimate)}`,
-      detail: `Pela média dos últimos 3 meses. Maiores: ${top.map((e) => `${e.name} ${brl(e.gap)}`).join(", ")}. Lançar uma previsão ou fixar um limite por categoria deixa a projeção mais fiel.`,
+      detail: `Pelo valor típico (mediana) dos últimos 3 meses, sem transferências entre contas. Maiores: ${top.map((e) => `${e.name} ${brl(e.gap)}`).join(", ")}. Lançar uma previsão ou fixar um limite por categoria deixa a projeção mais fiel.`,
     });
   }
 
@@ -509,6 +515,24 @@ export function suggestActions(args: {
 
 function entityLabel(t: string | null) {
   return t === "business" ? "a empresa (PJ)" : t === "personal" ? "a pessoa física (PF)" : "entidades diferentes";
+}
+
+/**
+ * Remove das despesas pagas as que têm uma receita paga de mesmo valor em até 3 dias
+ * (transferência entre contas próprias): não são gasto e inflariam a estimativa.
+ */
+export function dropInternalTransfers<T extends { amount: number; date: string }>(expenses: T[], incomes: { amount: number; date: string }[]): T[] {
+  const pool = incomes.map((i) => ({ amount: r2(i.amount), date: i.date, used: false }));
+  return expenses.filter((e) => {
+    const a = r2(e.amount);
+    const m = pool.find((i) => !i.used && i.amount === a && Math.abs(daysBetween(i.date, e.date)) <= 3);
+    if (m) { m.used = true; return false; }
+    return true;
+  });
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(`${b}T12:00:00Z`)) / 86_400_000);
 }
 
 // ---------------------------------------------------------------------------

@@ -285,7 +285,7 @@ export default function Projecao() {
                 <ul className="text-xs divide-y">
                   {estimates.filter((e) => e.gap > 0).map((e) => (
                     <li key={e.categoryId} className="py-1 flex items-center gap-2">
-                      <span className="flex-1 min-w-0 truncate">{e.name} <span className="text-muted-foreground">· média {fmt(e.average)}</span></span>
+                      <span className="flex-1 min-w-0 truncate">{e.name} <span className="text-muted-foreground">· típico {fmt(e.average)}</span></span>
                       <span className="font-mono">{fmt(e.gap)}</span>
                       <Select value={String(sim.estimateCuts[e.categoryId] ?? 0)} onValueChange={(v) => setSim((s) => ({ ...s, estimateCuts: { ...s.estimateCuts, [e.categoryId]: Number(v) } }))}>
                         <SelectTrigger id={`corte-${e.categoryId}`} className="h-7 w-[86px] text-xs"><SelectValue /></SelectTrigger>
@@ -314,7 +314,7 @@ export default function Projecao() {
           <p className="text-[11px] text-muted-foreground flex items-start gap-1">
             <Info className="h-3 w-3 mt-0.5 shrink-0" />
             Projeção a partir dos saldos atuais e dos lançamentos previstos; previstos vencidos entram como se fossem pagos hoje.
-            Estimativa de variáveis = média mensal paga em {data.refMonths.map((m) => `${m.slice(5)}/${m.slice(2, 4)}`).join(", ")} nas categorias variáveis, menos o que já está lançado no mês.
+            Estimativa de variáveis = valor típico (mediana) pago em {data.refMonths.map((m) => `${m.slice(5)}/${m.slice(2, 4)}`).join(", ")} nas categorias variáveis, sem transferências entre contas próprias, menos o que já está lançado no mês.
             As sugestões são regras sobre os seus próprios dados para organizar o caixa; não são recomendação de investimento.
           </p>
         </div>
