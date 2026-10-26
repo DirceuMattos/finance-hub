@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import { AlertTriangle, Banknote, Calculator, CalendarClock, Check, CheckCircle2, HandCoins, Lock, Pencil, X } from "lucide-react";
+import { AlertTriangle, Banknote, Calculator, CalendarClock, CheckCircle2, HandCoins, Lock } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { cardCycleWindow, formatIsoDateBR, normalizeDueDay } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
@@ -45,12 +45,14 @@ interface RowState {
   selected: boolean;
   accountId: string | null;
   paymentDate: string;
+  amountText: string; // valor editável (IOF/impostos da fatura)
 }
 
 type Action = "settle" | "reschedule" | null;
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const today = () => format(new Date(), "yyyy-MM-dd");
+const toText = (v: number) => Math.abs(Number(v) || 0).toFixed(2).replace(".", ",");
 
 export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, dueDay, referenceMonth, referenceLabel }: Props) {
   const queryClient = useQueryClient();
@@ -84,7 +86,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
 
   useEffect(() => { setNewDueDate(nextCycle.end); }, [nextCycle.end]);
   useEffect(() => {
-    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); setCancelReimbId(null); setEditId(null); }
+    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); setCancelReimbId(null); }
   }, [open]);
 
   // Reembolsos já lançados para esta fatura (vencimento = vencimento da fatura).
@@ -95,9 +97,8 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
   );
   const reimbSummary = useMemo(() => summarizeReimbursements(reimbursements), [reimbursements]);
   const [cancelReimbId, setCancelReimbId] = useState<string | null>(null);
-  // Ajuste de valor de um item (IOF/impostos calculados só na fatura).
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
+  // Valores ajustados em itens já pagos (IOF/impostos calculados só na fatura).
+  const [paidEdits, setPaidEdits] = useState<Record<string, string>>({});
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["card_invoice_items", cardId, referenceMonth],
@@ -144,15 +145,32 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
   // Nada vem selecionado: toda ação é explícita.
   useEffect(() => {
     const init: Record<string, RowState> = {};
-    pending.forEach((i) => { init[i.id] = { selected: false, accountId: i.account_id, paymentDate: today() }; });
+    pending.forEach((i) => { init[i.id] = { selected: false, accountId: i.account_id, paymentDate: today(), amountText: toText(i.amount) }; });
     setRows(init);
     setConfirming(null);
   }, [pending]);
 
+  useEffect(() => {
+    const init: Record<string, string> = {};
+    alreadyPaid.forEach((i) => { init[i.id] = toText(i.amount); });
+    setPaidEdits(init);
+  }, [alreadyPaid]);
+
+  // Valor a usar para um item em aberto selecionado: o digitado (se válido) ou o lançado.
+  const effAmount = (i: InvoiceItem) => {
+    const v = evaluateExpression(rows[i.id]?.amountText ?? "");
+    return v !== null && v > 0 ? Math.round(v * 100) / 100 : Math.abs(i.amount);
+  };
+  const changedOf = (list: { item: InvoiceItem; text: string }[]) => list
+    .map(({ item, text }) => ({ item, change: buildAmountChange(item, text, todayIso) }))
+    .filter(({ change }) => change.ok || !change.error.includes("igual"));
+
   const patch = (id: string, p: Partial<RowState>) => { setConfirming(null); setRows((prev) => ({ ...prev, [id]: { ...prev[id], ...p } })); };
   const selectedItems = pending.filter((i) => rows[i.id]?.selected);
   const totalPending = pending.reduce((s, i) => s + Math.abs(i.amount), 0);
-  const totalSelected = selectedItems.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalSelected = selectedItems.reduce((s, i) => s + effAmount(i), 0);
+  const pendingChanges = changedOf(selectedItems.map((i) => ({ item: i, text: rows[i.id]?.amountText ?? "" })));
+  const paidChanges = changedOf(alreadyPaid.map((i) => ({ item: i, text: paidEdits[i.id] ?? toText(i.amount) })));
   const totalPaid = alreadyPaid.reduce((s, i) => s + Math.abs(i.amount), 0);
   const allSelected = pending.length > 0 && selectedItems.length === pending.length;
   const readyToClose = !closedInvoice && pending.length === 0 && alreadyPaid.length > 0;
@@ -220,14 +238,30 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     if (selectedItems.length === 0) { toast.info("Selecione ao menos um lançamento."); return; }
     if (a === "settle" && missingAccount) { toast.error("Informe a conta bancária de todos os itens selecionados."); return; }
     if (a === "settle" && missingDate) { toast.error("Informe a data de pagamento de todos os itens selecionados."); return; }
+    const bad = pendingChanges.find(({ change }) => !change.ok);
+    if (bad) { toast.error(`${bad.item.description}: ${bad.change.error}`); return; }
     if (a === "reschedule" && badNewDue) { toast.error(`A nova data de vencimento deve ser posterior a ${formatIsoDateBR(cycle.end)}.`); return; }
     setConfirming(a);
+  };
+
+  // Grava os valores ajustados (valor anterior fica nas observações).
+  const applyAmountChanges = async (list: typeof pendingChanges) => {
+    for (const { item, change } of list) {
+      const { data: updated, error } = await (supabase as any)
+        .from("transactions")
+        .update({ amount: change.amount, notes: change.notes })
+        .eq("id", item.id)
+        .select("id");
+      if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error(`"${item.description}" não foi alterado. Verifique as permissões.`);
+    }
   };
 
   const runAction = async () => {
     if (!confirming) return;
     setSaving(true);
     try {
+      if (pendingChanges.length) await applyAmountChanges(pendingChanges);
       if (confirming === "settle") {
         const data = await callSettle(
           selectedItems.map((i) => ({ id: i.id, account_id: rows[i.id].accountId, payment_date: rows[i.id].paymentDate })),
@@ -306,60 +340,20 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     }
   };
 
-  const startEdit = (item: InvoiceItem) => {
-    setEditId(item.id);
-    setEditText(Math.abs(item.amount).toFixed(2).replace(".", ","));
-  };
-
-  const saveAmount = async (item: InvoiceItem) => {
-    const change = buildAmountChange(item, editText, todayIso);
-    if (!change.ok) { toast.error(change.error); return; }
+  const savePaidAdjustments = async () => {
+    const bad = paidChanges.find(({ change }) => !change.ok);
+    if (bad) { toast.error(`${bad.item.description}: ${bad.change.error}`); return; }
     setSaving(true);
     try {
-      const { data: updated, error } = await (supabase as any)
-        .from("transactions")
-        .update({ amount: change.amount, notes: change.notes })
-        .eq("id", item.id)
-        .select("id");
-      if (error) throw error;
-      if (!updated || updated.length === 0) throw new Error("Nenhum lançamento foi alterado. Verifique as permissões.");
-      // Item já pago mexe no saldo da conta: recalcula como na baixa.
-      if (item.status === "paid") await recalc();
+      await applyAmountChanges(paidChanges);
+      await recalc(); // itens pagos mexem no saldo das contas
       invalidateAll();
-      toast.success(`Valor de "${item.description}" ajustado de ${fmt(Math.abs(item.amount))} para ${fmt(change.amount)}.`);
-      setEditId(null);
+      toast.success(`${paidChanges.length} valor(es) ajustado(s). Valores anteriores registrados nas observações.`);
     } catch (e: any) {
-      toast.error("Não foi possível ajustar o valor: " + (e?.message || "erro desconhecido"));
+      toast.error("Não foi possível ajustar os valores: " + (e?.message || "erro desconhecido"));
     } finally {
       setSaving(false);
     }
-  };
-
-  // Célula de valor: editável enquanto a fatura não foi fechada.
-  const amountCell = (item: InvoiceItem) => {
-    if (editId === item.id) {
-      return (
-        <div className="flex items-center justify-end gap-1">
-          <Input id={`valor-${item.id}`} value={editText} autoFocus inputMode="decimal"
-            onChange={(e) => setEditText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") saveAmount(item); if (e.key === "Escape") setEditId(null); }}
-            className="h-7 w-32 text-xs font-mono text-right" aria-label={`Novo valor de ${item.description}`} />
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveAmount(item)} disabled={saving} aria-label="Salvar valor"><Check className="h-3.5 w-3.5" /></Button>
-          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditId(null)} disabled={saving} aria-label="Cancelar ajuste"><X className="h-3.5 w-3.5" /></Button>
-        </div>
-      );
-    }
-    return (
-      <span className="inline-flex items-center gap-1">
-        {fmt(Math.abs(item.amount))}
-        {!closedInvoice && (
-          <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground" onClick={() => startEdit(item)} disabled={saving}
-            title="Ajustar valor (ex.: IOF/impostos da fatura)" aria-label={`Ajustar valor de ${item.description}`}>
-            <Pencil className="h-3 w-3" />
-          </Button>
-        )}
-      </span>
-    );
   };
 
   const handleCloseInvoice = async () => {
@@ -389,7 +383,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
           <p className="text-xs text-muted-foreground">
             Período de gastos: {formatIsoDateBR(cycle.start)} a {formatIsoDateBR(cycle.end)} · Vencimento {formatIsoDateBR(cycle.end)}.
             Marque os lançamentos e escolha <b>Baixar</b> ou <b>Reagendar</b>; os demais ficam como estão.
-            {!closedInvoice && <> Use o lápis ao lado do valor para ajustar IOF ou impostos cobrados na fatura.</>}
+            {!closedInvoice && <> O valor pode ser ajustado na própria linha (ex.: IOF ou impostos cobrados na fatura).</>}
           </p>
         </DialogHeader>
 
@@ -502,6 +496,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
             {confirming === "settle" ? (
               <>
                 <p className="font-medium">Confirmar baixa de {selectedItems.length} lançamento(s), total {fmt(totalSelected)}?</p>
+                {pendingChanges.length > 0 && <p className="text-xs">{pendingChanges.length} valor(es) ajustado(s) antes da baixa; o valor anterior fica nas observações.</p>}
                 <ul className="text-xs text-muted-foreground">
                   {Array.from(new Set(selectedItems.map((i) => `${accountName(rows[i.id].accountId)} em ${formatIsoDateBR(rows[i.id].paymentDate)}`))).map((t) => <li key={t}>• {t}</li>)}
                 </ul>
@@ -509,7 +504,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                 {futurePayment && <p className="text-xs text-destructive">Há data de pagamento no futuro. Corrija antes de confirmar.</p>}
               </>
             ) : (
-              <p className="font-medium">Reagendar {selectedItems.length} lançamento(s) ({fmt(totalSelected)}) para {formatIsoDateBR(newDueDate)}? Eles saem desta fatura.</p>
+              <p className="font-medium">Reagendar {selectedItems.length} lançamento(s) ({fmt(totalSelected)}) para {formatIsoDateBR(newDueDate)}? Eles saem desta fatura.{pendingChanges.length > 0 ? ` ${pendingChanges.length} valor(es) ajustado(s) junto.` : ""}</p>
             )}
             <div className="flex gap-2">
               <Button size="sm" onClick={runAction} disabled={saving || (confirming === "settle" && futurePayment)}>{saving ? "Processando..." : "Confirmar"}</Button>
@@ -638,7 +633,13 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                         )}
                       </td>
                       <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
-                      <td className="py-2 text-right font-mono whitespace-nowrap">{amountCell(item)}</td>
+                      <td className="py-2 text-right font-mono whitespace-nowrap">
+                        {r.selected ? (
+                          <Input id={`valor-${item.id}`} inputMode="decimal" value={r.amountText} onChange={(e) => patch(item.id, { amountText: e.target.value })}
+                            className={`h-7 w-28 ml-auto text-xs font-mono text-right ${effAmount(item) !== Math.abs(item.amount) ? "border-amber-500" : ""}`}
+                            aria-label={`Valor de ${item.description}`} title="Ajuste se a fatura cobrou IOF ou impostos" />
+                        ) : fmt(Math.abs(item.amount))}
+                      </td>
                       <td className="py-2 pl-3">
                         {r.selected ? (
                           <Select value={r.accountId ?? ""} onValueChange={(v) => patch(item.id, { accountId: v })}>
@@ -666,7 +667,14 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                     <td className="py-2 pl-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /></td>
                     <td className="py-2 pr-2">{item.description}</td>
                     <td className="py-2 text-xs whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
-                    <td className="py-2 text-right font-mono whitespace-nowrap">{amountCell(item)}</td>
+                    <td className="py-2 text-right font-mono whitespace-nowrap">
+                      {closedInvoice ? fmt(Math.abs(item.amount)) : (
+                        <Input id={`valor-pago-${item.id}`} inputMode="decimal" value={paidEdits[item.id] ?? toText(item.amount)}
+                          onChange={(e) => setPaidEdits((p) => ({ ...p, [item.id]: e.target.value }))}
+                          className={`h-7 w-28 ml-auto text-xs font-mono text-right ${paidChanges.some((c) => c.item.id === item.id) ? "border-amber-500 text-foreground" : "border-transparent bg-transparent"}`}
+                          aria-label={`Valor de ${item.description}`} title="Ajuste se a fatura cobrou IOF ou impostos" />
+                      )}
+                    </td>
                     <td className="py-2 pl-3 text-xs">{accountName(item.account_id)}</td>
                     <td className="py-2 pr-2 text-xs">Pago em {formatIsoDateBR(item.payment_date)}</td>
                   </tr>
@@ -675,6 +683,16 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
             </table>
           )}
         </div>
+
+        {paidChanges.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/50 bg-amber-500/5 px-3 py-2 text-sm">
+            <span>{paidChanges.length} valor(es) alterado(s) em itens já pagos. O saldo das contas será recalculado.</span>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={savePaidAdjustments} disabled={saving}>{saving ? "Salvando..." : "Salvar ajustes"}</Button>
+              <Button size="sm" variant="outline" onClick={() => setPaidEdits(Object.fromEntries(alreadyPaid.map((i) => [i.id, toText(i.amount)])))} disabled={saving}>Descartar</Button>
+            </div>
+          </div>
+        )}
 
         {items.length > 0 && (
           <div className="border-t pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
