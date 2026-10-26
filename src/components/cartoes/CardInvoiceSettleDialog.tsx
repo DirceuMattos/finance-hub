@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { toast } from "sonner";
-import { AlertTriangle, Banknote, Calculator, CalendarClock, CheckCircle2, HandCoins, Lock } from "lucide-react";
+import { AlertTriangle, Banknote, Calculator, CalendarClock, Check, CheckCircle2, HandCoins, Lock, Pencil, X } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { cardCycleWindow, formatIsoDateBR, normalizeDueDay } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
 import { buildReimbursement, isReimbursementOf, summarizeReimbursements } from "@/lib/reimbursement";
 import { useCardReimbursements } from "@/hooks/useCardReimbursements";
+import { buildAmountChange } from "@/lib/invoiceAmountEdit";
 
 interface Props {
   open: boolean;
@@ -37,6 +38,7 @@ interface InvoiceItem {
   installment_number: number | null;
   installment_total: number | null;
   account_id: string | null;
+  notes: string | null;
 }
 
 interface RowState {
@@ -82,7 +84,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
 
   useEffect(() => { setNewDueDate(nextCycle.end); }, [nextCycle.end]);
   useEffect(() => {
-    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); setCancelReimbId(null); }
+    if (!open) { setShowReimb(false); setReimbAmount(""); setReimbAccount(""); setReimbConfirm(false); setCancelReimbId(null); setEditId(null); }
   }, [open]);
 
   // Reembolsos já lançados para esta fatura (vencimento = vencimento da fatura).
@@ -93,6 +95,9 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
   );
   const reimbSummary = useMemo(() => summarizeReimbursements(reimbursements), [reimbursements]);
   const [cancelReimbId, setCancelReimbId] = useState<string | null>(null);
+  // Ajuste de valor de um item (IOF/impostos calculados só na fatura).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["card_invoice_items", cardId, referenceMonth],
@@ -103,7 +108,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("transactions")
-        .select("id, description, amount, due_date, status, payment_date, installment_number, installment_total, account_id")
+        .select("id, description, amount, due_date, status, payment_date, installment_number, installment_total, account_id, notes")
         .eq("center_cost", cardName)
         .in("status", ["planned", "paid"])
         .gte("due_date", cycle.start)
@@ -301,6 +306,62 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     }
   };
 
+  const startEdit = (item: InvoiceItem) => {
+    setEditId(item.id);
+    setEditText(Math.abs(item.amount).toFixed(2).replace(".", ","));
+  };
+
+  const saveAmount = async (item: InvoiceItem) => {
+    const change = buildAmountChange(item, editText, todayIso);
+    if (!change.ok) { toast.error(change.error); return; }
+    setSaving(true);
+    try {
+      const { data: updated, error } = await (supabase as any)
+        .from("transactions")
+        .update({ amount: change.amount, notes: change.notes })
+        .eq("id", item.id)
+        .select("id");
+      if (error) throw error;
+      if (!updated || updated.length === 0) throw new Error("Nenhum lançamento foi alterado. Verifique as permissões.");
+      // Item já pago mexe no saldo da conta: recalcula como na baixa.
+      if (item.status === "paid") await recalc();
+      invalidateAll();
+      toast.success(`Valor de "${item.description}" ajustado de ${fmt(Math.abs(item.amount))} para ${fmt(change.amount)}.`);
+      setEditId(null);
+    } catch (e: any) {
+      toast.error("Não foi possível ajustar o valor: " + (e?.message || "erro desconhecido"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Célula de valor: editável enquanto a fatura não foi fechada.
+  const amountCell = (item: InvoiceItem) => {
+    if (editId === item.id) {
+      return (
+        <div className="flex items-center justify-end gap-1">
+          <Input id={`valor-${item.id}`} value={editText} autoFocus inputMode="decimal"
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") saveAmount(item); if (e.key === "Escape") setEditId(null); }}
+            className="h-7 w-32 text-xs font-mono text-right" aria-label={`Novo valor de ${item.description}`} />
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => saveAmount(item)} disabled={saving} aria-label="Salvar valor"><Check className="h-3.5 w-3.5" /></Button>
+          <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditId(null)} disabled={saving} aria-label="Cancelar ajuste"><X className="h-3.5 w-3.5" /></Button>
+        </div>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1">
+        {fmt(Math.abs(item.amount))}
+        {!closedInvoice && (
+          <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground" onClick={() => startEdit(item)} disabled={saving}
+            title="Ajustar valor (ex.: IOF/impostos da fatura)" aria-label={`Ajustar valor de ${item.description}`}>
+            <Pencil className="h-3 w-3" />
+          </Button>
+        )}
+      </span>
+    );
+  };
+
   const handleCloseInvoice = async () => {
     setSaving(true);
     try {
@@ -328,6 +389,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
           <p className="text-xs text-muted-foreground">
             Período de gastos: {formatIsoDateBR(cycle.start)} a {formatIsoDateBR(cycle.end)} · Vencimento {formatIsoDateBR(cycle.end)}.
             Marque os lançamentos e escolha <b>Baixar</b> ou <b>Reagendar</b>; os demais ficam como estão.
+            {!closedInvoice && <> Use o lápis ao lado do valor para ajustar IOF ou impostos cobrados na fatura.</>}
           </p>
         </DialogHeader>
 
@@ -576,7 +638,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                         )}
                       </td>
                       <td className="py-2 text-xs text-muted-foreground whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
-                      <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Math.abs(item.amount))}</td>
+                      <td className="py-2 text-right font-mono whitespace-nowrap">{amountCell(item)}</td>
                       <td className="py-2 pl-3">
                         {r.selected ? (
                           <Select value={r.accountId ?? ""} onValueChange={(v) => patch(item.id, { accountId: v })}>
@@ -604,7 +666,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                     <td className="py-2 pl-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /></td>
                     <td className="py-2 pr-2">{item.description}</td>
                     <td className="py-2 text-xs whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
-                    <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Math.abs(item.amount))}</td>
+                    <td className="py-2 text-right font-mono whitespace-nowrap">{amountCell(item)}</td>
                     <td className="py-2 pl-3 text-xs">{accountName(item.account_id)}</td>
                     <td className="py-2 pr-2 text-xs">Pago em {formatIsoDateBR(item.payment_date)}</td>
                   </tr>
