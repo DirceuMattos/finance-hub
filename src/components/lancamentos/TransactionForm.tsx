@@ -1,3 +1,5 @@
+import { Checkbox } from "@/components/ui/checkbox";
+import { FORECAST_TAG, withForecastTag } from "@/lib/cardForecast";
 import { useEffect, useRef, useState } from "react";
 import { realizedDates } from "@/lib/realizedDates";
 import { useForm } from "react-hook-form";
@@ -39,6 +41,7 @@ const schema = z.object({
   installments_count: z.coerce.number().min(1).max(360).optional().nullable(),
   center_cost: z.string().optional().nullable(),
   is_total_amount: z.boolean().optional().default(false),
+  is_forecast: z.boolean().optional().default(false),
 }).superRefine((data, ctx) => {
   const hasCard = data.center_cost && data.center_cost !== "none" && data.center_cost !== "";
   if (hasCard && !data.due_date) {
@@ -79,6 +82,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
       installment_number: 1, installment_total: 1, installments_count: 1,
       center_cost: "",
       is_total_amount: false,
+      is_forecast: false,
     },
   });
 
@@ -162,6 +166,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         installment_total: transaction.installment_total ?? 1,
         installments_count: 1,
         center_cost: (transaction as any).center_cost || "",
+        is_forecast: ((transaction as any).tags ?? []).includes(FORECAST_TAG),
       });
     } else {
       form.reset({
@@ -170,6 +175,7 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         status: "planned", payee: "", notes: "",
         installment_number: 1, installment_total: 1, installments_count: 1,
         center_cost: "",
+        is_forecast: false,
       });
     }
     setCreatingCategory(false);
@@ -249,6 +255,10 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
         ? data.center_cost
         : null,
     };
+    // Previsão (valor estimado em cartão): marca na tag "previsao", preservando as demais tags.
+    const currentTags = (transaction as any)?.tags ?? null;
+    const nextTags = withForecastTag(currentTags, hasCard && !!data.is_forecast);
+    if (transaction || nextTags) payload.tags = nextTags;
     if (isMulti) {
       payload.installments_count = installmentsCount;
       payload.is_total_amount = isTotalAmount;
@@ -330,6 +340,20 @@ export function TransactionForm({ open, onOpenChange, transaction, entities, acc
               <FormMessage />
             </FormItem>
           )} />
+
+          {watchCenterCost && watchCenterCost !== "none" && (
+            <FormField control={form.control} name="is_forecast" render={({ field }) => (
+              <FormItem className="flex items-start gap-2 space-y-0 rounded-md border border-dashed px-3 py-2">
+                <FormControl>
+                  <Checkbox id="is_forecast" checked={!!field.value} onCheckedChange={(c) => field.onChange(!!c)} />
+                </FormControl>
+                <div className="leading-tight">
+                  <FormLabel htmlFor="is_forecast" className="text-sm">É previsão (valor estimado)</FormLabel>
+                  <p className="text-xs text-muted-foreground">Ex.: supermercado ou aplicativos. Aparece destacado na fatura e na projeção até ser trocado pela compra real.</p>
+                </div>
+              </FormItem>
+            )} />
+          )}
 
           <FormField control={form.control} name="payee" render={({ field }) => (
             <FormItem><FormLabel>Favorecido/Cliente</FormLabel><FormControl><Input placeholder="Nome do favorecido ou cliente" {...field} value={field.value || ""} /></FormControl><FormMessage /></FormItem>

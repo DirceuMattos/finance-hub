@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
+import { isForecast } from "@/lib/cardForecast";
 import {
   dropInternalTransfers, monthBounds, recurrenceOccurrences, referenceMonths, variableEstimates,
   type PaidExpense, type ProjAccount, type ProjCard, type ProjCategory, type ProjRecurrence, type ProjTx, type VariableEstimate,
@@ -75,7 +76,7 @@ export function useMonthProjection(view: ProjectionView, today: string, horizon 
       const plannedRaw = await fetchAll<any>((from, to) =>
         (supabase as any)
           .from("transactions")
-          .select("id, description, amount, transaction_type, financial_entity_id, account_id, category_id, center_cost, due_date, competence_date")
+          .select("id, description, amount, transaction_type, financial_entity_id, account_id, category_id, center_cost, due_date, competence_date, source_type, tags")
           .eq("status", "planned")
           .or(`due_date.lte.${horizonEnd},and(due_date.is.null,competence_date.lte.${horizonEnd})`)
           .order("id")
@@ -92,6 +93,7 @@ export function useMonthProjection(view: ProjectionView, today: string, horizon 
           categoryId: t.category_id,
           cardName: t.center_cost ? String(t.center_cost) : null,
           date: (t.due_date || t.competence_date) as string,
+          forecast: isForecast(t),
         }))
         .filter((t) => !!t.date);
 
