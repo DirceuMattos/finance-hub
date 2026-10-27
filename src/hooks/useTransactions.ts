@@ -32,6 +32,7 @@ export function useTransactions(filterMonth?: string) {
     "installment_number",
     "installment_total",
     "center_cost",
+    "tags",
   ] as const;
 
   const recalcBalances = async () => {

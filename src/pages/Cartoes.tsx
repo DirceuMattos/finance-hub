@@ -18,6 +18,7 @@ import { cardCycleMonthOf, cardCycleWindow, formatIsoDateBR } from "@/lib/cardCy
 import { CardInvoiceSettleDialog } from "@/components/cartoes/CardInvoiceSettleDialog";
 import { useCardReimbursements } from "@/hooks/useCardReimbursements";
 import { isReimbursementOf, summarizeReimbursements } from "@/lib/reimbursement";
+import { splitForecast } from "@/lib/cardForecast";
 
 type FilterView = "all" | "personal" | "business";
 
@@ -101,6 +102,28 @@ export default function Cartoes() {
   const monthLastDay = format(new Date(y, m, 0), "yyyy-MM-dd");
   const { data: monthReimbursements = [] } = useCardReimbursements(referenceMonth, monthLastDay);
 
+  // Previsões (recorrências ou itens marcados) em aberto no ciclo de cada cartão: destacadas no card.
+  const { data: openCardItems = [] } = useQuery({
+    queryKey: ["card_open_items_forecast", filterMonth, cards.map((c) => c.name).join("|")],
+    enabled: cards.length > 0,
+    staleTime: 0,
+    queryFn: async () => {
+      const wins = cards.map((c) => cardCycleWindow(filterMonth, c.due_day));
+      const from = wins.reduce((m, w) => (w.start < m ? w.start : m), wins[0].start);
+      const to = wins.reduce((m, w) => (w.end > m ? w.end : m), wins[0].end);
+      const { data, error } = await (supabase as any)
+        .from("transactions")
+        .select("center_cost, amount, due_date, source_type, tags")
+        .eq("status", "planned")
+        .in("center_cost", cards.map((c) => c.name))
+        .gte("due_date", from)
+        .lte("due_date", to)
+        .limit(5000);
+      if (error) throw error;
+      return (data || []) as { center_cost: string; amount: number; due_date: string; source_type: string | null; tags: string[] | null }[];
+    },
+  });
+
   const byCard = useMemo(() => {
     const map = new Map<string, CycleTotals>();
     cycleTotals.forEach((r: CycleTotals) => map.set(r.card_id, r));
@@ -179,6 +202,7 @@ export default function Cartoes() {
             const totalPlanned = cycleData?.total_planned || 0;
             const cycleTotal = totalPaid + totalPlanned;
             // Reembolsos informativos: não mexem em Pago/A Pagar nem no teto (teto segue o bruto).
+            const fc = splitForecast(openCardItems.filter((t) => t.center_cost === card.name && t.due_date >= cycle.start && t.due_date <= cycle.end));
             const reimb = summarizeReimbursements(
               monthReimbursements.filter((t) => isReimbursementOf(t, { id: card.id, name: card.name }, cycle.end)),
             );
@@ -281,6 +305,12 @@ export default function Cartoes() {
                       <p className="font-semibold">{fmt(cycleTotal)}</p>
                     </div>
                   </div>
+
+                  {fc.forecastCount > 0 && (
+                    <p className="text-xs rounded-md border border-dashed border-sky-500/50 px-2 py-1 text-sky-800 dark:text-sky-300">
+                      A pagar inclui <b>{fmt(fc.forecast)}</b> de previsões ({fc.forecastCount}) · compras lançadas {fmt(fc.committed)}
+                    </p>
+                  )}
 
                   {reimb.count > 0 && (
                     <div className="grid grid-cols-3 gap-2 text-sm rounded-md bg-muted/50 px-2 py-1.5">

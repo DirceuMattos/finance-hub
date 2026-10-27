@@ -81,7 +81,7 @@ describe("projectMonth", () => {
     expect(p.worstLaunched).toEqual({ date: "2026-11-05", balance: 4200 });
     const pf = p.accounts.find((a) => a.id === "pf")!;
     expect(pf).toMatchObject({ start: 100, end: -800, min: -800, minDate: "2026-11-05", firstNegative: "2026-11-05" });
-    expect(p.invoiceList).toEqual([{ cardName: "Nu PJ", dueDate: "2026-11-25", total: 1500, count: 1, managerialLimit: 1000, accounts: ["Nu-Bank PJ"], topCategories: [{ name: "Alimentação", total: 1500 }] }]);
+    expect(p.invoiceList).toEqual([{ cardName: "Nu PJ", dueDate: "2026-11-25", total: 1500, count: 1, forecast: 0, managerialLimit: 1000, accounts: ["Nu-Bank PJ"], topCategories: [{ name: "Alimentação", total: 1500 }] }]);
   });
 
   it("previsto atrasado entra hoje e é contado", () => {
@@ -103,6 +103,20 @@ describe("projectMonth", () => {
     expect(s.endLaunched).toBe(5300);
     expect(s.estimate).toBe(1500);
     expect(s.endWithEstimate).toBe(3800);
+  });
+});
+
+describe("previsões em fatura", () => {
+  it("separa a parte prevista da fatura e aponta nas prioridades", () => {
+    const planned = [
+      tx({ amount: 300, date: "2026-11-10", accountId: "pj", entityId: "E_PJ", cardName: "Nu PJ" }),
+      tx({ amount: 550, date: "2026-11-12", accountId: "pj", entityId: "E_PJ", cardName: "Nu PJ", forecast: true }),
+    ];
+    const p = projectMonth({ accounts, categories, cards: [{ name: "Nu PJ", entityId: "E_PJ", managerialLimit: 0, dueDay: 25 }], planned, estimates: [], month: "2026-11", today: "2026-10-30" });
+    expect(p.invoiceList[0]).toMatchObject({ total: 850, forecast: 550 });
+    expect(p.invoiceForecast).toBe(550);
+    const s = suggestActions({ projection: p, planned, estimates: [], entityType: () => "business", today: "2026-10-30" });
+    expect(s.find((x) => x.id === "card-forecast")?.title).toContain("550,00");
   });
 });
 

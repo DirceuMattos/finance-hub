@@ -301,7 +301,7 @@ export default function Projecao() {
                 <CardContent className="pt-3">
                   {proj.invoiceList.length === 0 ? <p className="text-sm text-muted-foreground">Nenhuma fatura com lançamentos em aberto no mês.</p> : (
                     <table className="w-full text-sm">
-                      <thead><tr className="text-xs text-muted-foreground border-b"><th className="text-left py-1 font-medium">Cartão</th><th className="text-left font-medium">Venc.</th><th className="text-right font-medium">Fatura</th><th className="text-right font-medium">Teto</th></tr></thead>
+                      <thead><tr className="text-xs text-muted-foreground border-b"><th className="text-left py-1 font-medium">Cartão</th><th className="text-left font-medium">Venc.</th><th className="text-right font-medium">Fatura</th><th className="text-right font-medium">Previsões</th><th className="text-right font-medium">Teto</th></tr></thead>
                       <tbody>
                         {proj.invoiceList.map((f) => {
                           const over = f.managerialLimit > 0 && f.total > f.managerialLimit;
@@ -310,6 +310,7 @@ export default function Projecao() {
                               <td className="py-1.5">{f.cardName}<span className="text-[11px] text-muted-foreground"> · {f.count} itens · {f.accounts.join(", ") || "—"}</span></td>
                               <td className="text-xs">{formatIsoDateBR(f.dueDate)}</td>
                               <td className="text-right font-mono">{fmt(f.total)}</td>
+                              <td className="text-right font-mono text-xs text-sky-700 dark:text-sky-400">{f.forecast ? fmt(f.forecast) : "—"}</td>
                               <td className={`text-right text-xs ${over ? "text-destructive font-medium" : "text-muted-foreground"}`}>{f.managerialLimit > 0 ? (over ? `+${fmt(f.total - f.managerialLimit)}` : fmt(f.managerialLimit)) : "—"}</td>
                             </tr>
                           );
@@ -317,7 +318,7 @@ export default function Projecao() {
                       </tbody>
                     </table>
                   )}
-                  <p className="text-[11px] text-muted-foreground mt-2">Compras ainda não lançadas até o fechamento aumentam a fatura.</p>
+                  <p className="text-[11px] text-muted-foreground mt-2">Previsões = valores estimados (recorrências ou itens marcados como previsão), já somados na fatura. Compras ainda não lançadas até o fechamento aumentam a fatura.</p>
                 </CardContent>
               </Card>
             </TabsContent>

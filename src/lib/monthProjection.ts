@@ -22,6 +22,7 @@ export interface ProjTx {
   categoryId: string | null;
   cardName: string | null; // center_cost: item de fatura de cartão
   date: string;            // vencimento (ou competência), yyyy-MM-dd
+  forecast?: boolean;      // previsão (recorrência ou marcada), não compra real
 }
 
 export interface ProjCategory {
@@ -92,6 +93,7 @@ export interface InvoiceProjection {
   dueDate: string;
   total: number;
   count: number;
+  forecast: number;      // parte do total que é previsão
   managerialLimit: number;
   accounts: string[];
   topCategories: { name: string; total: number }[];
@@ -105,6 +107,7 @@ export interface MonthProjection {
   income: number;
   expense: number;
   invoices: number;
+  invoiceForecast: number; // previsões dentro das faturas do mês
   estimate: number;
   endLaunched: number;
   endWithEstimate: number;
@@ -315,14 +318,15 @@ export function projectMonth(args: {
 
   // Faturas: itens de cartão do mês agrupados por cartão e vencimento (inclui adiados? não: só ativos).
   const cardMap = new Map(cards.map((c) => [c.name, c]));
-  const inv = new Map<string, { cardName: string; dueDate: string; total: number; count: number; accounts: Set<string>; cats: Map<string, number> }>();
+  const inv = new Map<string, { cardName: string; dueDate: string; total: number; count: number; forecast: number; accounts: Set<string>; cats: Map<string, number> }>();
   for (const t of inMonthTx) {
     if (t.type !== "expense" || !t.cardName) continue;
     const card = cardMap.get(t.cardName);
     const due = card ? cardCycleWindow(cardCycleMonthOf(t.date, card.dueDay), card.dueDay).end : t.date;
     const k = `${t.cardName}|${due}`;
-    const g = inv.get(k) ?? { cardName: t.cardName, dueDate: due, total: 0, count: 0, accounts: new Set<string>(), cats: new Map<string, number>() };
+    const g = inv.get(k) ?? { cardName: t.cardName, dueDate: due, total: 0, count: 0, forecast: 0, accounts: new Set<string>(), cats: new Map<string, number>() };
     g.total += t.amount; g.count++;
+    if (t.forecast) g.forecast += t.amount;
     if (t.accountId) g.accounts.add(accName.get(t.accountId) || "—");
     const cn = (t.categoryId && catName.get(t.categoryId)) || "Sem categoria";
     g.cats.set(cn, (g.cats.get(cn) || 0) + t.amount);
@@ -333,6 +337,7 @@ export function projectMonth(args: {
     dueDate: g.dueDate,
     total: r2(g.total),
     count: g.count,
+    forecast: r2(g.forecast),
     managerialLimit: cardMap.get(g.cardName)?.managerialLimit || 0,
     accounts: Array.from(g.accounts),
     topCategories: Array.from(g.cats.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, total]) => ({ name, total: r2(total) })),
@@ -353,6 +358,7 @@ export function projectMonth(args: {
     income: r2(income),
     expense: r2(expense),
     invoices: r2(invoices),
+    invoiceForecast: r2(inMonthTx.reduce((s, t) => s + (t.type === "expense" && t.cardName && t.forecast ? t.amount : 0), 0)),
     estimate: estTotal,
     endLaunched: last ? last.launched : startBalance,
     endWithEstimate: last ? last.withEstimate : startBalance,
@@ -445,6 +451,17 @@ export function suggestActions(args: {
       level: "warning",
       title: `${over.length} fatura(s) acima do teto`,
       detail: over.map((f) => `${f.cardName} ${brl(f.total)} (+${brl(r2(f.total - f.managerialLimit))})`).join("; ") + ". Segure novas compras nesses cartões até o fechamento.",
+    });
+  }
+
+  // 3b. Previsões dentro das faturas: valor estimado, não compra.
+  if (p.invoiceForecast > 0) {
+    const withFc = p.invoiceList.filter((f) => f.forecast > 0);
+    out.push({
+      id: "card-forecast",
+      level: "info",
+      title: `Faturas incluem ${brl(p.invoiceForecast)} de previsões`,
+      detail: withFc.map((f) => `${f.cardName} ${brl(f.forecast)}`).join("; ") + ". São estimativas (supermercado, aplicativos): ao conferir a fatura, troque pelo valor real.",
     });
   }
 
@@ -546,7 +563,7 @@ export function recurrenceOccurrences(recs: ProjRecurrence[], existing: Set<stri
       if (date < begin || date > end || existing.has(`${r.id}|${date}`)) return;
       out.push({
         id: `rec:${r.id}:${date}`, description: `${r.description} (recorrência)`, amount: Math.abs(r.amount), type: r.type,
-        entityId: r.entityId, accountId: r.accountId, categoryId: r.categoryId, cardName: r.cardName, date,
+        entityId: r.entityId, accountId: r.accountId, categoryId: r.categoryId, cardName: r.cardName, date, forecast: true,
       });
     };
     if (r.frequency === "weekly") {

@@ -17,6 +17,7 @@ import { evaluateExpression } from "@/lib/calc";
 import { buildReimbursement, isReimbursementOf, summarizeReimbursements } from "@/lib/reimbursement";
 import { useCardReimbursements } from "@/hooks/useCardReimbursements";
 import { buildAmountChange } from "@/lib/invoiceAmountEdit";
+import { isForecast, splitForecast } from "@/lib/cardForecast";
 
 interface Props {
   open: boolean;
@@ -39,6 +40,8 @@ interface InvoiceItem {
   installment_total: number | null;
   account_id: string | null;
   notes: string | null;
+  source_type: string | null;
+  tags: string[] | null;
 }
 
 interface RowState {
@@ -109,7 +112,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("transactions")
-        .select("id, description, amount, due_date, status, payment_date, installment_number, installment_total, account_id, notes")
+        .select("id, description, amount, due_date, status, payment_date, installment_number, installment_total, account_id, notes, source_type, tags")
         .eq("center_cost", cardName)
         .in("status", ["planned", "paid"])
         .gte("due_date", cycle.start)
@@ -172,6 +175,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
   const pendingChanges = changedOf(selectedItems.map((i) => ({ item: i, text: rows[i.id]?.amountText ?? "" })));
   const paidChanges = changedOf(alreadyPaid.map((i) => ({ item: i, text: paidEdits[i.id] ?? toText(i.amount) })));
   const totalPaid = alreadyPaid.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const pendingSplit = splitForecast(pending);
   const allSelected = pending.length > 0 && selectedItems.length === pending.length;
   const readyToClose = !closedInvoice && pending.length === 0 && alreadyPaid.length > 0;
 
@@ -628,6 +632,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                       </td>
                       <td className="py-2 pr-2">
                         {item.description}
+                        {isForecast(item) && <Badge variant="outline" className="ml-1 text-[10px] border-sky-500 text-sky-700 dark:text-sky-400" title="Valor estimado: troque pela compra real ou ajuste o valor">Previsão</Badge>}
                         {item.installment_total && item.installment_total > 1 && (
                           <span className="text-[10px] text-muted-foreground ml-1">({item.installment_number}/{item.installment_total})</span>
                         )}
@@ -665,7 +670,7 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
                 {alreadyPaid.map((item) => (
                   <tr key={item.id} className="border-b text-muted-foreground">
                     <td className="py-2 pl-2"><CheckCircle2 className="h-4 w-4 text-emerald-600" /></td>
-                    <td className="py-2 pr-2">{item.description}</td>
+                    <td className="py-2 pr-2">{item.description}{isForecast(item) && <Badge variant="outline" className="ml-1 text-[10px]">Previsão</Badge>}</td>
                     <td className="py-2 text-xs whitespace-nowrap">{formatIsoDateBR(item.due_date)}</td>
                     <td className="py-2 text-right font-mono whitespace-nowrap">
                       {closedInvoice ? fmt(Math.abs(item.amount)) : (
@@ -697,7 +702,8 @@ export function CardInvoiceSettleDialog({ open, onOpenChange, cardId, cardName, 
         {items.length > 0 && (
           <div className="border-t pt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
             <div><p className="text-xs text-muted-foreground">Já pago no ciclo</p><p className="font-semibold text-emerald-600">{fmt(totalPaid)}</p></div>
-            <div><p className="text-xs text-muted-foreground">Em aberto</p><p className="font-semibold text-amber-600">{fmt(totalPending)}</p></div>
+            <div><p className="text-xs text-muted-foreground">Em aberto</p><p className="font-semibold text-amber-600">{fmt(totalPending)}</p>
+              {pendingSplit.forecastCount > 0 && <p className="text-[11px] text-sky-700 dark:text-sky-400">inclui {fmt(pendingSplit.forecast)} de previsões ({pendingSplit.forecastCount})</p>}</div>
             <div><p className="text-xs text-muted-foreground">Selecionado ({selectedItems.length}/{pending.length})</p><p className="font-semibold">{fmt(totalSelected)}</p></div>
             <div><p className="text-xs text-muted-foreground">Total do ciclo</p><p className="font-semibold">{fmt(totalPaid + totalPending)}</p></div>
             {reimbSummary.count > 0 && (
