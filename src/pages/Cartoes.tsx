@@ -306,12 +306,6 @@ export default function Cartoes() {
                     </div>
                   </div>
 
-                  {fc.forecastCount > 0 && (
-                    <p className="text-xs rounded-md border border-dashed border-sky-500/50 px-2 py-1 text-sky-800 dark:text-sky-300">
-                      A pagar inclui <b>{fmt(fc.forecast)}</b> de previsões ({fc.forecastCount}) · compras lançadas {fmt(fc.committed)}
-                    </p>
-                  )}
-
                   {reimb.count > 0 && (
                     <div className="grid grid-cols-3 gap-2 text-sm rounded-md bg-muted/50 px-2 py-1.5">
                       <div>
@@ -357,8 +351,18 @@ export default function Cartoes() {
                       );
                     }
 
-                    const barColor = isOver ? "bg-red-500" : pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
-                    const barWidth = Math.min(pct, 100);
+                    // Usado em laranja (vermelho a partir de 90% ou acima do teto); a folga até o teto em verde.
+                    const barColor = isOver || pct >= 90 ? "bg-red-500" : "bg-orange-500";
+                    // Uma régua só, em duas partes: compras lançadas (cheia) e previsões (listrada).
+                    // Acima do teto, a régua passa a representar o total e uma marca mostra onde fica o teto.
+                    const forecastPart = Math.min(fc.forecast, usedAmount);
+                    const committedPart = usedAmount - forecastPart;
+                    const scale = Math.max(limit, usedAmount);
+                    const wCommitted = scale > 0 ? (committedPart / scale) * 100 : 0;
+                    const wForecast = scale > 0 ? (forecastPart / scale) * 100 : 0;
+                    const ceilingAt = isOver ? (limit / usedAmount) * 100 : null;
+                    const committedPct = (committedPart / limit) * 100;
+                    const stripes = "repeating-linear-gradient(135deg, rgba(255,255,255,.55) 0 3px, transparent 3px 6px)";
 
                     return (
                       <div className="mt-3 space-y-1.5">
@@ -368,8 +372,12 @@ export default function Cartoes() {
                             {pct.toFixed(1)}%
                           </span>
                         </div>
-                        <div className="h-2 rounded-full bg-muted overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${barWidth}%` }} />
+                        <div className="relative h-2 rounded-full bg-emerald-500/35 overflow-hidden flex">
+                          <div className={`h-full transition-all ${barColor}`} style={{ width: `${wCommitted}%` }} title={`Compras lançadas ${fmt(committedPart)}`} />
+                          {forecastPart > 0 && (
+                            <div className={`h-full transition-all ${barColor} opacity-60`} style={{ width: `${wForecast}%`, backgroundImage: stripes }} title={`Previsões ${fmt(forecastPart)}`} />
+                          )}
+                          {ceilingAt !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/80" style={{ left: `${ceilingAt}%` }} title="Teto gerencial" />}
                         </div>
                         {isOver ? (
                           <p className="text-xs text-red-600 dark:text-red-400 font-medium">
@@ -378,6 +386,12 @@ export default function Cartoes() {
                         ) : (
                           <p className="text-xs text-muted-foreground">
                             Restam {fmt(remaining)} ({(100 - pct).toFixed(1)}% livre)
+                          </p>
+                        )}
+                        {forecastPart > 0 && (
+                          <p className="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                            <span className="inline-flex items-center gap-1"><span className={`inline-block h-2 w-3 rounded-sm ${barColor}`} />Compras {fmt(committedPart)} ({committedPct.toFixed(0)}% do teto)</span>
+                            <span className="inline-flex items-center gap-1"><span className={`inline-block h-2 w-3 rounded-sm ${barColor} opacity-60`} style={{ backgroundImage: stripes }} />Previsões {fmt(forecastPart)} ({fc.forecastCount})</span>
                           </p>
                         )}
                       </div>
