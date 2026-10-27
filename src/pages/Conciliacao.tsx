@@ -79,7 +79,7 @@ export default function Conciliacao() {
 
   return (
     <AppLayout>
-      <PageHeader title="Conciliação Bancária" description="Saldo de cada conta mês a mês, lançamento por lançamento, para conferir com o extrato" />
+      <PageHeader title="Conciliação Bancos" description="Saldo de cada conta mês a mês, lançamento por lançamento, para conferir com o extrato" />
 
       <div className="flex flex-wrap items-end gap-3 mb-4">
         <div className="space-y-1">

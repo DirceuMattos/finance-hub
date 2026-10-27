@@ -97,7 +97,7 @@ export default function Projecao() {
   return (
     <AppLayout>
       <PageHeader
-        title="Projeção"
+        title="Projeções e Análises"
         description={`Caixa previsto para ${monthLabel}`}
         actions={
           <div className="flex flex-wrap items-center gap-3">

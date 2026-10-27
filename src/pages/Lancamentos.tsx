@@ -628,7 +628,7 @@ export default function Lancamentos() {
 
   return (
     <AppLayout>
-      <PageHeader title="Lançamentos" description="Gerencie receitas e despesas" actions={
+      <PageHeader title="Movimentações" description="Gerencie receitas e despesas" actions={
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setImportOpen(true)}>
             <Upload className="h-4 w-4 mr-1" />Importar CSV
