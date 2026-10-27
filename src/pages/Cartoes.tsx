@@ -135,7 +135,7 @@ export default function Cartoes() {
   return (
     <AppLayout>
       <PageHeader
-        title="Cartões"
+        title="Cartões de Crédito"
         description={`Visão ${view === "all" ? "consolidada" : view === "personal" ? "pessoal" : "empresarial"} dos seus cartões de crédito`}
       />
 

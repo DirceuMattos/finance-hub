@@ -77,7 +77,7 @@ export function AccountsTab() {
 
   return (
     <div>
-      <PageHeader title="Contas Bancárias" description="Gerencie suas contas" actions={
+      <PageHeader title="Bancos e Saldos" description="Contas bancárias e saldos" actions={
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={recalculating}>
             <RefreshCw className={`h-4 w-4 mr-1 ${recalculating ? "animate-spin" : ""}`} />

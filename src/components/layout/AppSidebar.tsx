@@ -11,7 +11,6 @@ import {
   LogOut,
   DollarSign,
   FileDown,
-  Bell,
   Scale,
   TrendingUp,
   Wallet,
@@ -38,24 +37,23 @@ const navGroups = [
     label: "Visão Geral",
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
-      { title: "Projeção", url: "/projecao", icon: TrendingUp },
-      { title: "Alertas", url: "/alertas", icon: Bell },
+      { title: "Projeções e Análises", url: "/projecao", icon: TrendingUp },
     ],
   },
   {
     label: "Financeiro",
     items: [
-      { title: "Lançamentos", url: "/lancamentos", icon: ArrowRightLeft },
+      { title: "Movimentações", url: "/lancamentos", icon: ArrowRightLeft },
       { title: "Recorrências", url: "/recorrencias", icon: Repeat },
       { title: "Fluxo Mensal", url: "/fluxo-mensal", icon: CalendarRange },
-      { title: "Conciliação", url: "/conciliacao", icon: Scale },
-      { title: "Contas", url: "/contas", icon: Wallet },
+      { title: "Conciliação Bancos", url: "/conciliacao", icon: Scale },
+      { title: "Bancos e Saldos", url: "/contas", icon: Wallet },
     ],
   },
   {
     label: "Cartões",
     items: [
-      { title: "Cartões", url: "/cartoes", icon: CreditCard },
+      { title: "Cartões de Crédito", url: "/cartoes", icon: CreditCard },
       { title: "Faturas Projetadas", url: "/faturas-projetadas", icon: FileText },
     ],
   },
