@@ -351,7 +351,8 @@ export default function Cartoes() {
                       );
                     }
 
-                    const barColor = isOver ? "bg-red-500" : pct >= 90 ? "bg-red-500" : pct >= 70 ? "bg-amber-500" : "bg-emerald-500";
+                    // Usado em laranja (vermelho a partir de 90% ou acima do teto); a folga até o teto em verde.
+                    const barColor = isOver || pct >= 90 ? "bg-red-500" : "bg-orange-500";
                     // Uma régua só, em duas partes: compras lançadas (cheia) e previsões (listrada).
                     // Acima do teto, a régua passa a representar o total e uma marca mostra onde fica o teto.
                     const forecastPart = Math.min(fc.forecast, usedAmount);
@@ -371,7 +372,7 @@ export default function Cartoes() {
                             {pct.toFixed(1)}%
                           </span>
                         </div>
-                        <div className="relative h-2 rounded-full bg-muted overflow-hidden flex">
+                        <div className="relative h-2 rounded-full bg-emerald-500/35 overflow-hidden flex">
                           <div className={`h-full transition-all ${barColor}`} style={{ width: `${wCommitted}%` }} title={`Compras lançadas ${fmt(committedPart)}`} />
                           {forecastPart > 0 && (
                             <div className={`h-full transition-all ${barColor} opacity-60`} style={{ width: `${wForecast}%`, backgroundImage: stripes }} title={`Previsões ${fmt(forecastPart)}`} />
