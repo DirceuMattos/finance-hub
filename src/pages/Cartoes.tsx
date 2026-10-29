@@ -372,12 +372,18 @@ export default function Cartoes() {
                             {pct.toFixed(1)}%
                           </span>
                         </div>
-                        <div className="relative h-2 rounded-full bg-emerald-500/35 overflow-hidden flex">
+                        <div className="relative">
+                        <div className="h-2 rounded-full bg-emerald-500/35 overflow-hidden flex">
                           <div className={`h-full transition-all ${barColor}`} style={{ width: `${wCommitted}%` }} title={`Compras lançadas ${fmt(committedPart)}`} />
                           {forecastPart > 0 && (
                             <div className={`h-full transition-all ${barColor} opacity-60`} style={{ width: `${wForecast}%`, backgroundImage: stripes }} title={`Previsões ${fmt(forecastPart)}`} />
                           )}
-                          {ceilingAt !== null && <div className="absolute top-0 bottom-0 w-0.5 bg-foreground/80" style={{ left: `${ceilingAt}%` }} title="Teto gerencial" />}
+                        </div>
+                          {/* Marca do teto: mais alta que a régua, com contorno para destacar sobre o vermelho. */}
+                          {ceilingAt !== null && (
+                            <div className="absolute -top-1.5 -bottom-1.5 w-1 -ml-0.5 rounded-full bg-foreground ring-2 ring-card"
+                              style={{ left: `${ceilingAt}%` }} title="Teto gerencial" />
+                          )}
                         </div>
                         {isOver ? (
                           <p className="text-xs text-red-600 dark:text-red-400 font-medium">
