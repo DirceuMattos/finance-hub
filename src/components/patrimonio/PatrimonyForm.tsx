@@ -11,6 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAssetCategories, usePreviousPatrimonyClosingValue, type PatrimonySnapshot } from "@/hooks/usePatrimony";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { supabase } from "@/lib/supabaseClient";
+import { parseMoneyInput } from "@/lib/snapshots";
+
+// Valores em pt-BR ("56.680,88") ou com ponto; o campo numérico do navegador podia descartar a vírgula.
+const toMoney = (v: unknown): number | null | undefined =>
+  typeof v === "number" ? v : parseMoneyInput(String(v ?? ""));
+const showMoney = (v: unknown) => (typeof v === "number" ? String(v).replace(".", ",") : ((v as string) ?? ""));
 
 const schema = z.object({
   reference_month: z.string().min(1, "Mês de referência é obrigatório"),
@@ -18,9 +24,11 @@ const schema = z.object({
   asset_category_name: z.string().optional().nullable(),
   asset_type: z.string().optional().nullable(),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
-  opening_value: z.coerce.number(),
+  opening_value: z.preprocess((v) => { const r = toMoney(v); return r === null ? 0 : r; },
+    z.number({ required_error: "Valor inválido. Use, por exemplo, 12.345,67", invalid_type_error: "Valor inválido. Use, por exemplo, 12.345,67" })),
   // Vazio = "em aberto" (null); antes virava 0 ou copiava a abertura.
-  closing_value: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().nullable()).optional(),
+  closing_value: z.preprocess((v) => { const r = toMoney(v); return r === undefined ? "inválido" : r; },
+    z.number({ invalid_type_error: "Valor inválido. Use, por exemplo, 12.345,67" }).nullable()).optional(),
   notes: z.string().optional(),
 });
 
@@ -251,7 +259,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
             <FormField control={form.control} name="opening_value" render={({ field }) => (
               <FormItem>
                 <FormLabel>Valor Abertura</FormLabel>
-                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormControl><Input inputMode="decimal" placeholder="ex.: 150.000,00" {...field} value={showMoney(field.value)} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -259,7 +267,7 @@ export function PatrimonyForm({ open, onOpenChange, snapshot, onSubmit, loading 
             <FormField control={form.control} name="closing_value" render={({ field }) => (
               <FormItem>
                 <FormLabel>Valor Fechamento</FormLabel>
-                <FormControl><Input type="number" step="0.01" placeholder="Em aberto" {...field} value={field.value ?? ""} /></FormControl>
+                <FormControl><Input inputMode="decimal" placeholder="Em aberto" {...field} value={showMoney(field.value)} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />

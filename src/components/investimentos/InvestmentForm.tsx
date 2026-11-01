@@ -1,4 +1,4 @@
-import { isOutOfScale } from "@/lib/snapshots";
+import { isOutOfScale, parseMoneyInput } from "@/lib/snapshots";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,13 +12,21 @@ import { Button } from "@/components/ui/button";
 import { useInvestmentClasses, usePreviousClosingValue, type InvestmentSnapshot } from "@/hooks/useInvestments";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 
+// Valores digitados em pt-BR ("56.680,88") ou com ponto ("56680.88"). Antes o campo numérico do
+// navegador podia descartar a vírgula e gravar 5.668.088.
+const toMoney = (v: unknown): number | null | undefined =>
+  typeof v === "number" ? v : parseMoneyInput(String(v ?? ""));
+const showMoney = (v: unknown) => (typeof v === "number" ? String(v).replace(".", ",") : ((v as string) ?? ""));
+
 const schema = z.object({
   reference_month: z.string().min(1, "Mês de referência é obrigatório"),
   investment_class_id: z.string().min(1, "Classe é obrigatória"),
   financial_entity_id: z.string().min(1, "Entidade é obrigatória"),
-  opening_value: z.coerce.number(),
+  opening_value: z.preprocess((v) => { const r = toMoney(v); return r === null ? 0 : r; },
+    z.number({ required_error: "Valor inválido. Use, por exemplo, 12.345,67", invalid_type_error: "Valor inválido. Use, por exemplo, 12.345,67" })),
   // INV-03: vazio = "em aberto" (null); antes virava 0 ao salvar qualquer edição.
-  closing_value: z.preprocess((v) => (v === "" || v === null || v === undefined ? null : Number(v)), z.number().nullable()),
+  closing_value: z.preprocess((v) => { const r = toMoney(v); return r === undefined ? "inválido" : r; },
+    z.number({ invalid_type_error: "Valor inválido. Use, por exemplo, 12.345,67" }).nullable()),
   has_quick_liquidity: z.boolean().optional(),
 });
 
@@ -91,7 +99,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
   const [scaleConfirmed, setScaleConfirmed] = useState(false);
   const watchOpening = form.watch("opening_value");
   const watchClosing = form.watch("closing_value");
-  const outOfScale = isOutOfScale(Number(watchOpening), watchClosing === null || (watchClosing as unknown) === "" ? null : Number(watchClosing));
+  const outOfScale = isOutOfScale(toMoney(watchOpening) ?? 0, toMoney(watchClosing) ?? null);
   useEffect(() => { setScaleConfirmed(false); }, [watchOpening, watchClosing]);
 
   const handleSubmit = (data: FormData) => {
@@ -153,7 +161,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
             <FormField control={form.control} name="opening_value" render={({ field }) => (
               <FormItem>
                 <FormLabel>Valor Abertura</FormLabel>
-                <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
+                <FormControl><Input inputMode="decimal" placeholder="ex.: 53.299,72" {...field} value={showMoney(field.value)} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -161,7 +169,7 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
             <FormField control={form.control} name="closing_value" render={({ field }) => (
               <FormItem>
                 <FormLabel>Valor Fechamento</FormLabel>
-                <FormControl><Input type="number" step="0.01" placeholder="Em aberto" {...field} value={field.value ?? ""} /></FormControl>
+                <FormControl><Input inputMode="decimal" placeholder="Em aberto" {...field} value={showMoney(field.value)} onChange={(e) => field.onChange(e.target.value)} /></FormControl>
                 {outOfScale && (
                   <p className="text-xs text-amber-700 dark:text-amber-400">
                     Muito diferente da abertura. Confira a vírgula{scaleConfirmed ? "; clique em Salvar de novo para confirmar." : "."}
