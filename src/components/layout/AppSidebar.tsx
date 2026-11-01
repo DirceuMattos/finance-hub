@@ -13,6 +13,7 @@ import {
   FileDown,
   Scale,
   TrendingUp,
+  BarChart3,
   Wallet,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
@@ -37,6 +38,7 @@ const navGroups = [
     label: "Visão Geral",
     items: [
       { title: "Dashboard", url: "/", icon: LayoutDashboard },
+      { title: "Análises por Despesas ou Receitas", url: "/analises", icon: BarChart3 },
       { title: "Projeções e Análises", url: "/projecao", icon: TrendingUp },
     ],
   },
