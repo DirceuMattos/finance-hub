@@ -287,12 +287,16 @@ export default function Lancamentos() {
       } else if (filterEntity === "all_business") {
         if (t.entity_type !== "business") return false;
       } else if (filterEntity !== "all" && t.financial_entity_id !== filterEntity) return false;
-      if (filterAccount !== "all" && !t.is_card_installment && t.account_id !== filterAccount) return false;
-      if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
+      // "__none" = sem conta / sem categoria / sem cartão (para achar e corrigir lançamentos incompletos).
+      if (filterAccount === "__none") { if (t.is_card_installment || t.account_id) return false; }
+      else if (filterAccount !== "all" && !t.is_card_installment && t.account_id !== filterAccount) return false;
+      if (filterCategory === "__none") { if (t.is_card_installment ? !!t.category_name : !!t.category_id) return false; }
+      else if (filterCategory !== "all" && !t.is_card_installment && t.category_id !== filterCategory) return false;
       // Status filter applied client-side for all rows (transactions and card installments)
       if (filterStatus !== "all" && t.status !== filterStatus) return false;
       if (filterTypeTab !== "all" && t.transaction_type !== filterTypeTab) return false;
-      if (filterCard !== "all" && t.card_name !== filterCard) return false;
+      if (filterCard === "__none") { if (t.card_name) return false; }
+      else if (filterCard !== "all" && t.card_name !== filterCard) return false;
       if (filterInstallment === "yes" && !((t.installment_total ?? 1) > 1)) return false;
       if (filterInstallment === "no" && ((t.installment_total ?? 1) > 1)) return false;
       if (filterContainable) {
@@ -536,12 +540,12 @@ export default function Lancamentos() {
       adjusted = true;
     }
 
-    if (filterAccount !== "all" && item.account_id !== filterAccount) {
+    if (filterAccount !== "all" && (filterAccount === "__none" ? !!item.account_id : item.account_id !== filterAccount)) {
       setFilterAccount("all");
       adjusted = true;
     }
 
-    if (filterCategory !== "all" && item.category_id !== filterCategory) {
+    if (filterCategory !== "all" && (filterCategory === "__none" ? !!item.category_id : item.category_id !== filterCategory)) {
       setFilterCategory("all");
       adjusted = true;
     }
@@ -758,6 +762,7 @@ export default function Lancamentos() {
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Conta" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas contas</SelectItem>
+                <SelectItem value="__none">Sem conta</SelectItem>
                 {filteredAccounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -768,6 +773,7 @@ export default function Lancamentos() {
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas categorias</SelectItem>
+                <SelectItem value="__none">Sem categoria</SelectItem>
                 {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -778,6 +784,7 @@ export default function Lancamentos() {
               <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Cartão" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos cartões</SelectItem>
+                <SelectItem value="__none">Sem cartão</SelectItem>
                 {cardsList.filter((c: any) => c.is_active !== false).map(c => (
                   <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
                 ))}

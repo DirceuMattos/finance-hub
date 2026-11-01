@@ -100,6 +100,7 @@ export default function Analises() {
               <SelectTrigger id="analise-categoria" className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="__none">Sem categoria</SelectItem>
                 {typeCats.sort((a: any, b: any) => a.name.localeCompare(b.name)).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -110,6 +111,7 @@ export default function Analises() {
               <SelectTrigger id="analise-conta" className="h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="__none">Sem conta</SelectItem>
                 {accounts.filter((a) => a.is_active).map((a) => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
               </SelectContent>
             </Select>

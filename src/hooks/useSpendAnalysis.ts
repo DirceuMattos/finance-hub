@@ -43,8 +43,10 @@ export function useSpendAnalysis(f: AnalysisFilters) {
           .neq("status", "cancelled")
           .or(`and(due_date.gte.${start},due_date.lte.${end}),and(due_date.is.null,competence_date.gte.${start},competence_date.lte.${end})`);
         if (f.status !== "all") q = q.eq("status", f.status);
-        if (f.categoryId !== "all") q = q.eq("category_id", f.categoryId);
-        if (f.accountId !== "all") q = q.eq("account_id", f.accountId);
+        if (f.categoryId === "__none") q = q.is("category_id", null);
+        else if (f.categoryId !== "all") q = q.eq("category_id", f.categoryId);
+        if (f.accountId === "__none") q = q.is("account_id", null);
+        else if (f.accountId !== "all") q = q.eq("account_id", f.accountId);
         return q.order("id").range(from, to);
       });
       return raw.map((t) => ({
