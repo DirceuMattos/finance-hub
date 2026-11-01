@@ -14,6 +14,7 @@ export interface AnalysisRow {
   payee: string | null;
   notes: string | null;
   cardName: string | null;
+  forecast: boolean;       // previsão (recorrência ou marcada): estimativa, não fato
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -45,17 +46,21 @@ export function matchesSearch(row: AnalysisRow, query: string): boolean {
   return words.every((w) => hay.includes(w));
 }
 
-export interface MonthPoint { month: string; total: number; count: number }
+/** total = fato (o que de fato aconteceu ou foi comprado); forecast = previsões, mostradas à parte. */
+export interface MonthPoint { month: string; total: number; count: number; forecast: number; forecastCount: number }
 
 export function totalsByMonth(rows: AnalysisRow[], months: string[]): MonthPoint[] {
-  const map = new Map(months.map((m) => [m, { total: 0, count: 0 }]));
+  const map = new Map(months.map((m) => [m, { total: 0, count: 0, forecast: 0, forecastCount: 0 }]));
   for (const r of rows) {
     const g = map.get(r.date.slice(0, 7));
     if (!g) continue;
-    g.total += r.amount;
-    g.count++;
+    if (r.forecast) { g.forecast += r.amount; g.forecastCount++; }
+    else { g.total += r.amount; g.count++; }
   }
-  return months.map((m) => ({ month: m, total: r2(map.get(m)!.total), count: map.get(m)!.count }));
+  return months.map((m) => {
+    const g = map.get(m)!;
+    return { month: m, total: r2(g.total), count: g.count, forecast: r2(g.forecast), forecastCount: g.forecastCount };
+  });
 }
 
 export interface Trend {
@@ -100,8 +105,9 @@ export function summarize(points: MonthPoint[]): MonthSummary {
 export interface CategoryRow {
   categoryId: string | null;
   name: string;
-  current: number;   // no mês selecionado
-  average: number;   // média dos meses anteriores do período
+  current: number;   // fato no mês selecionado
+  forecast: number;  // previsões no mês selecionado (à parte)
+  average: number;   // média do fato nos meses anteriores do período
   delta: number;     // current − average
   months: number[];  // série do período (para minigráfico)
 }
@@ -114,15 +120,16 @@ export function byCategory(rows: AnalysisRow[], months: string[]): CategoryRow[]
     const i = idx.get(r.date.slice(0, 7));
     if (i === undefined) continue;
     const key = r.categoryId ?? "__sem";
-    const g = map.get(key) ?? { categoryId: r.categoryId, name: r.categoryName ?? "Sem categoria", current: 0, average: 0, delta: 0, months: months.map(() => 0) };
-    g.months[i] += r.amount;
+    const g = map.get(key) ?? { categoryId: r.categoryId, name: r.categoryName ?? "Sem categoria", current: 0, forecast: 0, average: 0, delta: 0, months: months.map(() => 0) };
+    if (r.forecast) { if (i === months.length - 1) g.forecast += r.amount; }
+    else g.months[i] += r.amount;
     map.set(key, g);
   }
   const prevCount = months.length - 1;
   return Array.from(map.values()).map((g) => {
     const current = r2(g.months[g.months.length - 1]);
     const average = prevCount ? r2(g.months.slice(0, -1).reduce((s, v) => s + v, 0) / prevCount) : 0;
-    return { ...g, months: g.months.map(r2), current, average, delta: r2(current - average) };
+    return { ...g, months: g.months.map(r2), current, forecast: r2(g.forecast), average, delta: r2(current - average) };
   }).sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || b.current - a.current)
-    .filter((g) => g.current > 0 || g.average > 0);
+    .filter((g) => g.current > 0 || g.average > 0 || g.forecast > 0);
 }
