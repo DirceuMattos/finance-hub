@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { isOutOfScale } from "@/lib/snapshots";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -86,7 +87,15 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
     }
   }, [snapshot, open]);
 
+  // Fechamento fora de escala: exige um segundo clique em Salvar (evita vírgula esquecida).
+  const [scaleConfirmed, setScaleConfirmed] = useState(false);
+  const watchOpening = form.watch("opening_value");
+  const watchClosing = form.watch("closing_value");
+  const outOfScale = isOutOfScale(Number(watchOpening), watchClosing === null || (watchClosing as unknown) === "" ? null : Number(watchClosing));
+  useEffect(() => { setScaleConfirmed(false); }, [watchOpening, watchClosing]);
+
   const handleSubmit = (data: FormData) => {
+    if (outOfScale && !scaleConfirmed) { setScaleConfirmed(true); return; }
     onSubmit(snapshot ? { id: snapshot.id, ...data } : data);
   };
 
@@ -153,6 +162,11 @@ export function InvestmentForm({ open, onOpenChange, snapshot, onSubmit, loading
               <FormItem>
                 <FormLabel>Valor Fechamento</FormLabel>
                 <FormControl><Input type="number" step="0.01" placeholder="Em aberto" {...field} value={field.value ?? ""} /></FormControl>
+                {outOfScale && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    Muito diferente da abertura. Confira a vírgula{scaleConfirmed ? "; clique em Salvar de novo para confirmar." : "."}
+                  </p>
+                )}
                 <FormMessage />
               </FormItem>
             )} />
