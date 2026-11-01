@@ -17,6 +17,7 @@ import { Landmark, TrendingUp, TrendingDown, Plus, Pencil, Trash2, AlertTriangle
 import { usePatrimonySnapshots, usePatrimonyCrud, PatrimonySnapshot } from "@/hooks/usePatrimony";
 import { useFinancialEntities } from "@/hooks/useFinancialEntities";
 import { PatrimonyForm } from "@/components/patrimonio/PatrimonyForm";
+import { PatrimonySuggestions } from "@/components/patrimonio/PatrimonySuggestions";
 import { DeleteDialog } from "@/components/configuracoes/DeleteDialog";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { isClosed, patrimonyItemValue, signedPatrimonyValue } from "@/lib/snapshots";
@@ -400,6 +401,13 @@ export default function Patrimonio() {
             </Card>
           ))}
         </div>
+      )}
+
+      {activeMonth && (
+        <PatrimonySuggestions
+          month={activeMonth}
+          items={filteredSnapshots.map((s) => ({ id: s.id, item_name: s.item_name, financial_entity_id: s.financial_entity_id, closing_value: s.closing_value }))}
+        />
       )}
 
       <DataTable
