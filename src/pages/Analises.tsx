@@ -133,9 +133,12 @@ export default function Analises() {
           <Card>
             <CardContent className="p-3 grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                <p className="text-[11px] text-muted-foreground">{isExpense ? "Despesas" : "Receitas"} em {monthLabel(filters.month, true)}</p>
+                <p className="text-[11px] text-muted-foreground">{isExpense ? "Despesas" : "Receitas"} em {monthLabel(filters.month, true)} (fato)</p>
                 <p className="text-lg font-semibold">{fmt(summary.current)}</p>
-                <p className="text-[11px] text-muted-foreground">{points[points.length - 1]?.count ?? 0} lançamento(s)</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {points[points.length - 1]?.count ?? 0} lançamento(s)
+                  {(points[points.length - 1]?.forecast ?? 0) > 0 && <span className="text-sky-700 dark:text-sky-400"> · + {fmt(points[points.length - 1].forecast)} previsto</span>}
+                </p>
               </div>
               <div>
                 <p className="text-[11px] text-muted-foreground">Vs. mês anterior</p>
@@ -167,15 +170,22 @@ export default function Analises() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-muted" />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={fmtK} width={44} />
-                  <Tooltip formatter={(v: number, n: string) => [fmt(v), n === "trend" ? "Tendência" : "Total"]} />
+                  <defs>
+                    <pattern id="prevStripes" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                      <rect width="6" height="6" fill="hsl(199 89% 48% / 0.25)" />
+                      <rect width="3" height="6" fill="hsl(199 89% 48% / 0.6)" />
+                    </pattern>
+                  </defs>
+                  <Tooltip formatter={(v: number, n: string) => [fmt(v), n === "trend" ? "Tendência (fato)" : n === "forecast" ? "Previsão" : "Fato"]} />
                   {summary.average > 0 && <ReferenceLine y={summary.average} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" label={{ value: "média", fontSize: 10, position: "insideTopLeft" }} />}
-                  <Bar dataKey="total" radius={[4, 4, 0, 0]} name="total">
+                  <Bar dataKey="total" stackId="m" name="total">
                     {chartData.map((d) => <Cell key={d.month} fill={d.selected ? "hsl(var(--primary))" : "hsl(var(--primary) / 0.35)"} />)}
                   </Bar>
+                  <Bar dataKey="forecast" stackId="m" radius={[4, 4, 0, 0]} name="forecast" fill="url(#prevStripes)" />
                   <Line type="linear" dataKey="trend" stroke={trend.direction === "flat" ? "hsl(var(--muted-foreground))" : (trend.slope > 0) === isExpense ? "hsl(0 72% 50%)" : "hsl(152 60% 38%)"} strokeWidth={2} strokeDasharray="6 4" dot={false} name="trend" />
                 </ComposedChart>
               </ResponsiveContainer>
-              <p className="text-[11px] text-muted-foreground">Barra escura: mês selecionado · tracejado cinza: média dos meses anteriores · linha tracejada colorida: tendência.</p>
+              <p className="text-[11px] text-muted-foreground">Barra cheia: fato (mês selecionado mais escuro) · parte listrada azul: previsão · tracejado cinza: média do fato · linha colorida: tendência do fato.</p>
             </CardContent>
           </Card>
 
@@ -186,7 +196,7 @@ export default function Analises() {
               <CardContent className="pb-3 overflow-x-auto">
                 {cats.length === 0 ? <p className="text-sm text-muted-foreground">Nada encontrado com esses filtros.</p> : (
                   <table className="w-full text-sm min-w-[380px]">
-                    <thead><tr className="text-xs text-muted-foreground border-b"><th className="text-left py-1 font-medium">Categoria</th><th className="text-right font-medium">Mês</th><th className="text-right font-medium">Média</th><th className="text-right font-medium">Variação</th></tr></thead>
+                    <thead><tr className="text-xs text-muted-foreground border-b"><th className="text-left py-1 font-medium">Categoria</th><th className="text-right font-medium">Mês (fato)</th>{cats.some((c) => c.forecast > 0) && <th className="text-right font-medium">Previsto</th>}<th className="text-right font-medium">Média</th><th className="text-right font-medium">Variação</th></tr></thead>
                     <tbody>
                       {cats.slice(0, 15).map((c) => {
                         const v = c.average ? (c.delta / c.average) * 100 : null;
@@ -195,6 +205,7 @@ export default function Analises() {
                             onClick={() => c.categoryId && set({ categoryId: c.categoryId })} title={c.categoryId ? "Filtrar por esta categoria" : undefined}>
                             <td className="py-1.5">{c.name}</td>
                             <td className="text-right font-mono text-xs">{fmt(c.current)}</td>
+                            {cats.some((x) => x.forecast > 0) && <td className="text-right font-mono text-xs text-sky-700 dark:text-sky-400">{c.forecast ? fmt(c.forecast) : "—"}</td>}
                             <td className="text-right font-mono text-xs text-muted-foreground">{fmt(c.average)}</td>
                             <td className={`text-right text-xs ${tone(v ?? (c.delta ? Math.sign(c.delta) : 0))}`}>{c.delta > 0 ? "+" : ""}{fmt(c.delta)}{v !== null && <span className="text-[10px]"> ({pct(v)})</span>}</td>
                           </tr>
@@ -222,7 +233,11 @@ export default function Analises() {
                             <span className="text-[11px] text-muted-foreground">{[r.categoryName, r.cardName || r.accountName].filter(Boolean).join(" · ")}</span>
                           </td>
                           <td className="text-right font-mono text-xs whitespace-nowrap">{fmt(r.amount)}</td>
-                          <td className="text-right pl-2">{r.status === "planned" && <Badge variant="outline" className="text-[10px]">Previsto</Badge>}</td>
+                          <td className="text-right pl-2 whitespace-nowrap">
+                            {r.forecast
+                              ? <Badge variant="outline" className="text-[10px] border-sky-500 text-sky-700 dark:text-sky-400">Previsão</Badge>
+                              : r.status === "planned" && <Badge variant="outline" className="text-[10px]">A pagar</Badge>}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -234,6 +249,7 @@ export default function Analises() {
           </div>
 
           <p className="text-[11px] text-muted-foreground">
+            Fato = o que foi pago ou comprado (inclui compras já lançadas ainda a pagar). Previsão = estimativas (recorrências ou itens marcados como previsão), mostradas à parte e fora da média e da tendência.
             O mês de cada lançamento é o do vencimento (o mesmo critério de Movimentações); itens de cartão entram no mês do vencimento da fatura. Cancelados não entram.
           </p>
         </div>

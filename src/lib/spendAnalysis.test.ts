@@ -4,7 +4,7 @@ import { byCategory, matchesSearch, monthWindow, summarize, totalsByMonth, trend
 let n = 0;
 const row = (p: Partial<AnalysisRow>): AnalysisRow => ({
   id: `r${++n}`, description: "x", amount: 100, date: "2026-10-10", status: "paid", categoryId: "sup", categoryName: "Supermercados",
-  accountId: "a", accountName: "Itaú - PF", payee: null, notes: null, cardName: null, ...p,
+  accountId: "a", accountName: "Itaú - PF", payee: null, notes: null, cardName: null, forecast: false, ...p,
 });
 
 describe("monthWindow", () => {
@@ -35,7 +35,8 @@ describe("totais, resumo e tendência", () => {
   ];
   it("soma por mês só dentro da janela", () => {
     expect(totalsByMonth(rows, months)).toEqual([
-      { month: "2026-08", total: 800, count: 1 }, { month: "2026-09", total: 900, count: 1 }, { month: "2026-10", total: 1100, count: 2 },
+      { month: "2026-08", total: 800, count: 1, forecast: 0, forecastCount: 0 }, { month: "2026-09", total: 900, count: 1, forecast: 0, forecastCount: 0 },
+      { month: "2026-10", total: 1100, count: 2, forecast: 0, forecastCount: 0 },
     ]);
   });
   it("compara com o mês anterior e com a média dos anteriores", () => {
@@ -46,6 +47,21 @@ describe("totais, resumo e tendência", () => {
     expect(trendOf([1000, 800, 600]).direction).toBe("down");
     expect(trendOf([1000, 1010, 995]).direction).toBe("flat");
     expect(trendOf([500]).direction).toBe("flat");
+  });
+});
+
+describe("fato x previsão", () => {
+  it("previsão fica fora do total, da média e da tendência, e aparece à parte", () => {
+    const months = ["2026-09", "2026-10", "2026-11"];
+    const rows = [
+      row({ amount: 2500, date: "2026-09-10" }), row({ amount: 2600, date: "2026-10-10" }),
+      row({ amount: 444, date: "2026-11-05" }), row({ amount: 3219, date: "2026-11-25", forecast: true }),
+    ];
+    const pts = totalsByMonth(rows, months);
+    expect(pts[2]).toEqual({ month: "2026-11", total: 444, count: 1, forecast: 3219, forecastCount: 1 });
+    expect(summarize(pts).current).toBe(444);
+    const c = byCategory(rows, months)[0];
+    expect([c.current, c.forecast, c.average]).toEqual([444, 3219, 2550]);
   });
 });
 

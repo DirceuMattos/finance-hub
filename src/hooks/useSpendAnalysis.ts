@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabaseClient";
 import { monthWindow, type AnalysisRow } from "@/lib/spendAnalysis";
+import { isForecast } from "@/lib/cardForecast";
 
 const PAGE = 1000;
 
@@ -37,7 +38,7 @@ export function useSpendAnalysis(f: AnalysisFilters) {
       const raw = await fetchAll<any>((from, to) => {
         let q = (supabase as any)
           .from("transactions")
-          .select("id, description, amount, due_date, competence_date, status, category_id, account_id, payee, notes, center_cost, categories(name), accounts(name)")
+          .select("id, description, amount, due_date, competence_date, status, category_id, account_id, payee, notes, center_cost, source_type, tags, categories(name), accounts(name)")
           .eq("transaction_type", f.type)
           .neq("status", "cancelled")
           .or(`and(due_date.gte.${start},due_date.lte.${end}),and(due_date.is.null,competence_date.gte.${start},competence_date.lte.${end})`);
@@ -59,6 +60,7 @@ export function useSpendAnalysis(f: AnalysisFilters) {
         payee: t.payee,
         notes: t.notes,
         cardName: t.center_cost || null,
+        forecast: isForecast(t),
       })).filter((r) => !!r.date);
     },
   });
