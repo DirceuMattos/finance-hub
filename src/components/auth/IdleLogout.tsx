@@ -43,7 +43,9 @@ export function IdleLogout({ lastSignInAt }: { lastSignInAt?: string | null }) {
     loggingOut.current = true;
     setWarning(false);
     try { localStorage.removeItem(IDLE_STORAGE_KEY); } catch { /* ignore */ }
-    await supabase.auth.signOut();
+    // Só este dispositivo: o padrão ("global") derrubava a sessão em todos os outros computadores e abas,
+    // que passavam a falhar ao renovar o acesso (lentidão e "erro inesperado").
+    await supabase.auth.signOut({ scope: "local" });
     toast.info("Sessão encerrada após 15 minutos sem atividade.");
     navigate("/login", { replace: true });
   }, [navigate]);
