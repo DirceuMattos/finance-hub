@@ -26,7 +26,8 @@ export function useAuth() {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Sair encerra só este dispositivo (o padrão "global" derrubava as outras sessões abertas).
+    await supabase.auth.signOut({ scope: "local" });
   };
 
   return { session, user, loading, signOut };

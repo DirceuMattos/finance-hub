@@ -69,6 +69,15 @@ export function getUserErrorMessage(error: unknown): string {
     return "Muitas tentativas. Aguarde alguns minutos e tente novamente.";
   }
 
+  // Sessão vencida ou encerrada em outro lugar: orientar a entrar de novo em vez de "erro inesperado".
+  if (code === "PGRST301" || code === "PGRST303" || /jwt|refresh token|auth session missing|session.*expired/i.test(message)) {
+    return "Sua sessão expirou. Entre novamente para continuar.";
+  }
+  // Falha de rede (sem resposta do servidor).
+  if (/failed to fetch|networkerror|load failed|network request failed/i.test(message)) {
+    return "Sem resposta do servidor. Verifique a internet e tente novamente.";
+  }
+
   // Generic fallback
   return "Ocorreu um erro inesperado. Tente novamente.";
 }
