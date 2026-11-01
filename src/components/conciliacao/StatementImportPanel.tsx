@@ -21,6 +21,7 @@ import {
   useUndoReconciliation, useUnassignedPlanned,
 } from "@/hooks/useStatementReconciliation";
 import { parseStatement, readStatementFile, statementHash, type ParsedStatement } from "@/lib/statementParsers";
+import { extractPdfLines, parsePdfStatementLines } from "@/lib/pdfStatement";
 import {
   approvedEffect, matchStatement, suggestDescription, suggestPattern, type AppTx, type MatchResult,
 } from "@/lib/statementMatching";
@@ -97,8 +98,18 @@ export function StatementImportPanel({ accounts, byAccount }: Props) {
     setParsed(null); setDuplicate(false);
     if (!file) return;
     try {
-      const text = await readStatementFile(file);
-      const p = parseStatement(file.name, text);
+      // PDF: texto extraído no navegador (pdf.js); OFX/CSV: leitura direta.
+      const isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+      let text: string;
+      let p: ParsedStatement;
+      if (isPdf) {
+        const lines = await extractPdfLines(await file.arrayBuffer());
+        text = lines.join("\n");
+        p = parsePdfStatementLines(lines);
+      } else {
+        text = await readStatementFile(file);
+        p = parseStatement(file.name, text);
+      }
       const h = await statementHash(text);
       setFileName(file.name); setHash(h); setParsed(p);
       setLedgerText(p.ledgerBalance !== null ? String(p.ledgerBalance).replace(".", ",") : "");
@@ -231,7 +242,7 @@ export function StatementImportPanel({ accounts, byAccount }: Props) {
     <Card className="mb-6">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <FileUp className="h-4 w-4 text-primary" />Importar extrato do banco (OFX ou CSV)
+          <FileUp className="h-4 w-4 text-primary" />Importar extrato do banco (OFX, CSV ou PDF)
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -251,7 +262,7 @@ export function StatementImportPanel({ accounts, byAccount }: Props) {
           </div>
           <div className="space-y-1">
             <Label htmlFor="stmt-file" className="text-xs">Arquivo</Label>
-            <Input id="stmt-file" type="file" accept=".ofx,.csv,.txt" className="h-9 w-72 text-xs" onChange={(e) => onFile(e.target.files?.[0])} />
+            <Input id="stmt-file" type="file" accept=".ofx,.csv,.txt,.pdf" className="h-9 w-72 text-xs" onChange={(e) => onFile(e.target.files?.[0])} />
           </div>
           <div className="space-y-1">
             <Label htmlFor="stmt-ledger" className="text-xs">Saldo do extrato</Label>
@@ -271,7 +282,7 @@ export function StatementImportPanel({ accounts, byAccount }: Props) {
             {parsed.bankRef && bankRefAccount && bankRefAccount !== accountId && (
               <span className="text-amber-700 dark:text-amber-400"> Este arquivo já foi associado a outra conta ({accounts.find((a) => a.id === bankRefAccount)?.name}).</span>
             )}
-            {parsed.source === "csv" && !ledgerText && <span> Informe o saldo do extrato para ver a diferença final.</span>}
+            {parsed.source !== "ofx" && !ledgerText && <span> Informe o saldo do extrato para ver a diferença final.</span>}
           </p>
         )}
         {duplicate && (

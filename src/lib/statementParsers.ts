@@ -9,7 +9,7 @@ export interface StatementLine {
 }
 
 export interface ParsedStatement {
-  source: "ofx" | "csv";
+  source: "ofx" | "csv" | "pdf";
   bankRef: string | null;      // banco:conta (OFX), para reconhecer a conta do app
   periodStart: string | null;
   periodEnd: string | null;

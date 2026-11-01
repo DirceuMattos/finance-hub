@@ -15,6 +15,8 @@ import { officialBalance, reconcileMonth, reconciliationCsv } from "@/lib/reconc
 import { formatIsoDateBR } from "@/lib/cardCycle";
 import { evaluateExpression } from "@/lib/calc";
 import { StatementImportPanel } from "@/components/conciliacao/StatementImportPanel";
+import { useStatementBalances } from "@/hooks/useStatementBalances";
+import { toast } from "sonner";
 
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 const monthLabel = (m: string) => {
@@ -29,7 +31,8 @@ function buildMonths(): string[] {
   return out.reverse();
 }
 
-// Saldo do extrato informado pelo usuário: conveniência local, só neste navegador.
+// Saldo do extrato: gravado no banco (account_statement_balances). O armazenamento do navegador
+// fica só como reserva enquanto a migração não foi aplicada e para valores digitados antes dela.
 const STMT_KEY = "fh-conciliacao-extrato";
 function loadStatements(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(STMT_KEY) || "{}"); } catch { return {}; }
@@ -43,9 +46,45 @@ export default function Conciliacao() {
   const months = useMemo(buildMonths, []);
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [accountId, setAccountId] = useState<string>("");
-  const [statements, setStatements] = useState<Record<string, string>>(loadStatements);
+  const [statements, setStatements] = useState<Record<string, string>>(loadStatements); // reserva local
+  const [drafts, setDrafts] = useState<Record<string, string>>({}); // em edição, ainda não gravado
+  const { balances, missing, save } = useStatementBalances();
 
   useEffect(() => { saveStatements(statements); }, [statements]);
+
+  const fmtInput = (v: number) => v.toFixed(2).replace(".", ",");
+  // Valor exibido: o que está sendo digitado; senão o gravado no banco; senão o antigo do navegador.
+  const stmtText = (accId: string) => {
+    const k = `${accId}_${month}`;
+    if (k in drafts) return drafts[k];
+    if (balances.has(k)) return fmtInput(balances.get(k)!);
+    return statements[k] ?? "";
+  };
+  const isPendingLocal = (accId: string) => {
+    const k = `${accId}_${month}`;
+    return !missing && !balances.has(k) && !!statements[k] && !(k in drafts);
+  };
+
+  const commitStatement = async (accId: string) => {
+    const k = `${accId}_${month}`;
+    if (!(k in drafts) && !isPendingLocal(accId)) return;
+    const raw = (k in drafts ? drafts[k] : statements[k] ?? "").trim();
+    const value = raw ? evaluateExpression(raw) : null;
+    if (raw && value === null) { toast.error("Saldo do extrato inválido. Ex.: -3.872,55"); return; }
+    if (missing) {
+      setStatements((prev) => ({ ...prev, [k]: raw }));
+      setDrafts((d) => { const n = { ...d }; delete n[k]; return n; });
+      return;
+    }
+    try {
+      await save.mutateAsync({ accountId: accId, month, balance: value === null ? null : Math.round(value * 100) / 100 });
+      setDrafts((d) => { const n = { ...d }; delete n[k]; return n; });
+      setStatements((prev) => { const n = { ...prev }; delete n[k]; return n; }); // já está no banco
+      toast.success(value === null ? "Saldo do extrato removido." : "Saldo do extrato gravado.");
+    } catch (e: any) {
+      toast.error("Não foi possível gravar o saldo do extrato: " + (e?.message || "erro"));
+    }
+  };
   useEffect(() => {
     if (!accountId && data?.accounts.length) setAccountId(data.accounts[0].id);
   }, [data, accountId]);
@@ -56,15 +95,16 @@ export default function Conciliacao() {
       const txs = data.byAccount.get(a.id) || [];
       const r = reconcileMonth(a, txs, month);
       const official = officialBalance(a, txs);
-      const stmtRaw = statements[`${a.id}_${month}`];
+      const stmtRaw = stmtText(a.id);
       const stmt = stmtRaw ? evaluateExpression(stmtRaw) : null;
       return { account: a, r, official, appDiff: Math.round((a.current_balance - official) * 100) / 100, stmt, stmtDiff: stmt !== null ? Math.round((r.endBalance - stmt) * 100) / 100 : null };
     });
-  }, [data, month, statements]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, month, statements, drafts, balances]);
 
   const selected = overview.find((o) => o.account.id === accountId);
 
-  const setStatement = (accId: string, v: string) => setStatements((prev) => ({ ...prev, [`${accId}_${month}`]: v }));
+  const setStatement = (accId: string, v: string) => setDrafts((prev) => ({ ...prev, [`${accId}_${month}`]: v }));
 
   const exportCsv = () => {
     if (!selected) return;
@@ -128,10 +168,13 @@ export default function Conciliacao() {
                     <td className="py-2 pl-3 text-right" onClick={(e) => e.stopPropagation()}>
                       <Input
                         id={`stmt-${o.account.id}`}
-                        value={statements[`${o.account.id}_${month}`] ?? ""}
+                        value={stmtText(o.account.id)}
                         onChange={(e) => setStatement(o.account.id, e.target.value)}
+                        onBlur={() => commitStatement(o.account.id)}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
                         placeholder="ex.: -3.872,55"
-                        className="h-7 w-32 text-xs text-right font-mono ml-auto"
+                        title={isPendingLocal(o.account.id) ? "Digitado antes, só neste navegador. Clique e saia do campo para gravar no banco." : "Grava ao sair do campo ou com Enter"}
+                        className={`h-7 w-32 text-xs text-right font-mono ml-auto ${isPendingLocal(o.account.id) ? "border-amber-500" : ""}`}
                       />
                     </td>
                     <td className={`py-2 text-right font-mono ${o.stmtDiff === null ? "text-muted-foreground" : o.stmtDiff === 0 ? "text-emerald-600" : "text-destructive font-semibold"}`}>
@@ -148,7 +191,8 @@ export default function Conciliacao() {
             </table>
           )}
           <p className="text-[11px] text-muted-foreground mt-2">
-            Informe o saldo do extrato no último dia do mês. "Diferença" = saldo final calculado − extrato. O valor digitado fica salvo só neste navegador.
+            Informe o saldo do extrato no último dia do mês; ele é gravado ao sair do campo (ou com Enter). "Diferença" = saldo final calculado − extrato.
+            {missing && <span className="text-amber-700 dark:text-amber-400"> A tabela de saldos ainda não existe no banco (migração pendente): por enquanto o valor fica só neste navegador.</span>}
           </p>
         </CardContent>
       </Card>
