@@ -79,3 +79,15 @@ export function parseMoneyInput(text: string): number | null | undefined {
   const n = Number(s);
   return Number.isFinite(n) ? Math.round(n * 100) / 100 : undefined;
 }
+
+/**
+ * Fechamento fora de escala em relação à abertura (provável erro de digitação, ex.: vírgula esquecida).
+ * Pede confirmação quando o valor fica 5x maior ou menor que 1/5 da abertura, com diferença acima de R$ 1.000.
+ */
+export function isOutOfScale(opening: number | null | undefined, closing: number | null | undefined): boolean {
+  const o = Math.abs(Number(opening) || 0);
+  const c = Math.abs(Number(closing) || 0);
+  if (!o || closing === null || closing === undefined) return false;
+  if (Math.abs(c - o) < 1000) return false;
+  return c > o * 5 || (c > 0 && c < o / 5);
+}

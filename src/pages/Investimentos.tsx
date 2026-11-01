@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { isClosed, monthlySeries, parseMoneyInput } from "@/lib/snapshots";
+import { isClosed, isOutOfScale, monthlySeries, parseMoneyInput } from "@/lib/snapshots";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -233,6 +233,16 @@ export default function Investimentos() {
                 const v = parseMoneyInput(e.target.value);
                 if (v === undefined) { toast.error("Valor inválido. Use, por exemplo, 12.345,67"); return; }
                 if (v === (raw ?? null)) return;
+                // Valor muito diferente da abertura: confirma antes de gravar (evita vírgula esquecida).
+                if (isOutOfScale(r.opening_value, v)) {
+                  const input = e.target;
+                  toast.warning(`${fmt(v as number)} está muito diferente da abertura (${fmt(r.opening_value)}). Confirma?`, {
+                    duration: 15000,
+                    action: { label: "Gravar assim", onClick: () => update.mutate({ id: r.id, closing_value: v }) },
+                    cancel: { label: "Corrigir", onClick: () => { input.value = raw === null || raw === undefined ? "" : String(raw).replace(".", ","); input.focus(); } },
+                  });
+                  return;
+                }
                 update.mutate({ id: r.id, closing_value: v });
               }}
             />

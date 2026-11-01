@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { currentValue, isClosed, monthlySeries, nextMonthStart, parseMoneyInput, prevMonthStart } from "./snapshots";
+import { currentValue, isClosed, monthlySeries, nextMonthStart, parseMoneyInput, prevMonthStart, isOutOfScale } from "./snapshots";
 
 describe("snapshots", () => {
   it("mês anterior/seguinte sem fuso", () => {
@@ -50,5 +50,18 @@ describe("passivos no patrimônio", () => {
   it("valor do item usa fechamento ou abertura com o sinal da categoria", () => {
     expect(patrimonyItemValue({ opening_value: 50000, closing_value: null, asset_categories: { asset_type: "liability" } })).toBe(-50000);
     expect(patrimonyItemValue({ opening_value: 1, closing_value: 0, asset_categories: { asset_type: "investment" } })).toBe(0);
+  });
+});
+
+describe("isOutOfScale", () => {
+  it("acusa vírgula esquecida e valores 5x fora da abertura; aceita variação normal", () => {
+    expect(isOutOfScale(53299.72, 5668088)).toBe(true);   // 56.680,88 digitado sem vírgula
+    expect(isOutOfScale(53299.72, 56680.88)).toBe(false);
+    expect(isOutOfScale(17063.2, 9656.04)).toBe(false);   // resgate parcial
+    expect(isOutOfScale(17063.2, 3000)).toBe(true);
+    expect(isOutOfScale(0, 2.93)).toBe(false);            // sem abertura
+    expect(isOutOfScale(100, 900)).toBe(false);           // diferença pequena em reais
+    expect(isOutOfScale(5000, null)).toBe(false);         // em aberto
+    expect(isOutOfScale(5000, 0)).toBe(false);            // zerado (resgate total) é válido
   });
 });
