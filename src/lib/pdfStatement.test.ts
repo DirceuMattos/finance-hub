@@ -52,6 +52,20 @@ describe("parsePdfStatementLines", () => {
     expect([p.ledgerBalance, p.ledgerDate]).toEqual([2874.1, "2026-10-10"]);
   });
 
+  it("ignora quadro de informações do contrato (limite, taxas, custo efetivo) após a tabela", () => {
+    const p = parsePdfStatementLines([
+      "27/10/2026 PIX RECEBIDO CLIENTE   2.700,00 C",
+      "27/10/2026 SALDO DO DIA   3.000,00 C",
+      "(+) CHEQUE ESPECIAL CONTRATADO:   5.000,00",
+      "TAXA CHEQUE ESPECIAL EMPRESARIAL (a.m.):   11,90",
+      "CUSTO EFETIVO TOTAL (a.a.): LIMITES DE CRÉDITO   296,26",
+      "CAPITAL DE GIRO:   11.637,00",
+      "PARCELA MÁXIMA DISPONÍVEL: 000 EXTRATOS   6.591,82",
+      "VALOR AVULSO SEM DATA   99,00",
+    ]);
+    expect(p.lines.map((l) => [l.date, l.amount, l.memo])).toEqual([["2026-10-27", 2700, "PIX RECEBIDO CLIENTE"]]);
+  });
+
   it("avisa quando não encontra lançamentos (PDF escaneado ou outro documento)", () => {
     const p = parsePdfStatementLines(["Relatório sem lançamentos"]);
     expect(p.lines).toEqual([]);
