@@ -38,6 +38,8 @@ const MONEY = /(\(?-?\s?\d{1,3}(?:\.\d{3})*,\d{2}\)?(?:\s?[-DC](?![A-Za-zÀ-ú])
 const BALANCE_WORDS = /\bsaldo\b/i;
 // Linhas de resumo do extrato (não são lançamentos).
 const SUMMARY_WORDS = /^(total|totais|subtotal|resumo|soma)\b/i;
+// Quadros de informação do extrato (limite, taxas, custo efetivo...): "Rótulo: valor", "(a.m.)", "%".
+const INFO_LINE = /:\s*[(+\-]*\s*(R\$\s*)?\d|\((a\.m\.|a\.a\.)\)|%|\b(contratad[oa]|dispon[ií]vel|custo efetivo|cheque especial contratado|capital de giro)\b/i;
 
 function moneyValue(token: string): number | null {
   const t = token.replace(/\s/g, "");
@@ -72,6 +74,7 @@ export function parsePdfStatementLines(lines: string[]): ParsedStatement {
   let lastDate: string | null = null;
   let last: StatementLine | null = null;
   let continuations = 0;
+  let prevWasTx = false; // linha sem data só herda a data se vier logo após um lançamento
   let ledger: { date: string; balance: number } | null = null;
 
   for (const raw of lines) {
@@ -92,12 +95,13 @@ export function parsePdfStatementLines(lines: string[]): ParsedStatement {
     if (!date && !lastDate) continue; // cabeçalho
     const useDate = date ?? lastDate!;
 
-    if (SUMMARY_WORDS.test(rest)) { last = null; continue; }
+    if (SUMMARY_WORDS.test(rest) || INFO_LINE.test(rest)) { last = null; prevWasTx = false; continue; }
     if (BALANCE_WORDS.test(rest)) {
       const v = tokens.length ? moneyValue(tokens[tokens.length - 1]) : null;
       if (v !== null && (!ledger || useDate >= ledger.date)) ledger = { date: useDate, balance: v };
       if (date) lastDate = date;
       last = null;
+      prevWasTx = !!date;
       continue;
     }
     if (!tokens.length) {
@@ -107,6 +111,7 @@ export function parsePdfStatementLines(lines: string[]): ParsedStatement {
       if (date) lastDate = date;
       continue;
     }
+    if (!date && !prevWasTx) { last = null; continue; } // valor solto fora da tabela de lançamentos
     // Com dois valores (valor e saldo), o lançamento é o penúltimo.
     const valueToken = tokens.length >= 2 ? tokens[tokens.length - 2] : tokens[0];
     const amount = moneyValue(valueToken);
@@ -120,6 +125,7 @@ export function parsePdfStatementLines(lines: string[]): ParsedStatement {
     continuations = 0;
     out.push(last);
     lastDate = useDate;
+    prevWasTx = true;
   }
 
   if (!out.length) warnings.push("Não encontrei lançamentos no PDF. Se for um PDF escaneado (imagem), exporte o extrato em PDF de texto, OFX ou CSV.");
